@@ -5,7 +5,7 @@ This repository contains the Infrastructure as Code (IaC) written in
 Infrastructure (OCI) Always Free Tier** and automatically bootstrap the **Tekton
 Pipelines Engine**.
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -41,7 +41,7 @@ end
     NP --- TektonNS
 ```
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 1. An **Oracle Cloud Infrastructure (OCI)** account.
 2. An **API Key Pair** generated in the OCI User Settings.
@@ -56,7 +56,7 @@ end
    - `OCI_S3_ACCESS_KEY`: The AWS s3 access key.
    - `OCI_S3_SECRET_KEY`: The AWS s3 secret key.
 
-## 💻 Local Execution
+## Local Execution
 
 To test or apply the Terraform code locally:
 
@@ -74,7 +74,7 @@ To test or apply the Terraform code locally:
 3. Connect `kubectl` to the cluster:
    Run the command provided in `terraform output get_kubeconfig_command`.
 
-## 🚀 CI/CD Pipeline
+## CI/CD Pipeline
 
 The included `.github/workflows/terraform.yml` handles automated infrastructure
 management:
