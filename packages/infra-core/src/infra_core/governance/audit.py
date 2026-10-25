@@ -15,6 +15,7 @@ from infra_core.governance.contracts import (
     text,
     timestamp,
 )
+from infra_core.governance.coverage import validate_coverage
 from infra_core.governance.resources import CAPACITY, INVENTORY_TYPES, MONTHLY, footprint
 
 
@@ -72,6 +73,9 @@ def audit(
             "account_id",
             "provider",
             "observed_at",
+            "collection_started_at",
+            "collection_completed_at",
+            "coverage",
             "complete",
             "covered_types",
             "all_regions",
@@ -85,7 +89,8 @@ def audit(
     require(
         type(inventory["schema_version"]) is int
         and type(plan["schema_version"]) is int
-        and inventory["schema_version"] == plan["schema_version"] == 1,
+        and inventory["schema_version"] == 2
+        and plan["schema_version"] == 1,
         "GOV003",
         "unsupported document schema",
     )
@@ -102,6 +107,7 @@ def audit(
         "partial inventory or proposal cannot pass",
     )
     _fresh(inventory.get("observed_at"), now, timedelta(minutes=15), "inventory")
+    validate_coverage(inventory, account["home_region"], now)
     coverage = inventory["covered_types"]
     require(
         isinstance(coverage, list)
@@ -224,7 +230,7 @@ def audit(
         )
     usage = fields(
         inventory.get("usage"),
-        {"account_id", "provider", "month", "observed_at", "source", "values"},
+        {"account_id", "provider", "month", "observed_at", "covered_through", "source", "values"},
         "monthly usage",
     )
     require(
@@ -236,6 +242,14 @@ def audit(
         usage["month"] == now.strftime("%Y-%m"), "GOV031", "usage evidence is for another month"
     )
     _fresh(usage["observed_at"], now, timedelta(minutes=15), "monthly usage")
+    _fresh(usage["covered_through"], now, timedelta(minutes=15), "usage coverage")
+    covered = timestamp(usage["covered_through"], "usage coverage")
+    require(
+        covered <= timestamp(usage["observed_at"], "usage observation")
+        and covered.strftime("%Y-%m") == usage["month"],
+        "GOV043",
+        "usage coverage must precede observation in the current month",
+    )
     text(usage["source"], "monthly usage source")
     values = mapping(usage["values"], "monthly usage values")
     monthly = mapping(profile.get("monthly"), "monthly limits")
@@ -245,7 +259,7 @@ def audit(
         "every monthly usage metric is required",
     )
     forecast = {}
-    hours = hours_remaining(timestamp(usage["observed_at"], "monthly usage"))
+    hours = hours_remaining(covered)
     for metric, capacity in MONTHLY.items():
         factor = (
             hours

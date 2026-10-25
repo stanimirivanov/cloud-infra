@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from evidence_helpers import upgrade_inventory
 from infra_core.governance.audit import audit
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import INVENTORY_TYPES
@@ -80,6 +81,7 @@ def evidence():
         },
     }
     # Near the start of a 31-day month, 2*744=1488 and 12*744=8928 fit the free profile.
+    upgrade_inventory(inventory, account["home_region"])
     return account, profile, inventory
 
 

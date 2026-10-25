@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import yaml
+from evidence_helpers import recovery_metrics
 from infra_core import backend, cli
 from infra_core.foundation import deny_deployment, load_foundation
 
@@ -91,6 +92,7 @@ def test_remote_credentials_are_required_without_ambient_fallback(tmp_path):
         "PULUMI_BACKEND_URL": "https://unexpected",
         "AWS_PROFILE": "ambient",
         "PULUMI_CONFIG_PASSPHRASE_FILE": "unexpected",
+        "BACKEND_POSTURE_JSON": "private evidence",
         "PATH": "tools",
     }
     env = backend.qualification_environment(source, tmp_path, local=False)
@@ -104,6 +106,7 @@ def test_remote_credentials_are_required_without_ambient_fallback(tmp_path):
             "PULUMI_BACKEND_URL",
             "AWS_PROFILE",
             "PULUMI_CONFIG_PASSPHRASE_FILE",
+            "BACKEND_POSTURE_JSON",
         )
     )
 
@@ -123,7 +126,9 @@ def test_raw_cli_output_is_never_returned_on_failure(monkeypatch, tmp_path):
 
 def receipt(config):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "run_id": "a" * 32,
+        "recovery": recovery_metrics(),
         "kind": "oci-s3",
         "configuration_sha256": config.digest,
         "pulumi_version": config.pulumi_version,
@@ -133,6 +138,7 @@ def receipt(config):
             "encrypted-checkpoint",
             "lock-contention",
             "restore-readback",
+            "independent-recovery",
         ],
         "deployment_authorized": False,
     }
@@ -161,16 +167,29 @@ def test_receipt_binding_is_not_resource_authorization(config):
         deny_deployment(config, "oci-network")
 
 
-@pytest.mark.parametrize("bad_phase", ["preview", "checkpoint", "restore", "readback", "cleanup"])
+@pytest.mark.parametrize(
+    "bad_phase",
+    [
+        "preview",
+        "checkpoint",
+        "simulate-loss",
+        "recovery-login",
+        "recovery-initialize",
+        "restore",
+        "readback",
+        "cleanup",
+    ],
+)
 def test_failed_qualification_never_returns_success_and_cleans_own_stack(
     config, monkeypatch, bad_phase
 ):
     events = []
 
     class FakeSession:
+        sentinel = None
+
         def __init__(self, cwd, env):
             self.cwd = cwd
-            self.sentinel = None
 
         def run(self, phase, args):
             events.append((phase, args))
@@ -181,7 +200,7 @@ def test_failed_qualification_never_returns_success_and_cleans_own_stack(
             if phase == "initialize":
                 (self.cwd / f"Pulumi.{args[2]}.yaml").write_text("encrypted")
             if phase == "configure":
-                self.sentinel = args[3]
+                FakeSession.sentinel = args[3]
             if phase == "export":
                 return json.dumps(
                     {
@@ -196,7 +215,7 @@ def test_failed_qualification_never_returns_success_and_cleans_own_stack(
                     }
                 )
             if phase == "readback":
-                return json.dumps(self.sentinel)
+                return json.dumps(FakeSession.sentinel)
             return ""
 
         def check_lock(self, stack, marker):
@@ -243,6 +262,10 @@ def test_protected_workflow_has_no_pr_trigger_or_resource_credentials(config):
 )
 def test_real_local_backend_encryption_lock_and_recovery(config):
     evidence = backend.qualify(config, local=True, allow_writes=True)
+    assert evidence["schema_version"] == 2
+    assert evidence["recovery"]["restore_seconds"] > 0
+    assert evidence["recovery"]["backup_age_seconds"] >= 0
+    assert "independent-recovery" in evidence["checks"]
     assert evidence["kind"] == "local"
     assert evidence["deployment_authorized"] is False
     with pytest.raises(backend.QualificationError):

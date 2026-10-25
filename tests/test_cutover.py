@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from evidence_helpers import recovery_metrics, upgrade_inventory
 from infra_core import cli, cutover
 from infra_core.foundation import load_foundation
 from infra_core.governance.contracts import GovernanceError
@@ -125,6 +126,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
             "values": {"a1_ocpu_hours": 0, "a1_memory_gb_hours": 0, "block_gb_months": 0},
         },
     }
+    upgrade_inventory(inventory, account["home_region"])
     graph = foundation_graph(oci)
     entries = [
         {
@@ -161,7 +163,9 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "oci_config": table("foundation", oci_values) + table("image", image),
         "kubernetes_config": kube_text,
         "backend_receipt": {
-            "schema_version": 1,
+            "schema_version": 2,
+            "run_id": "a" * 32,
+            "recovery": recovery_metrics(),
             "kind": "oci-s3",
             "configuration_sha256": config.digest,
             "pulumi_version": config.pulumi_version,
@@ -172,6 +176,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
                 "encrypted-checkpoint",
                 "lock-contention",
                 "restore-readback",
+                "independent-recovery",
             ],
         },
         "inventory": inventory,

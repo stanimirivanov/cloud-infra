@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from evidence_helpers import upgrade_inventory
 from infra_core.governance.audit import audit
 from infra_core.governance.contracts import GovernanceError, number
 from infra_core.governance.resources import (
@@ -85,6 +86,7 @@ def evidence():
             }
         ],
     }
+    upgrade_inventory(inventory, account["home_region"])
     return account, profile, inventory, plan
 
 
@@ -427,3 +429,75 @@ def test_cli_failed_inventory_removes_stale_snapshot_and_rejects_escape(tmp_path
     calls.clear()
     assert cli.main([*args, "--output", "../escape.json"]) == 1
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing-query",
+        "duplicate-query",
+        "missing-region",
+        "missing-compartment",
+        "missing-ad",
+        "negative-count",
+        "boolean-count",
+        "old-start",
+        "future-end",
+        "reversed-clocks",
+        "v1",
+    ],
+)
+def test_inventory_coverage_must_be_complete_measured_and_fresh(evidence, fault):
+    inventory = evidence[2]
+    coverage = inventory["coverage"]
+    if fault == "missing-query":
+        coverage["queries"].pop()
+    elif fault == "duplicate-query":
+        coverage["queries"].append(coverage["queries"][0].copy())
+    elif fault == "missing-region":
+        coverage["regions"] = []
+    elif fault == "missing-compartment":
+        coverage["compartments"] = ["another-compartment"]
+    elif fault == "missing-ad":
+        coverage["availability_domains"]["home"] = []
+    elif fault in {"negative-count", "boolean-count"}:
+        coverage["queries"][0]["count"] = -1 if fault == "negative-count" else True
+    elif fault == "old-start":
+        inventory["collection_started_at"] = (NOW - timedelta(hours=1)).isoformat()
+    elif fault == "future-end":
+        inventory["collection_completed_at"] = (NOW + timedelta(minutes=1)).isoformat()
+    elif fault == "reversed-clocks":
+        inventory["collection_completed_at"] = (NOW - timedelta(minutes=1)).isoformat()
+    else:
+        inventory["schema_version"] = 1
+    with pytest.raises(GovernanceError, match="GOV042|GOV003"):
+        evaluate(evidence)
+
+
+def test_usage_report_observation_cannot_retimestamp_old_coverage(evidence):
+    evidence[2]["usage"]["covered_through"] = (NOW - timedelta(minutes=16)).isoformat()
+    with pytest.raises(GovernanceError, match="GOV004"):
+        evaluate(evidence)
+    evidence[2]["usage"].update(
+        observed_at=(NOW - timedelta(minutes=2)).isoformat(),
+        covered_through=(NOW - timedelta(minutes=1)).isoformat(),
+    )
+    with pytest.raises(GovernanceError, match="GOV043"):
+        evaluate(evidence)
+
+
+def test_zero_query_counts_cannot_cover_existing_resources(evidence):
+    evidence[2]["resources"] = [live_instance()]
+    for row in evidence[2]["coverage"]["queries"]:
+        if row["operation"] == "instances":
+            row["count"] = 0
+    with pytest.raises(GovernanceError, match="GOV042"):
+        evaluate(evidence)
+
+
+@pytest.mark.parametrize("operation", ["regions", "ads", "virtual_pools"])
+def test_discovery_counts_and_virtual_pool_exclusion_are_enforced(evidence, operation):
+    row = next(row for row in evidence[2]["coverage"]["queries"] if row["operation"] == operation)
+    row["count"] = 2
+    with pytest.raises(GovernanceError, match="GOV042"):
+        evaluate(evidence)
