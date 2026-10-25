@@ -1,0 +1,10 @@
+[project]
+name = "infra-program"
+version = "0.1.0"
+description = "Pulumi Python development foundation; provisioning is not enabled"
+requires-python = ">=3.12,<3.13"
+dependencies = ["infra-core", "pulumi>=3.200,<4"]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"

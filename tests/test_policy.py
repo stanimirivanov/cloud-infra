@@ -2,35 +2,35 @@
 
 import copy
 import json
-import sys
-import unittest
 from pathlib import Path
 
+from infra_core.policy import check, load
+
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from policy import check, load  # noqa: E402
 
 
-class PolicyTests(unittest.TestCase):
-    def setUp(self):
+class TestPolicy:
+    def setup_method(self):
         self.docs = {p.name: load(p) for p in (ROOT / "terraform/01-infrastructure").glob("*.tf")}
         self.baseline = json.loads((ROOT / "tests/public_ingress_baseline.json").read_text())
 
     def resource(self, kind):
         return next(
-            body
-            for doc in self.docs.values()
-            for group in doc.get("resource", [])
-            for resource_type, named in group.items()
-            if resource_type == kind
-            for body in named.values()
+            (
+                body
+                for doc in self.docs.values()
+                for group in doc.get("resource", [])
+                for resource_type, named in group.items()
+                if resource_type == kind
+                for body in named.values()
+            )
         )
 
     def rejects(self, rule):
-        self.assertTrue(any(e.startswith(rule + ":") for e in check(self.docs, self.baseline)))
+        assert any(e.startswith(rule + ":") for e in check(self.docs, self.baseline))
 
     def test_repository_baseline(self):
-        self.assertEqual(check(self.docs, self.baseline), [])
+        assert check(self.docs, self.baseline) == []
 
     def test_paid_cluster(self):
         self.resource("oci_containerengine_cluster")["type"] = "ENHANCED_CLUSTER"
@@ -103,7 +103,3 @@ class PolicyTests(unittest.TestCase):
     def test_secret_output(self):
         self.docs["outputs.tf"]["output"].append({"bad": {"value": "${var.private_key}"}})
         self.rejects("SECRET001")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -3,8 +3,11 @@
 import ipaddress
 import json
 import re
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
-import hcl2
+from hcl2.api import load as parse_hcl
 
 NETWORK_TYPES = {
     "oci_core_vcn",
@@ -23,19 +26,19 @@ DATA_TYPES = {
 GENERATED = {"backend.tf", "provider.tf", "common_variables.tf"}
 
 
-def load(path):
+def load(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
-        return hcl2.load(stream)
+        return parse_hcl(stream)
 
 
-def blocks(document, kind):
+def blocks(document: dict[str, Any], kind: str) -> Iterator[tuple[str, str, dict[str, Any]]]:
     for group in document.get(kind, []):
         for resource_type, named in group.items():
             for name, body in named.items():
                 yield resource_type, name, body
 
 
-def walk(value):
+def walk(value: Any) -> Iterator[Any]:
     if isinstance(value, dict):
         for key, item in value.items():
             yield key
@@ -47,12 +50,12 @@ def walk(value):
         yield value
 
 
-def check(documents, public_baseline):
+def check(documents: dict[str, dict[str, Any]], public_baseline: dict[str, Any]) -> list[str]:
     """Return stable, actionable diagnostics. Expressions fail literal-only rules."""
-    errors = []
-    resources = []
+    errors: list[str] = []
+    resources: list[tuple[str, str, dict[str, Any]]] = []
 
-    def require(condition, rule, message):
+    def require(condition: bool, rule: str, message: str) -> None:
         if not condition:
             errors.append(f"{rule}: {message}")
 
@@ -131,13 +134,13 @@ def check(documents, public_baseline):
             require(False, "COST003", "use explicit positive literal node count/OCPUs/GiB")
     require(cpu <= 4 and memory <= 24, "COST004", "aggregate pools exceed 4 OCPUs / 24 GiB")
 
-    subnets = []
+    subnets: list[ipaddress.IPv4Network] = []
     for kind, name, body in resources:
         if kind == "oci_core_subnet":
             try:
-                subnet = ipaddress.ip_network(body["cidr_block"])
+                subnet = ipaddress.IPv4Network(body["cidr_block"])
                 require(
-                    subnet.subnet_of(ipaddress.ip_network("10.0.0.0/16")),
+                    subnet.subnet_of(ipaddress.IPv4Network("10.0.0.0/16")),
                     "NET001",
                     f"{name}: subnet must stay within 10.0.0.0/16",
                 )
@@ -166,7 +169,7 @@ def check(documents, public_baseline):
     return errors
 
 
-def check_repository(root):
+def check_repository(root: Path) -> list[str]:
     unit = root / "terraform/01-infrastructure"
     documents = {p.name: load(p) for p in sorted(unit.glob("*.tf"))}
     errors = check(documents, json.loads((root / "tests/public_ingress_baseline.json").read_text()))

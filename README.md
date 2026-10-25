@@ -1,6 +1,8 @@
 # OCI OKE infrastructure
 
-Terraform and Terragrunt provision OCI networking and an OKE Basic cluster with
+The repository is transitioning to Pulumi Python. The uv workspace now packages
+automation and Pulumi SDK development support; Pulumi provisioning remains
+disabled. Terraform and Terragrunt currently provision OCI networking and an OKE Basic cluster with
 an Ampere A1 node pool. The current configuration has two nodes, each with one
 OCPU and 8 GiB RAM. It targets Always Free sizing but cannot guarantee zero cost,
 capacity or tenancy eligibility. Tekton installation is not implemented.
@@ -17,16 +19,19 @@ terraform/01-infrastructure/outputs.tf  cluster_ocid and region
 
 ## Development verification
 
-Install the pinned tools documented in HARNESS.md, activate the Python virtual
-environment and run:
+Install uv 0.12.5 and the Terraform/Terragrunt pins documented in HARNESS.md,
+then run from the repository root:
 
 ```sh
-python -m pip install -r scripts/requirements.txt
-pre-commit install
-python scripts/verify.py
+uv sync --locked --all-groups
+uv run --locked pre-commit install
+uv run --locked infra verify
 ```
 
-This validates formatting, architecture, policy regression tests and provider
+Use `uv run --locked infra verify --scope python` for Python-only development
+without Terraform/Terragrunt binaries, or `uv run --locked infra check` for focused
+HCL architecture checks. The complete command validates formatting, types,
+architecture, policy regression tests and provider
 schema without OCI credentials or state access. No resources are provisioned.
 
 ## Provisioning prerequisites
