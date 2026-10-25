@@ -174,3 +174,13 @@ format, strict typing and 313 tests; three explicit backend integration tests we
 skipped. `uv build --all-packages` built all three source distributions and wheels.
 `git diff --check` passed. Linux execution and live provider behavior were not
 verified locally.
+
+## M03-PR1 completion follow-up
+
+Issue #35 supplies the missing verified actionlint syntax/expression sensor from
+original M03-PR1. It runs through infra verify and the focused security workflows
+CLI, alongside #31's Action/credential boundary tests. See the
+[toolchain runbook](runbooks/trusted-toolchain.md#workflow-syntax-sensor) for exact
+coverage and the [M03 status map](../HARNESS.md#m03-implementation-status) for
+remaining work. Workflow shell behavior and administrative protections remain
+outside this syntax sensor's evidence.

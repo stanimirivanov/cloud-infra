@@ -13,6 +13,7 @@ from infra_core.backend import QualificationError, qualify, validate_receipt
 from infra_core.backend_posture import validate_posture
 from infra_core.foundation import deny_deployment, load_foundation
 from infra_core.repository import find_repository
+from infra_core.security import check_workflows
 from infra_core.verification import verify
 
 
@@ -23,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("verify", help="run the credential-free Python and artifact checks")
+    security = commands.add_parser("security", help="offline security sensors; no operations")
+    security_commands = security.add_subparsers(dest="security_command", required=True)
+    security_commands.add_parser("workflows", help="check workflow syntax with verified actionlint")
     backend = commands.add_parser("backend", help="inspect or explicitly qualify backend behavior")
     backend_commands = backend.add_subparsers(dest="backend_command", required=True)
     backend_commands.add_parser("inspect", help="show configuration and disabled deployment state")
@@ -107,7 +111,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "services":
+        if args.command == "security":
+            check_workflows(root)
+            print("PASS: workflow syntax/expressions; no workflow steps executed")
+        elif args.command == "services":
             from infra_core.governance.contracts import mapping
             from infra_core.services.governance import audit as audit_services
 

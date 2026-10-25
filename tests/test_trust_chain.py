@@ -93,7 +93,8 @@ def test_missing_scanner_fails_closed(tmp_path):
         secret_scanning.scanner(tmp_path)
 
 
-def test_altered_archive_fails_before_extraction(tmp_path):
+@pytest.mark.parametrize("tool", ["gitleaks", "actionlint"])
+def test_altered_archive_fails_before_extraction(tmp_path, tool):
     archive = tmp_path / "altered.zip"
     archive.write_bytes(b"not the pinned release archive")
     result = subprocess.run(
@@ -103,7 +104,7 @@ def test_altered_archive_fails_before_extraction(tmp_path):
             "-File",
             str(ROOT / ".github/scripts/install-tools.ps1"),
             "-Tool",
-            "gitleaks",
+            tool,
             "-Archive",
             str(archive),
         ],
@@ -115,7 +116,7 @@ def test_altered_archive_fails_before_extraction(tmp_path):
     )
     assert result.returncode == 1
     assert result.stderr.splitlines() == [
-        "TOOL001: gitleaks archive checksum mismatch; nothing extracted or executed"
+        f"TOOL001: {tool} archive checksum mismatch; nothing extracted or executed"
     ]
 
 

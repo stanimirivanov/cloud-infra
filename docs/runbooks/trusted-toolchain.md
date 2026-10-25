@@ -4,21 +4,23 @@
 
 Use PowerShell 7 and Git on Linux/Windows x64. In a PowerShell session, run
 `./.github/scripts/install-tools.ps1`, then the locked commands in
-[HARNESS.md](../../HARNESS.md). The installer downloads fixed uv, Pulumi and
-Gitleaks releases into ignored .infra/tools, verifies the committed archive SHA-256
+[HARNESS.md](../../HARNESS.md). The installer downloads fixed uv, Pulumi,
+Gitleaks and actionlint releases into ignored .infra/tools, verifies the committed
+archive SHA-256
 before extraction, and adds their binary directories to this session's PATH and
 GITHUB_PATH in CI. It never executes downloaded installer scripts. Fresh extraction
-directories avoid stale install contents. Gitleaks uses a stable binary location
-whose SHA-256 is rechecked by every infra verify invocation; PATH substitutes are
+directories avoid stale install contents. Gitleaks and actionlint use stable binary locations
+whose SHA-256 hashes are rechecked by every infra verify invocation; PATH substitutes are
 not accepted. Verification does not install anything or access cloud APIs.
 
 [config/toolchain.json](../../config/toolchain.json) is the reviewable trust root.
 The release asset URLs and digests were read through the official GitHub release
 APIs on 25 October 2026: [uv 0.12.5](https://github.com/astral-sh/uv/releases/tag/0.12.5),
-[Pulumi 3.272.0](https://github.com/pulumi/pulumi/releases/tag/v3.272.0), and
-[Gitleaks 8.30.1](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1).
-The downloaded Linux and Windows scanner archives matched those digests; extracted
-scanner binaries supplied the additional binary hashes. SHA-256 protects against
+[Pulumi 3.272.0](https://github.com/pulumi/pulumi/releases/tag/v3.272.0),
+[Gitleaks 8.30.1](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1), and
+[actionlint 1.7.12](https://github.com/rhysd/actionlint/releases/tag/v1.7.12).
+The downloaded Linux and Windows scanner and workflow-linter archives matched
+those digests; extracted scanner/linter binaries supplied the additional binary hashes. SHA-256 protects against
 replacement relative to these reviewed values; it does not prove publisher
 integrity, code safety, or a cryptographically independent release identity.
 
@@ -65,7 +67,7 @@ a negative regression test preserving the original detection requirement.
 
 For a tool update, review the official release/tag, retrieve its asset digest and
 compare the actual archive hash, then update both supported platforms in the
-manifest and existing version contracts. Recompute scanner binary hashes only
+manifest and existing version contracts. Recompute scanner/linter binary hashes only
 after archive verification. Review the full Action commit and its release context;
 update YAML and the catalogue together. Run checksum-tampering, planted-secret and
 workflow mutation tests, then the complete gate. There are no floating downloads.
@@ -77,3 +79,26 @@ required Harness matrix checks, review/anti-bypass rules, and qualification
 reviewers/main-only branches before treating these as protected execution paths.
 The PR does not change these settings. Cloud IAM, bucket controls and hosted-runner
 isolation were not audited here. Resource operations remain disabled.
+
+## Workflow syntax sensor
+
+`uv run --locked infra security workflows` runs the same actionlint check required
+by infra verify. It checks every .yml/.yaml file directly in .github/workflows,
+including reusable workflows, using the catalogue-verified binary under
+.infra/tools/actionlint. It never executes workflow steps or installs tools.
+A missing/tampered binary, empty workflow inventory, syntax/expression error,
+launch failure or 60-second per-file timeout fails with WORKFLOW001. Diagnostics
+include only the file and validated numeric locations/rule kinds (up to ten);
+source snippets, error messages and stderr are suppressed. Inspect source at the
+reported location privately; do not publish raw tool output with private values.
+
+[actionlint's documented integrations](https://github.com/rhysd/actionlint/blob/v1.7.12/docs/usage.md)
+are explicitly disabled with -shellcheck= and -pyflakes=; those unpinned tools
+must not be discovered through PATH. An explicit empty configuration prevents a
+repository-local ignore rule from weakening this gate. MIT-licensed actionlint
+adds one development executable per platform and no Python runtime dependency.
+Existing pytest contracts continue to enforce reviewed Action pins and repository
+credential/permission/trigger boundaries in the full gate. The focused workflow
+CLI checks syntax/expressions only; it does not replace those safety contracts,
+validate composite action metadata, prove shell behavior, inspect GitHub settings,
+or authenticate upstream releases independently of the reviewed digest catalogue.

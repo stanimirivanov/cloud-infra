@@ -8,6 +8,7 @@ from pathlib import Path
 
 from infra_core.fitness import check_fitness
 from infra_core.secret_scanning import check_secrets
+from infra_core.security import check_workflows
 
 
 def run(
@@ -49,6 +50,7 @@ def verify(root: Path) -> None:
     check_tracked_artifacts(root)
     check_secrets(root)
     check_fitness(root)
+    check_workflows(root)
     for args in (
         ["ruff", "check", "."],
         ["ruff", "format", "--check", "."],
@@ -70,5 +72,5 @@ def verify(root: Path) -> None:
             ],
             root,
         )
-    print("PASS: secrets, artifacts, architecture, docs, lint, format, types and tests")
+    print("PASS: secrets, artifacts, architecture, docs, workflows, lint, format, types and tests")
     print("No live provider, billing or deployed-state checks were performed.")
