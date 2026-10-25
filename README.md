@@ -1,84 +1,59 @@
-# Oracle OKE Infrastructure & Tekton Engine Provisioner
+# OCI OKE infrastructure
 
-This repository contains the Infrastructure as Code (IaC) written in
-**Terraform** to provision a zero-cost Kubernetes cluster on **Oracle Cloud
-Infrastructure (OCI) Always Free Tier** and automatically bootstrap the **Tekton
-Pipelines Engine**.
+Terraform and Terragrunt provision OCI networking and an OKE Basic cluster with
+an Ampere A1 node pool. The current configuration has two nodes, each with one
+OCPU and 8 GiB RAM. It targets Always Free sizing but cannot guarantee zero cost,
+capacity or tenancy eligibility. Tekton installation is not implemented.
 
-## Architecture
+Start with [HARNESS.md](HARNESS.md) for the architecture map, scoped agent guides,
+local setup, deterministic checks, CI gates and hardening roadmap.
 
-```mermaid
-flowchart TD
-subgraph CICD["GitHub Actions Workflow"]
-GHA["<code>terraform.yml</code>"]
-end
-
-    subgraph OCI["Oracle Cloud Infrastructure (OCI)"]
-        
-        subgraph VCN["Virtual Cloud Network (10.0.0.0/16)"]
-            APISubnet["API Endpoint Subnet<br/><code>10.0.0.0/28</code>"]
-            NodeSubnet["Worker Node Subnet<br/><code>10.0.10.0/24</code>"]
-        end
-
-        subgraph OKE["Oracle Container Engine for Kubernetes (OKE)"]
-            Cluster["Basic Cluster ($0/mo)"]
-            
-            subgraph NP["Node Pool: Ampere ARM (VM.Standard.A1.Flex)"]
-                Resources["2 Nodes | Total: 4 OCPUs & 24 GB RAM<br/><i>(Always Free Cap)</i>"]
-            end
-
-            subgraph TektonNS["Namespace: tekton-pipelines"]
-                TektonEngine["Tekton Engine<br/><i>(Installed automatically via Helm/Terraform)</i>"]
-            end
-        end
-    end
-
-    %% Flows
-    GHA ==>|"Terraform Apply"| OCI
-    APISubnet -.->|"Endpoint Binding"| Cluster
-    NodeSubnet -.->|"Node Placement"| NP
-    Cluster --- NP
-    NP --- TektonNS
+```text
+terraform/root.hcl                    Shared generated backend/provider/variables
+terraform/01-infrastructure/vcn.tf    VCN, API/node/pod subnets, routing and NSGs
+terraform/01-infrastructure/oke.tf    Basic cluster, OCI lookups and A1 nodes
+terraform/01-infrastructure/outputs.tf  cluster_ocid and region
 ```
 
-## Prerequisites
+## Development verification
 
-1. An **Oracle Cloud Infrastructure (OCI)** account.
-2. An **API Key Pair** generated in the OCI User Settings.
-3. A **GitHub Repository Environment** named `oci-infrastructure` with the
-   following secrets:
-   - `OCI_CLI_USER`: Your OCI User OCID.
-   - `OCI_CLI_TENANCY`: Your OCI Tenancy OCID.
-   - `OCI_CLI_FINGERPRINT`: OCI API Key fingerprint.
-   - `OCI_CLI_KEY_CONTENT`: Full content of the private `.pem` key.
-   - `OCI_CLI_REGION`: Your OCI active region (e.g., `eu-frankfurt-1`).
-   - `OCI_COMPARTMENT_OCID`: Target compartment OCID.
-   - `OCI_S3_ACCESS_KEY`: The AWS s3 access key.
-   - `OCI_S3_SECRET_KEY`: The AWS s3 secret key.
+Install the pinned tools documented in HARNESS.md, activate the Python virtual
+environment and run:
 
-## Local Execution
+```sh
+python -m pip install -r scripts/requirements.txt
+pre-commit install
+python scripts/verify.py
+```
 
-To test or apply the Terraform code locally:
+This validates formatting, architecture, policy regression tests and provider
+schema without OCI credentials or state access. No resources are provisioned.
 
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/stanimirivanov/oci-oke-terraform.git](https://github.com/stanimirivanov/oci-oke-terraform.git)
-   cd oci-oke-terraform/terraform
-   ```
-2. **Initialize and apply:**
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-3. Connect `kubectl` to the cluster:
-   Run the command provided in `terraform output get_kubeconfig_command`.
+## Provisioning prerequisites
 
-## CI/CD Pipeline
+Use an OCI account, API signing key and the GitHub environment
+`oci-infrastructure` with these secrets:
 
-The included `.github/workflows/terraform.yml` handles automated infrastructure
-management:
+- OCI_CLI_USER, OCI_CLI_TENANCY, OCI_CLI_FINGERPRINT, OCI_CLI_KEY_CONTENT
+- OCI_CLI_REGION, OCI_COMPARTMENT_OCID
+- OCI_S3_ACCESS_KEY, OCI_S3_SECRET_KEY for the pre-existing S3-compatible backend
 
-- Pull Requests: Runs `terraform plan` to preview infrastructure changes.
-- Push to `main`: Runs `terraform apply` after passing owner authorization
-  checks.
+For authorized local provisioning, export the corresponding `TF_VAR_tenancy_ocid`,
+`TF_VAR_user_ocid`, `TF_VAR_fingerprint`, `TF_VAR_private_key`, `TF_VAR_region` and
+`TF_VAR_compartment_ocid`, plus backend AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.
+The root.hcl file owns backend location and state keys; do not replace them with
+local state. Treat `terraform.tfvars.example` as documentation only: Terragrunt
+inputs come from environment variables. Never commit real credentials or state.
+
+Run Terragrunt from `terraform/01-infrastructure`; plain Terraform in the parent
+`terraform/` directory does not generate the required configuration. Inspect an
+authorized `terragrunt plan` before requesting any apply. Cluster access requires
+OCI tooling and the `cluster_ocid` output; there is no kubeconfig command output.
+
+## CI/CD
+
+The Harness workflow runs credential-free checks on every PR and main push. The
+Terragrunt Deployment workflow runs for Terraform changes and manual dispatch,
+requires the same gate, and retains the owner/environment controls for its
+credentialed plan and main apply. See HARNESS.md for required repository settings,
+known network/image/recovery risks and the staged hardening plan.

@@ -33,32 +33,32 @@ resource "oci_core_route_table" "rt" {
 
 # Subnet 1: Kubernetes API Endpoint
 resource "oci_core_subnet" "k8s_endpoint_subnet" {
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.oke_vcn.id
-  cidr_block        = "10.0.0.0/28"
-  display_name      = "${var.project_prefix}-k8s-endpoint-subnet"
-  dns_label         = "${local.dns_prefix}endpoint"
-  route_table_id    = oci_core_route_table.rt.id
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.oke_vcn.id
+  cidr_block     = "10.0.0.0/28"
+  display_name   = "${var.project_prefix}-k8s-endpoint-subnet"
+  dns_label      = "${local.dns_prefix}endpoint"
+  route_table_id = oci_core_route_table.rt.id
 }
 
 # Subnet 2: Worker Nodes Subnet
 resource "oci_core_subnet" "node_subnet" {
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.oke_vcn.id
-  cidr_block        = "10.0.10.0/24"
-  display_name      = "${var.project_prefix}-node-subnet"
-  dns_label         = "${local.dns_prefix}nodes"
-  route_table_id    = oci_core_route_table.rt.id
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.oke_vcn.id
+  cidr_block     = "10.0.10.0/24"
+  display_name   = "${var.project_prefix}-node-subnet"
+  dns_label      = "${local.dns_prefix}nodes"
+  route_table_id = oci_core_route_table.rt.id
 }
 
 # Subnet 3: Pod Subnet (Required for OCI_VCN_IP_NATIVE CNI)
 resource "oci_core_subnet" "pod_subnet" {
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.oke_vcn.id
-  cidr_block        = "10.0.20.0/24"
-  display_name      = "${var.project_prefix}-pod-subnet"
-  dns_label         = "${local.dns_prefix}pods"
-  route_table_id    = oci_core_route_table.rt.id
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.oke_vcn.id
+  cidr_block     = "10.0.20.0/24"
+  display_name   = "${var.project_prefix}-pod-subnet"
+  dns_label      = "${local.dns_prefix}pods"
+  route_table_id = oci_core_route_table.rt.id
 }
 
 # --- API Endpoint NSG ---

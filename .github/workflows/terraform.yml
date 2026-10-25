@@ -23,8 +23,15 @@ env:
   # Terragrunt Non-Interactive Flag
   TG_NON_INTERACTIVE: true
 
+permissions:
+  contents: read
+
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   apply:
+    needs: verify
     runs-on: ubuntu-latest
     environment: oci-infrastructure
     if: github.actor == github.repository_owner
@@ -154,7 +161,7 @@ jobs:
 
   recover:
     needs: apply
-    if: failure()
+    if: failure() && needs.apply.result == 'failure'
     runs-on: ubuntu-latest
 
     steps:

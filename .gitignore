@@ -25,3 +25,21 @@ local.properties
 *.launch
 .classpath
 .target
+
+### Terraform and local verification
+.terraform/
+.terragrunt-cache/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+*.pem
+*.key
+backend.tf
+provider.tf
+common_variables.tf
+.venv/
+.harness-tools/
+__pycache__/
+.ruff_cache/
