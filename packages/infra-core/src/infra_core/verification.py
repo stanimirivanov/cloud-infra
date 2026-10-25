@@ -99,9 +99,17 @@ def verify(root: Path, *, scope: str = "all") -> None:
         path = Path(name)
         if (
             path.name in GENERATED
-            or any(part in path.parts for part in (".terraform", ".terragrunt-cache", ".venv"))
+            or any(
+                part in path.parts
+                for part in (".terraform", ".terragrunt-cache", ".venv", ".pulumi", ".infra")
+            )
             or path.suffix in {".pem", ".key", ".tfstate", ".tfplan", ".tfvars"}
-            or name.endswith((".tfstate.backup", ".tfvars.json"))
+            or name.endswith((".tfstate.backup", ".tfvars.json", ".checkpoint.json"))
+            or (
+                path.name.startswith("Pulumi.")
+                and path.name != "Pulumi.yaml"
+                and path.suffix == ".yaml"
+            )
         ):
             raise RuntimeError(f"SECRET002: untrack generated/sensitive artifact: {name}")
     run(["terraform", "fmt", "-check", "-recursive", "terraform"], root)

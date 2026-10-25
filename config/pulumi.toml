@@ -1,0 +1,30 @@
+schema_version = 1
+pulumi_version = "3.272.0"
+qualification_ttl_hours = 24
+
+[backend]
+bucket = "kishu-tf-state"
+prefix = "pulumi"
+region = "eu-frankfurt-1"
+endpoint = "https://frx6hbt3t4bu.compat.objectstorage.eu-frankfurt-1.oraclecloud.com"
+
+# Immutable disabled identities. Enabling resource deployment needs later code/governance PRs.
+[units.oci-network]
+provider = "oci"
+stack = "oci-network"
+enabled = false
+
+[units.oci-oke]
+provider = "oci"
+stack = "oci-oke"
+enabled = false
+
+[units.cloudflare-edge]
+provider = "cloudflare"
+stack = "cloudflare-edge"
+enabled = false
+
+[units.supabase-database]
+provider = "supabase"
+stack = "supabase-database"
+enabled = false

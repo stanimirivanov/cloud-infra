@@ -1,8 +1,10 @@
 # Agent entry point
 
-Terraform/Terragrunt currently own the OCI infrastructure. Python automation is
+Existing OCI resources remain described by Terraform/Terragrunt; cloud writes and
+automatic recovery are frozen during migration. Python automation is
 managed in a uv workspace; Pulumi development is bootstrapped but provisioning is
-disabled until later migration PRs. Read [HARNESS.md](HARNESS.md) for the map and commands, then only
+disabled until later migration PRs. Backend qualification is opt-in and isolated;
+see docs/runbooks/pulumi-backend.md. Read [HARNESS.md](HARNESS.md) for the map and commands, then only
 the instructions and source in the directory you change. Do not ingest all docs.
 
 ## Plan → Execute → Verify
@@ -26,8 +28,10 @@ relevant feedback, verify, commit, push and comment with the resolution. Stop.
 
 ## Non-negotiable boundaries
 
-- Do not run apply, destroy, import, state push/move or recovery as verification.
-  Infrastructure mutations require an explicit provisioning request.
+- Deployed-state apply/destroy/import/recovery are never routine verification.
+  Only the documented opt-in qualification may exercise synthetic checkpoint
+  operations in new isolated namespaces. Infrastructure mutations and ownership
+  transfers require an explicit operational request.
 - Never commit credentials, tfvars values, state, plan files or generated caches.
 - Keep cloud credentials out of PR verification and untrusted workflow code.
 - Do not bypass checks or broaden a policy exception to get a green result.

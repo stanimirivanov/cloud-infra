@@ -1,27 +1,13 @@
-name: "Terragrunt Deployment"
+name: Legacy Terraform (frozen)
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'terraform/**'
+    branches: [main]
+    paths: ['terraform/**']
   pull_request:
-    branches: [ main ]
-    paths:
-      - 'terraform/**'
+    branches: [main]
+    paths: ['terraform/**']
   workflow_dispatch:
-
-env:
-  # S3 Remote State Backend
-  AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
-
-  # Fix the 501 AWS chunked encoding error
-  AWS_REQUEST_CHECKSUM_CALCULATION: "when_required"
-  AWS_RESPONSE_CHECKSUM_VALIDATION: "when_required"
-
-  # Terragrunt Non-Interactive Flag
-  TG_NON_INTERACTIVE: true
 
 permissions:
   contents: read
@@ -29,117 +15,8 @@ permissions:
 jobs:
   verify:
     uses: ./.github/workflows/verify.yml
-
-  apply:
+  frozen:
     needs: verify
-    runs-on: ubuntu-latest
-    environment: oci-infrastructure
-    if: github.actor == github.repository_owner
-
-    defaults:
-      run:
-        working-directory: ./terraform
-
-    env:
-      # Standard OCI SDK/CLI Variables. Natively read by the Terraform OCI Provider
-      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
-      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
-      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
-      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
-      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
-
-      # Mapping OCI standard variables directly to your custom TF_VARs to prevent repetition
-      TF_VAR_user_ocid: ${{ secrets.OCI_CLI_USER }}
-      TF_VAR_tenancy_ocid: ${{ secrets.OCI_CLI_TENANCY }}
-      TF_VAR_fingerprint: ${{ secrets.OCI_CLI_FINGERPRINT }}
-      TF_VAR_private_key:  ${{ secrets.OCI_CLI_KEY_CONTENT }}
-      TF_VAR_region: ${{ secrets.OCI_CLI_REGION }}
-      TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
-
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.12.5'
-          enable-cache: false
-
-      - name: Install workspace
-        working-directory: .
-        run: uv sync --locked --all-groups
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-tools
-
-      - name: Terragrunt Plan
-        run: |
-          terragrunt run --all plan \
-            --report-file plan_report.json \
-            --report-format json
-
-      - name: Terragrunt Apply
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        id: terragrunt_apply
-        continue-on-error: true
-        run: |
-          terragrunt run --all apply \
-            --report-file apply_report.json \
-            --report-format json \
-
-      - name: Reconcile and Generate Infrastructure Report
-        if: always()
-        working-directory: .
-        run: uv run --locked infra report --directory terraform
-
-      - name: Upload errored state artifact
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: errored-tfstates
-          path: "**/errored.tfstate"
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 3
-
-      - name: Fail Workflow if Apply Failed
-        if: steps.terragrunt_apply.outcome == 'failure'
-        run: exit 1
-
-  recover:
-    needs: apply
-    if: failure() && needs.apply.result == 'failure'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-tools
-
-      - name: Download errored state artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: errored-tfstates
-        continue-on-error: true
-
-      - name: Push state files to OCI Object Storage
-        run: |
-          find terraform -name "errored.tfstate" | while read -r tfstate_path; do
-            # Extract the actual module directory by stripping out .terragrunt-cache
-            # e.g., 'terraform/01-infrastructure/.terragrunt-cache/...' becomes 'terraform/01-infrastructure'
-            module_dir=$(echo "$tfstate_path" | sed 's|\/\.terragrunt-cache/.*||')
-          
-            echo "=== Recovering state for module: $module_dir ==="
-          
-            # Copy errored.tfstate to the module root where terragrunt.hcl lives
-            cp "$tfstate_path" "$module_dir/errored.tfstate"
-          
-            cd "$module_dir"
-            terragrunt init -reconfigure
-            terragrunt state push errored.tfstate
-            rm -f errored.tfstate
-            cd - > /dev/null
-          done
+      - run: echo "Terraform cloud writes and automatic recovery are frozen for the Pulumi migration."

@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,9 +17,10 @@ def test_repository_discovery_from_nested_directory():
     assert find_repository(ROOT / "packages/infra-core/src") == ROOT
 
 
-def test_repository_discovery_outside_checkout(tmp_path):
-    with pytest.raises(RuntimeError, match="--root"):
-        find_repository(tmp_path)
+def test_repository_discovery_outside_checkout():
+    with tempfile.TemporaryDirectory(prefix="infra-outside-") as directory:
+        with pytest.raises(RuntimeError, match="--root"):
+            find_repository(Path(directory))
 
 
 def test_installed_console_entrypoint_from_nested_directory():
@@ -154,3 +156,30 @@ def test_verification_materializes_only_approved_files_in_temporary_copy(
         assert len(initialized) == 1
     assert len(rendered) == 1
     assert not rendered[0].exists()
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    [
+        ".infra/qualification.json",
+        ".pulumi/state.json",
+        "Pulumi.production.yaml",
+        "backup.checkpoint.json",
+    ],
+)
+def test_private_pulumi_artifacts_cannot_be_tracked(monkeypatch, artifact):
+    calls = []
+
+    def record(args, root, **kwargs):
+        calls.append(args)
+        output = ""
+        if args[0] in verification.VERSIONS and args[1] == "--version":
+            output = "v" + verification.VERSIONS[args[0]]
+        elif args[:2] == ["git", "ls-files"]:
+            output = artifact + "\0"
+        return subprocess.CompletedProcess(args, 0, stdout=output)
+
+    monkeypatch.setattr(verification, "run", record)
+    with pytest.raises(RuntimeError, match="SECRET002"):
+        verification.verify(ROOT)
+    assert not any(args[:2] == ["terraform", "init"] for args in calls)

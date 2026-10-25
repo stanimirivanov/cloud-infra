@@ -43,3 +43,10 @@ jobs:
       - name: Verify Python packaging and harness
         if: runner.os == 'Windows'
         run: uv run --locked infra verify --scope python
+      - uses: pulumi/actions@v7
+        with:
+          pulumi-version: '3.272.0'
+      - name: Qualify disposable local backend (no cloud credentials)
+        env:
+          RUN_PULUMI_LOCAL_QUALIFICATION: '1'
+        run: uv run --locked pytest -q -m backend_integration --basetemp .infra/pytest-backend -o cache_dir=.infra/pytest-cache
