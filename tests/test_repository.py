@@ -1,91 +1,46 @@
-"""Regression tests for state/generation boundaries and CI gate wiring."""
+"""Credential-free workflow and shared verification contracts."""
 
-import shutil
-import tempfile
 import tomllib
 from pathlib import Path
 
 import yaml
-from infra_core.policy import check_repository
-from infra_core.verification import VERSIONS
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class TestRepository:
-    def mutated_repository(self, relative_path, before, after, rule):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            shutil.copytree(ROOT / "terraform", root / "terraform")
-            (root / "tests").mkdir()
-            shutil.copy2(ROOT / "tests/public_ingress_baseline.json", root / "tests")
-            path = root / relative_path
-            text = path.read_text()
-            assert before in text
-            path.write_text(text.replace(before, after))
-            assert any(e.startswith(rule + ":") for e in check_repository(root))
+def test_workflow_runs_the_same_gate_on_both_platforms_without_credentials():
+    workflow = (ROOT / ".github/workflows/verify.yml").read_text()
+    config = yaml.load(workflow, Loader=yaml.BaseLoader)
+    assert set(config["on"]) == {"pull_request", "push", "workflow_call"}
+    assert config["permissions"] == {"contents": "read"}
+    assert "secrets." not in workflow
+    assert "environment:" not in workflow
+    job = config["jobs"]["verify"]
+    assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04", "windows-2025"}
+    assert "if" not in job
+    steps = job["steps"]
+    runs = {step.get("run"): step for step in steps if "run" in step}
+    for command in (
+        "uv sync --locked --all-groups",
+        "uv build --all-packages",
+        "uv run --locked infra verify",
+    ):
+        assert command in runs and "if" not in runs[command]
+    setup = {s["uses"].split("@")[0]: s for s in steps if "uses" in s}
+    assert set(setup) == {"actions/checkout", "astral-sh/setup-uv", "pulumi/actions"}
+    assert setup["actions/checkout"]["with"]["persist-credentials"] == "false"
+    root_config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert setup["astral-sh/setup-uv"]["with"]["version"] == root_config["tool"]["uv"][
+        "required-version"
+    ].removeprefix("==")
+    foundation = tomllib.loads((ROOT / "config/pulumi.toml").read_text())
+    assert setup["pulumi/actions"]["with"]["pulumi-version"] == foundation["pulumi_version"]
+    integration = next(s for s in steps if s.get("env", {}).get("RUN_PULUMI_LOCAL_QUALIFICATION"))
+    assert "-m backend_integration" in integration["run"]
 
-    def test_generated_path_escape(self):
-        self.mutated_repository(
-            "terraform/root.hcl",
-            'path      = "provider.tf"',
-            'path      = "../../provider.tf"',
-            "ARCH009",
-        )
 
-    def test_child_hook(self):
-        self.mutated_repository(
-            "terraform/01-infrastructure/terragrunt.hcl",
-            'include "root"',
-            'locals { x = "extra" }\ninclude "root"',
-            "ARCH011",
-        )
-
-    def test_root_shell_execution(self):
-        self.mutated_repository(
-            "terraform/root.hcl",
-            'region                  = "eu-frankfurt-1"',
-            'region = run_cmd("unexpected-program")',
-            "ARCH012",
-        )
-
-    def test_repository_generation_baseline(self):
-        assert check_repository(ROOT) == []
-
-    def test_workflow_gate_and_pins(self):
-        workflow = (ROOT / ".github/workflows/verify.yml").read_text()
-        config = yaml.load(workflow, Loader=yaml.BaseLoader)
-        assert set(config["on"]) == {"pull_request", "push", "workflow_call"}
-        assert config["permissions"] == {"contents": "read"}
-        assert "secrets." not in workflow
-        assert "environment:" not in workflow
-        steps = config["jobs"]["verify"]["steps"]
-        job = config["jobs"]["verify"]
-        assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04", "windows-2025"}
-        assert "if" not in job
-        runs = {step.get("run"): step for step in steps if "run" in step}
-        assert "uv sync --locked --all-groups" in runs
-        assert "uv build --all-packages" in runs
-        root_config = tomllib.loads((ROOT / "pyproject.toml").read_text())
-        setup_uv = next(s for s in steps if s.get("uses", "").startswith("astral-sh/setup-uv@"))
-        assert setup_uv["with"]["version"] == root_config["tool"]["uv"][
-            "required-version"
-        ].removeprefix("==")
-        assert runs["uv run --locked infra verify"]["if"] == "runner.os == 'Linux'"
-        assert runs["uv run --locked infra verify --scope python"]["if"] == "runner.os == 'Windows'"
-        assert runs["uv sync --locked --all-groups"].get("if") is None
-        setup = {s["uses"].split("@")[0]: s.get("with", {}) for s in steps if "uses" in s}
-        assert setup["hashicorp/setup-terraform"]["terraform_version"] == VERSIONS["terraform"]
-        assert setup["autero1/action-terragrunt"]["terragrunt-version"] == VERSIONS["terragrunt"]
-        deploy = yaml.load(
-            (ROOT / ".github/workflows/terraform.yml").read_text(), Loader=yaml.BaseLoader
-        )
-        assert set(deploy["jobs"]) == {"verify", "frozen"}
-        assert deploy["jobs"]["frozen"]["needs"] == "verify"
-        assert "secrets." not in (ROOT / ".github/workflows/terraform.yml").read_text()
-        assert deploy["jobs"]["verify"]["uses"] == "./.github/workflows/verify.yml"
-        tools = yaml.load(
-            (ROOT / ".github/actions/setup-tools/action.yml").read_text(), Loader=yaml.BaseLoader
-        )
-        assert tools["runs"]["steps"][0]["with"]["terraform_version"] == VERSIONS["terraform"]
-        assert tools["runs"]["steps"][1]["with"]["terragrunt-version"] == VERSIONS["terragrunt"]
+def test_hook_uses_the_complete_verification_gate():
+    config = yaml.load((ROOT / ".pre-commit-config.yaml").read_text(), Loader=yaml.BaseLoader)
+    hook = config["repos"][0]["hooks"][0]
+    assert hook["entry"] == "uv run --locked infra verify"
+    assert hook["pass_filenames"] == "false" and hook["always_run"] == "true"

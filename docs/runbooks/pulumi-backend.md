@@ -2,16 +2,16 @@
 
 ## Current release boundary
 
-Resource provisioning, imports, production stack initialization, ownership transfer,
-Terraform apply and automatic state recovery are disabled. `infra preview --unit NAME`
+Resource provisioning, imports, production stack initialization, ownership transfer
+and automatic state recovery are disabled. `infra preview --unit NAME`
 and `infra deploy --unit NAME` are intentional readiness failures. Qualification
 receipts never authorize resource deployment. The normal Pulumi program still fails
 before declaring resources; its Pulumi.yaml establishes only the Python entry point.
 
 `config/pulumi.toml` owns the CLI pin, backend identity, short evidence TTL and disabled
 unit/stack identities. The CLI pin must match the SDK in uv.lock. The existing OCI
-bucket is reused only under `pulumi/`; Terraform's `01-infrastructure/terraform.tfstate`
-is untouched. Every qualification uses a fresh `pulumi/qualification/<UUID>` prefix
+bucket is reused only under `pulumi/`; externally owned state objects are untouched.
+Every qualification uses a fresh `pulumi/qualification/<UUID>` prefix
 and a `qualification-<UUID>` stack in project `backend-qualification`.
 
 The tool performs real checkpoint operations only in that generated namespace. It
@@ -78,7 +78,7 @@ uv run --locked infra backend check-receipt
 ```
 
 Do not put credentials/passphrases on command lines. The tool clears ambient
-Pulumi/AWS/OCI/Terraform overrides, uses a temporary PULUMI_HOME, supplies only reviewed
+Pulumi and cloud credential overrides, uses a temporary PULUMI_HOME, supplies only reviewed
 HMAC credentials, disables EC2 metadata credentials, and uses HTTPS/path-style access
 with the configured region. Empty or missing secrets fail before CLI startup.
 
@@ -127,7 +127,7 @@ Validate backend permissions, locking and identity before any actual restoration
 An explicitly authorized recovery must restore the intended encrypted configuration
 and checkpoint using the matching secret provider, then inspect a preview for
 unintended replacement/deletion. Do not point two writable backends at the same
-resources. Do not restore an old Terraform snapshot after Pulumi has modified
+resources. Do not restore an old external-state snapshot after Pulumi has modified
 resources without reconciling actual cloud state and resource ownership.
 
 If cleanup/qualification fails, inspect only the printed generated namespace. Do

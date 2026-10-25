@@ -1,4 +1,4 @@
-"""CLI and orchestration regression tests, without external binaries or credentials."""
+"""CLI and verification regression tests, without cloud credentials."""
 
 import json
 import subprocess
@@ -24,21 +24,20 @@ def test_repository_discovery_outside_checkout():
 
 
 def test_installed_console_entrypoint_from_nested_directory():
-    # Exercise the installed console script without assuming a Windows/POSIX suffix.
     script = Path(sys.executable).parent / ("infra.exe" if sys.platform == "win32" else "infra")
     result = subprocess.run(
-        [str(script), "check"],
-        cwd=ROOT / "terraform",
+        [str(script), "backend", "inspect"],
+        cwd=ROOT / "packages/infra-program",
         check=True,
         capture_output=True,
         text=True,
         timeout=30,
     )
-    assert "PASS: HCL architecture" in result.stdout
+    assert json.loads(result.stdout)["deployment_enabled"] is False
 
 
 def test_cli_propagates_failure(monkeypatch, capsys):
-    def fail(root, *, scope):
+    def fail(root):
         raise RuntimeError("deliberate verification failure")
 
     monkeypatch.setattr(cli, "verify", fail)
@@ -46,30 +45,13 @@ def test_cli_propagates_failure(monkeypatch, capsys):
     assert "FAIL: deliberate verification failure" in capsys.readouterr().err
 
 
-def test_cli_rejects_provisioning_commands():
+@pytest.mark.parametrize(
+    "args", [["apply"], ["check"], ["report"], ["verify", "--scope", "python"]]
+)
+def test_cli_rejects_removed_or_unsupported_commands(args):
     with pytest.raises(SystemExit) as error:
-        cli.main(["apply"])
+        cli.main(args)
     assert error.value.code == 2
-
-
-def test_validation_environment_strips_credentials_and_overrides():
-    env = verification.validation_environment(
-        {
-            "PATH": "tools",
-            "AWS_ACCESS_KEY_ID": "secret",
-            "oci_private_key": "secret",
-            "TF_CLI_ARGS_init": "-upgrade",
-            "TG_CONFIG": "elsewhere",
-            "PULUMI_ACCESS_TOKEN": "secret",
-            "TERRAGRUNT_TFPATH": "untrusted",
-            "TF_VAR_private_key": "real-key",
-        }
-    )
-    assert env["PATH"] == "tools"
-    assert "secret" not in env.values()
-    assert env["TF_VAR_private_key"] == "VALIDATION_ONLY_NOT_A_KEY"
-    for key in ("TF_CLI_ARGS_init", "TG_CONFIG", "TERRAGRUNT_TFPATH", "PULUMI_ACCESS_TOKEN"):
-        assert key not in env
 
 
 def test_command_runner_propagates_failures_and_bounds_execution():
@@ -78,84 +60,40 @@ def test_command_runner_propagates_failures_and_bounds_execution():
     assert error.value.returncode == 9
 
 
-def test_python_scope_does_not_require_infrastructure_tools(monkeypatch, capsys):
+def test_verification_needs_only_git_and_python_tools(monkeypatch, capsys):
     calls = []
 
     def record(args, root, **kwargs):
         calls.append(args)
-        return subprocess.CompletedProcess(args, 0, stdout="")
+        output = "packages/infra-program/Pulumi.yaml\0" if args[0] == "git" else ""
+        return subprocess.CompletedProcess(args, 0, stdout=output)
 
     monkeypatch.setattr(verification, "run", record)
-    verification.verify(ROOT, scope="python")
-    assert all(args[0] == sys.executable for args in calls)
-    assert [args[2] for args in calls] == ["ruff", "ruff", "mypy", "pytest"]
+    verification.verify(ROOT)
+    assert calls[0] == ["git", "ls-files", "-z"]
+    assert all(args[0] == sys.executable for args in calls[1:])
+    assert [args[2] for args in calls[1:]] == ["ruff", "ruff", "mypy", "pytest"]
     pytest_args = calls[-1]
     scratch = Path(pytest_args[pytest_args.index("--basetemp") + 1]).parent
     assert f"cache_dir={scratch / 'cache'}" in pytest_args
     assert not scratch.exists()
-    assert "infrastructure not checked" in capsys.readouterr().out
+    assert "No live provider" in capsys.readouterr().out
 
 
-def test_failed_python_gate_stops_before_provider_initialization(monkeypatch):
+def test_failed_gate_stops_before_tests(monkeypatch):
     calls = []
 
     def fail(args, root, **kwargs):
         calls.append(args)
+        if args[0] == "git":
+            return subprocess.CompletedProcess(args, 0, stdout="")
         raise subprocess.CalledProcessError(1, args)
 
     monkeypatch.setattr(verification, "run", fail)
     with pytest.raises(subprocess.CalledProcessError):
         verification.verify(ROOT)
-    assert len(calls) == 1
-
-
-@pytest.mark.parametrize("unexpected_path", [None, "../../escape.tf"])
-def test_verification_materializes_only_approved_files_in_temporary_copy(
-    monkeypatch, unexpected_path
-):
-    generated = {
-        name: {"path": name, "contents": "# synthetic rendered configuration\n"}
-        for name in verification.GENERATED
-    }
-    if unexpected_path:
-        generated["bad"] = {"path": unexpected_path, "contents": "invalid"}
-    initialized = []
-    rendered = []
-
-    def record(args, root, **kwargs):
-        output = ""
-        if args[0] in verification.VERSIONS and args[1] == "--version":
-            output = "v" + verification.VERSIONS[args[0]]
-        elif args[:2] == ["terragrunt", "render"]:
-            rendered.append(root)
-            output = json.dumps({"generate": generated})
-        elif args[:2] == ["terraform", "init"]:
-            initialized.append(root)
-            assert root != ROOT / "terraform/01-infrastructure"
-            assert args == [
-                "terraform",
-                "init",
-                "-backend=false",
-                "-input=false",
-                "-lockfile=readonly",
-            ]
-            assert all(
-                (root / name).read_text().startswith("# synthetic")
-                for name in verification.GENERATED
-            )
-            assert kwargs["env"]["TF_VAR_private_key"] == "VALIDATION_ONLY_NOT_A_KEY"
-        return subprocess.CompletedProcess(args, 0, stdout=output)
-
-    monkeypatch.setattr(verification, "run", record)
-    if unexpected_path:
-        with pytest.raises(RuntimeError, match="ARCH009"):
-            verification.verify(ROOT)
-        assert not initialized
-    else:
-        verification.verify(ROOT)
-        assert len(initialized) == 1
-    assert len(rendered) == 1
-    assert not rendered[0].exists()
+    assert len(calls) == 2
+    assert calls[-1][2:] == ["ruff", "check", "."]
 
 
 @pytest.mark.parametrize(
@@ -163,23 +101,24 @@ def test_verification_materializes_only_approved_files_in_temporary_copy(
     [
         ".infra/qualification.json",
         ".pulumi/state.json",
+        ".venv/credentials.json",
         "Pulumi.production.yaml",
         "backup.checkpoint.json",
+        "signing.key",
+        "external.tfstate",
+        ".terraform/credentials.json",
+        ".terragrunt-cache/checkpoint.json",
+        "backend.tf",
     ],
 )
-def test_private_pulumi_artifacts_cannot_be_tracked(monkeypatch, artifact):
+def test_private_artifacts_fail_before_running_python_tools(monkeypatch, artifact):
     calls = []
 
     def record(args, root, **kwargs):
         calls.append(args)
-        output = ""
-        if args[0] in verification.VERSIONS and args[1] == "--version":
-            output = "v" + verification.VERSIONS[args[0]]
-        elif args[:2] == ["git", "ls-files"]:
-            output = artifact + "\0"
-        return subprocess.CompletedProcess(args, 0, stdout=output)
+        return subprocess.CompletedProcess(args, 0, stdout=artifact + "\0")
 
     monkeypatch.setattr(verification, "run", record)
     with pytest.raises(RuntimeError, match="SECRET002"):
         verification.verify(ROOT)
-    assert not any(args[:2] == ["terraform", "init"] for args in calls)
+    assert calls == [["git", "ls-files", "-z"]]

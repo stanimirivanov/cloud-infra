@@ -28,21 +28,8 @@ jobs:
           enable-cache: false
       - run: uv sync --locked --all-groups
       - run: uv build --all-packages
-      - uses: hashicorp/setup-terraform@v4
-        if: runner.os == 'Linux'
-        with:
-          terraform_version: '1.15.8'
-          terraform_wrapper: false
-      - uses: autero1/action-terragrunt@v3
-        if: runner.os == 'Linux'
-        with:
-          terragrunt-version: '0.97.2'
-      - name: Verify Python and infrastructure
-        if: runner.os == 'Linux'
+      - name: Verify Python, Pulumi contracts and private artifacts
         run: uv run --locked infra verify
-      - name: Verify Python packaging and harness
-        if: runner.os == 'Windows'
-        run: uv run --locked infra verify --scope python
       - uses: pulumi/actions@v7
         with:
           pulumi-version: '3.272.0'

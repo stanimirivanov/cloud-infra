@@ -4,7 +4,7 @@ The governance engine evaluates an entire OCI billing tenancy across the support
 resource families, rather than granting each stack its own free allowance. It is
 a preflight foundation, not permission to deploy or a zero-billing certificate.
 All resource deployment units and the normal Pulumi entry point remain disabled.
-Terraform source, deployed resources and state ownership are unchanged.
+These checks do not modify deployed resources or external state ownership.
 
 ## Boundaries and files
 
@@ -47,9 +47,9 @@ account evidence before changing dates. Do not raise limits just to pass a check
 The storage monthly model conservatively bounds GB-months to 200 as well as
 instantaneous capacity; it does not model a cloud invoice or billing rounding.
 
-The preserved legacy HCL regression ceiling of 4 OCPUs / 24 GiB is independent
-of this engine. Its current two 8 GiB workers exceed the free profile's 12 GB
-aggregate ceiling. This PR does not resize or adopt them.
+Repository source retirement does not establish the sizing of deployed resources.
+Reconcile live account inventory against the selected entitlement profile before
+any adoption or capacity change.
 
 ## Collecting evidence
 
@@ -224,7 +224,7 @@ uv build --all-packages
 ```
 
 The same pre-commit and Windows/Linux CI gate runs lint, formatting, strict mypy,
-schema/accounting/negative tests and existing legacy validation. CI's explicit
+schema/accounting/negative tests and tracked-artifact checks. CI's explicit
 backend_integration step also runs a real Pulumi preview against a temporary file
 backend and proves the mandatory policy rejects an unclassified synthetic
 ComponentResource. It needs no provider plugins or OCI credentials and never
