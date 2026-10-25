@@ -1,0 +1,46 @@
+[project]
+name = "oci-oke-infrastructure"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["infra-core", "infra-program"]
+
+[dependency-groups]
+dev = [
+    "ruff==0.14.2",
+    "pytest>=8.4,<10",
+    "mypy>=1.18,<2",
+    "pre-commit==4.3.0",
+    "PyYAML==6.0.3",
+]
+
+[tool.uv]
+package = false
+required-version = "==0.12.5"
+
+[tool.uv.workspace]
+members = ["packages/infra-core", "packages/infra-program"]
+
+[tool.uv.sources]
+infra-core = { workspace = true }
+infra-program = { workspace = true }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers -ra"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["packages/infra-core/src", "packages/infra-program/src"]
+
+# HCL is heterogeneous parser output; keep Any at this parsing boundary.
+[[tool.mypy.overrides]]
+module = ["hcl2", "hcl2.*"]
+ignore_missing_imports = true

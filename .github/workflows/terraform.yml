@@ -60,10 +60,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.11'
+          version: '0.12.5'
+          enable-cache: false
+
+      - name: Install workspace
+        working-directory: .
+        run: uv sync --locked --all-groups
 
       - name: Setup Environment
         uses: ./.github/actions/setup-tools
@@ -85,65 +90,8 @@ jobs:
 
       - name: Reconcile and Generate Infrastructure Report
         if: always()
-        uses: jannekem/run-python-script-action@v1
-        with:
-          script: |
-            import json
-            import os
-
-            # Load Plan Report
-            planned_units = {}
-            if os.path.exists('plan_report.json'):
-                with open('plan_report.json') as f:
-                    data = json.load(f)
-                    units = data if isinstance(data, list) else data.get('units', [])
-                    for u in units:
-                        planned_units[u.get('name')] = u
-
-            # Load Apply Report
-            applied_units = {}
-            if os.path.exists('apply_report.json'):
-                with open('apply_report.json') as f:
-                    data = json.load(f)
-                    units = data if isinstance(data, list) else data.get('units', [])
-                    for u in units:
-                        applied_units[u.get('name')] = u
-
-            # Build Markdown Table Summary
-            lines = ["### Infrastructure Deployment Reconciliation Report\n"]
-            lines.append("| Module / Unit | Planned Changes? | Apply Status | Cause / Details |")
-            lines.append("| :--- | :---: | :---: | :--- |")
-
-            all_names = sorted(list(set(list(planned_units.keys()) + list(applied_units.keys()))))
-
-            for name in all_names:
-                p_unit = planned_units.get(name, {})
-                a_unit = applied_units.get(name, {})
-            
-                has_planned = "✅ Yes" if p_unit else "⚪ No Changes"
-                result = a_unit.get('result', 'skipped / not reached')
-                reason = a_unit.get('reason', a_unit.get('cause', 'Dependency or upstream failure'))
-            
-                # Format icons based on result outcome
-                if result == 'succeeded':
-                    status_icon = "🟢 Present / Applied"
-                elif result == 'failed':
-                    status_icon = "🔴 Failed"
-                elif result == 'early exit':
-                    status_icon = "🟡 Skipped (Upstream Failed)"
-                else:
-                    status_icon = f"⚪ {result}"
-            
-                lines.append(f"| `{name}` | {has_planned} | {status_icon} | {reason} |")
-
-            summary_markdown = "\n".join(lines)
-
-            # Write to GitHub Step Summary
-            if "GITHUB_STEP_SUMMARY" in os.environ:
-                with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary_file:
-                    summary_file.write(summary_markdown + "\n")
-
-            print(summary_markdown)
+        working-directory: .
+        run: uv run --locked infra report --directory terraform
 
       - name: Upload errored state artifact
         if: failure()

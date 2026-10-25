@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: harness
         name: Complete credential-free harness
-        entry: python scripts/verify.py
+        entry: uv run --locked infra verify
         language: system
         pass_filenames: false
         always_run: true

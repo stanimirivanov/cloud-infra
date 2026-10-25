@@ -43,3 +43,7 @@ common_variables.tf
 .harness-tools/
 __pycache__/
 .ruff_cache/
+.pytest_cache/
+.mypy_cache/
+dist/
+*.egg-info/

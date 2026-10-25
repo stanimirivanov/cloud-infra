@@ -1,7 +1,8 @@
 # Agent entry point
 
-This repository provisions OCI networking and an OKE Basic cluster using Terraform
-and Terragrunt. Read [HARNESS.md](HARNESS.md) for the map and commands, then only
+Terraform/Terragrunt currently own the OCI infrastructure. Python automation is
+managed in a uv workspace; Pulumi development is bootstrapped but provisioning is
+disabled until later migration PRs. Read [HARNESS.md](HARNESS.md) for the map and commands, then only
 the instructions and source in the directory you change. Do not ingest all docs.
 
 ## Plan → Execute → Verify
@@ -12,7 +13,7 @@ the instructions and source in the directory you change. Do not ingest all docs.
    acceptance criteria; branch as `feature/issue-N` or `fix/issue-N`.
 2. Execute: follow the nearest scoped AGENTS.md; keep topology changes explicit.
    Never edit generated Terraform or move state to make validation pass.
-3. Verify: run `python scripts/verify.py`. Read diagnostics, fix their cause and
+3. Verify: run `uv run --locked infra verify`. Read diagnostics, fix their cause and
    rerun affected checks. Never suppress a failure or claim an unexecuted check.
    For infrastructure changes, an authorized credentialed plan is additional
    evidence; static checks cannot prove availability, security or billing.

@@ -11,22 +11,35 @@ permissions:
 
 jobs:
   verify:
-    name: Credential-free verification
-    runs-on: ubuntu-24.04
+    name: Credential-free verification (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.12.12'
+          version: '0.12.5'
+          enable-cache: false
+      - run: uv sync --locked --all-groups
+      - run: uv build --all-packages
       - uses: hashicorp/setup-terraform@v4
+        if: runner.os == 'Linux'
         with:
           terraform_version: '1.15.8'
           terraform_wrapper: false
       - uses: autero1/action-terragrunt@v3
+        if: runner.os == 'Linux'
         with:
           terragrunt-version: '0.97.2'
-      - run: python -m pip install -r scripts/requirements.txt
-      - run: python scripts/verify.py
+      - name: Verify Python and infrastructure
+        if: runner.os == 'Linux'
+        run: uv run --locked infra verify
+      - name: Verify Python packaging and harness
+        if: runner.os == 'Windows'
+        run: uv run --locked infra verify --scope python
