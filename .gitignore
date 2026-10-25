@@ -47,3 +47,9 @@ __pycache__/
 .mypy_cache/
 dist/
 *.egg-info/
+
+### Private Pulumi state, configuration and qualification evidence
+.infra/
+.pulumi/
+Pulumi.*.yaml
+*.checkpoint.json

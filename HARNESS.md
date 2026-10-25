@@ -4,8 +4,9 @@
 
 The repository is migrating to Pulumi Python. This PR establishes the uv workspace,
 packaged automation, typed configuration contracts and credential-free SDK tests.
-Terraform/Terragrunt still own all existing infrastructure. Pulumi has no resources,
-backend, stack configuration or enabled deployment entry point yet. There is no
+Existing Terraform configuration and cloud ownership are preserved, but Terraform
+apply/recovery are frozen. Pulumi backend configuration, disabled stack identities
+and isolated qualification tooling are now available; resource deployment is blocked. There is no
 Tekton installation, Helm release or Kubernetes workload in this baseline.
 
 ```text
@@ -23,11 +24,15 @@ packages/
       repository.py                  Checkout discovery from cwd or --root
       reporting.py                   Legacy deployment execution summary
       config.py                      Immutable account/provider/unit contracts
+      foundation.py                  Explicit backend and disabled stack identities
+      backend.py                     Opt-in isolated qualification and evidence
       policy.py                      Existing parsed-HCL architectural sensors
       verification.py                Python and legacy infrastructure gates
   infra-program/
     pyproject.toml                   Pulumi SDK and infra-core dependency
-    src/infra_program/__main__.py    Disabled until later migration PRs
+    Pulumi.yaml                     Shared runtime entry point, no implicit backend
+    src/infra_program/__main__.py    Resource deployment disabled
+    src/infra_program/qualification.py  Synthetic secret only, no cloud resources
 terraform/                           Existing source, scoped guides and provider lock
 tests/                               pytest regression, CLI, config and SDK tests
 .github/workflows/verify.yml         Linux full gate; Windows Python gate
@@ -53,7 +58,7 @@ specific structural properties repeatable, not the model itself deterministic.
 | Interface | 01-infrastructure/outputs.tf | cluster_ocid and region; no credentials |
 | Future add-ons | Separate unit, design required | Consume cluster outputs; own distinct state; no reverse dependency |
 | Verification | infra-core, tests/, verify.yml | Synthetic inputs, temporary files, no state or OCI calls |
-| Provisioning | terraform.yml | Existing owner check and oci-infrastructure environment |
+| Provisioning | pulumi.yml | Manual protected qualification only; resource operations disabled |
 
 Files in the infrastructure unit share one Terraform state and may reference
 one another according to these boundaries. Renaming a directory changes the
@@ -65,7 +70,9 @@ remain owned by root.hcl. State movement/recovery is never a validation fix.
 Install **uv 0.12.5**, Terraform **1.15.8**, Terragrunt **0.97.2**, Git and gh on
 PATH. uv obtains Python **3.12.14** from .python-version. Use official signed
 releases and verify published checksums. Terraform/Terragrunt pins are preserved
-from the existing harness; Pulumi CLI/backend setup belongs to the next PR.
+from the existing harness. Pulumi CLI **3.272.0** must match its locked Python SDK.
+Default verification needs no Pulumi CLI; opt-in local qualification and its CI
+step install/use this exact version.
 
 From the repository root, identically on PowerShell and POSIX shells:
 
@@ -88,13 +95,13 @@ nested directories. From outside the checkout, use
 `uv run --project /path/to/repo --locked infra --root /path/to/repo verify`.
 Package imports do not assume their installation directory is the repository.
 
-The existing deployment summary is packaged as
+The historical deployment summary remains packaged as
 `uv run --locked infra report --directory terraform`. It reads Terragrunt execution
 reports from that directory, prints Markdown and appends to GITHUB_STEP_SUMMARY
 when set. It reports execution presence, not whether resource changes were planned.
-The legacy deployment job uses this CLI instead of a third-party inline Python
-action; its provisioning commands, triggers, credentials and state ownership remain
-unchanged. Backend and deployment ownership migration belong to subsequent PRs.
+The legacy deployment writer and automatic recovery are now removed; the report
+command remains available for historical execution reports. Backend qualification and recovery are described in
+[the backend runbook](docs/runbooks/pulumi-backend.md); ownership migration is deferred.
 
 No OCI credentials, GitHub secrets, tfvars or backend initialization are needed.
 First sync downloads Python dependencies; full verification obtains the locked
@@ -157,31 +164,31 @@ same checks if neither code nor relevant environment changed.
 
 ## CI integration and repository settings
 
-The Harness matrix runs on all PRs and main pushes without actor/path exclusions
-or secrets. Ubuntu runs the complete `uv run --locked infra verify` gate. Windows
-runs `uv run --locked infra verify --scope python`, checking both editable packages,
-console entry points, strict typing and the SDK mock runtime without installing
-infrastructure binaries. Both matrix results are prerequisites for deployment.
-The deployment workflow also calls the matrix as a required prerequisite, preserving the existing deployment event/path filters and
-owner/environment controls. Infrastructure events consequently run the gate in
-both workflows; this keeps deployment gating explicit and standalone coverage
-unconditional. Neither workflow grants write access to PR validation.
+The Harness matrix runs on all PRs and main pushes without secrets. Ubuntu runs
+full verification; Windows runs the Python gate. Both also explicitly run the real,
+disposable filesystem-backend integration test using the pinned Pulumi CLI. This
+is local-only and creates no provider/cloud resources. Default local verification
+skips that opt-in test. The manual Pulumi workflow depends on the verification matrix.
 
-Repository administrators should require both standalone Harness matrix checks
-in main's branch protection/ruleset, block direct pushes and require review for harness,
-workflow and policy-baseline changes. Configure required reviewers on the
-oci-infrastructure environment. These settings are not enabled by this PR.
-A workflow file alone cannot prevent privileged bypass or changes to its own rules.
-The existing credentialed plan remains owner-only; static validation on forks is
-complete without it. Apply, destroy and state recovery require separate explicit
-operational authorization. This harness task does not provision resources.
+The legacy Terraform workflow is verification-only, without cloud credentials,
+apply, imports or automatic state recovery. The Pulumi foundation workflow has only
+a manual dispatch trigger, main/owner guards, non-cancelling concurrency, and the
+pulumi-backend-qualification environment. Only the qualification step receives
+S3 HMAC credentials/passphrase; resource preview/deploy remain deliberate failures.
+It uploads only sanitized qualification evidence. No PR code receives those secrets.
+
+Administrators must configure environment reviewers, main-only deployment branches
+and required Harness status checks. A named environment alone does not prove these
+settings exist. See the backend runbook for the administrative prerequisites,
+permissions, storage/retention boundaries, recovery and evidence limitations.
 
 ## Approved Pulumi migration sequence
 
 1. Delivered here: uv workspace, packaged CLI, pytest, strict mypy, shared hook/CI,
    typed account/unit contracts and Pulumi SDK development support.
-2. Next: qualify a separate Pulumi backend, secrets, stack identities and protected
-   deployment controls. Do not import or change ownership in this PR.
+2. Delivered: validated backend/stack identities, encrypted secret/checkpoint and
+   locking/recovery qualification tooling, manual protected workflow, and legacy
+   writer freeze. Actual OCI qualification remains an explicit credentialed gate.
 3. Add account-aware quota/inventory governance and mandatory resource policies.
 4. Implement OCI networking and OKE components with reviewed adoption contracts.
 5. Add Kubernetes resource governance and execute a separately authorized cutover.
@@ -215,7 +222,7 @@ baseline, never a blanket suppression.
 
 Other inherited limitations: Kubernetes/image selection depends on live OCI
 lookups and can select a non-ARM fallback; README previously claimed unimplemented
-Tekton support and different node sizing. Deployment recovery uploads/pushes state
-and its failure/environment handling needs a separate operational review. Static
+Tekton support and different node sizing. The former automatic recovery writer
+is removed; future deployed-state recovery requires the reviewed operator runbook. Static
 validation cannot prove those behaviors. No cloud plan or deployment is performed
 by the harness or implied by its green status.

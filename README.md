@@ -2,7 +2,9 @@
 
 The repository is transitioning to Pulumi Python. The uv workspace now packages
 automation and Pulumi SDK development support; Pulumi provisioning remains
-disabled. Terraform and Terragrunt currently provision OCI networking and an OKE Basic cluster with
+disabled. Backend/secret qualification is opt-in; see the
+[backend runbook](docs/runbooks/pulumi-backend.md). Existing Terraform and Terragrunt
+configuration describes OCI networking and an OKE Basic cluster with
 an Ampere A1 node pool. The current configuration has two nodes, each with one
 OCPU and 8 GiB RAM. It targets Always Free sizing but cannot guarantee zero cost,
 capacity or tenancy eligibility. Tekton installation is not implemented.
@@ -34,31 +36,25 @@ HCL architecture checks. The complete command validates formatting, types,
 architecture, policy regression tests and provider
 schema without OCI credentials or state access. No resources are provisioned.
 
-## Provisioning prerequisites
+## State and secrets foundation
 
-Use an OCI account, API signing key and the GitHub environment
-`oci-infrastructure` with these secrets:
+`config/pulumi.toml` declares the existing OCI S3-compatible bucket, a separate
+Pulumi prefix, pinned CLI and disabled stack identities. Inspect it without
+credentials using `uv run --locked infra backend inspect`.
 
-- OCI_CLI_USER, OCI_CLI_TENANCY, OCI_CLI_FINGERPRINT, OCI_CLI_KEY_CONTENT
-- OCI_CLI_REGION, OCI_COMPARTMENT_OCID
-- OCI_S3_ACCESS_KEY, OCI_S3_SECRET_KEY for the pre-existing S3-compatible backend
-
-For authorized local provisioning, export the corresponding `TF_VAR_tenancy_ocid`,
-`TF_VAR_user_ocid`, `TF_VAR_fingerprint`, `TF_VAR_private_key`, `TF_VAR_region` and
-`TF_VAR_compartment_ocid`, plus backend AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.
-The root.hcl file owns backend location and state keys; do not replace them with
-local state. Treat `terraform.tfvars.example` as documentation only: Terragrunt
-inputs come from environment variables. Never commit real credentials or state.
-
-Run Terragrunt from `terraform/01-infrastructure`; plain Terraform in the parent
-`terraform/` directory does not generate the required configuration. Inspect an
-authorized `terragrunt plan` before requesting any apply. Cluster access requires
-OCI tooling and the `cluster_ocid` output; there is no kubeconfig command output.
+The [backend runbook](docs/runbooks/pulumi-backend.md) documents local qualification,
+explicit OCI qualification, protected-environment secrets and recovery. Configure
+required reviewers and protected-main branch restrictions before enabling the
+manual workflow. Resource preview/deploy intentionally fail until later governance
+and adoption PRs; Terraform writes are frozen. Existing Terraform source and state
+keys are preserved for reference and credential-free schema validation.
 
 ## CI/CD
 
-The Harness workflow runs credential-free checks on every PR and main push. The
-Terragrunt Deployment workflow runs for Terraform changes and manual dispatch,
-requires the same gate, and retains the owner/environment controls for its
-credentialed plan and main apply. See HARNESS.md for required repository settings,
-known network/image/recovery risks and the staged hardening plan.
+The Harness workflow runs credential-free checks on every PR and main push, plus
+explicit disposable local-backend qualification on Windows and Linux. The legacy
+Terraform workflow now verifies only: apply and automatic state recovery are frozen.
+The manual Pulumi foundation workflow permits backend inspection and isolated OCI
+qualification on protected main; preview/deploy remain readiness failures. No merge
+provisions resources. See the backend runbook for required environment settings,
+secrets, qualification evidence and operator-run recovery.

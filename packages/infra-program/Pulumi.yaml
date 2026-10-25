@@ -1,0 +1,7 @@
+name: free-infrastructure
+runtime:
+  name: python
+  options:
+    virtualenv: ../../.venv
+main: src/infra_program
+# No backend or stack is selected implicitly; the CLI supplies reviewed identities.

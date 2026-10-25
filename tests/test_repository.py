@@ -80,16 +80,9 @@ class TestRepository:
         deploy = yaml.load(
             (ROOT / ".github/workflows/terraform.yml").read_text(), Loader=yaml.BaseLoader
         )
-        assert deploy["jobs"]["apply"]["needs"] == "verify"
-        deploy_steps = deploy["jobs"]["apply"]["steps"]
-        reporter = next(
-            step for step in deploy_steps if step.get("name", "").startswith("Reconcile")
-        )
-        assert reporter["run"] == "uv run --locked infra report --directory terraform"
-        assert reporter["working-directory"] == "."
-        assert reporter["if"] == "always()"
-        assert "script:" not in (ROOT / ".github/workflows/terraform.yml").read_text()
-        assert deploy["jobs"]["recover"]["if"] == "failure() && needs.apply.result == 'failure'"
+        assert set(deploy["jobs"]) == {"verify", "frozen"}
+        assert deploy["jobs"]["frozen"]["needs"] == "verify"
+        assert "secrets." not in (ROOT / ".github/workflows/terraform.yml").read_text()
         assert deploy["jobs"]["verify"]["uses"] == "./.github/workflows/verify.yml"
         tools = yaml.load(
             (ROOT / ".github/actions/setup-tools/action.yml").read_text(), Loader=yaml.BaseLoader
