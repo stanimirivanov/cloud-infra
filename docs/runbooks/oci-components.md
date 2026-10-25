@@ -1,10 +1,10 @@
 # OCI networking and OKE components
 
-PR 4 provides a protected component library and a pure proposal renderer. It does
-not provision, adopt, resize or move any existing resource. The root Pulumi
-program, CLI preview/deploy and all configured deployment identities remain
-disabled. Terraform continues to describe existing ownership while its writers
-remain frozen. Cutover requires a separate explicit operational request.
+This protected component library and pure proposal renderer do not provision,
+adopt, resize or move existing resources. The root Pulumi program, CLI
+preview/deploy and all configured deployment identities remain disabled.
+Existing external resource/state ownership remains authoritative; source retirement
+does not transfer it. Cutover requires a separate explicit operational request.
 
 ## Source map and contracts
 
@@ -49,9 +49,9 @@ StackReference wiring must be introduced and reviewed at cutover, with exported
 network contracts bound to their actual source stack/account and governance
 proposal. Do not point one combined program at either reserved stack identity.
 
-## Topology and reviewed differences
+## Topology and security boundaries
 
-| Layer | New component contract | Difference from legacy source |
+| Layer | Component contract | Enforced boundary |
 | --- | --- | --- |
 | VCN | Explicit RFC1918 CIDR; disjoint regional API/worker/pod subnets | Same default CIDRs, strict overlap/capacity validation |
 | Routing | Internet gateway for API/workers; All Services gateway for OCI; pods route only through service gateway | No NAT or load balancer; private pods have no general internet route |
@@ -60,7 +60,7 @@ proposal. Do not point one combined program at either reserved stack identity.
 | Workers | Public subnet, internal worker/pod communication, control-plane TCP/10250, ICMP fragmentation | No public SSH, NodePorts or unrestricted worker ingress |
 | Pods | Private subnet, pod NSG, internal/API/OCI-services communication | Explicit pod security boundary |
 | OKE | BASIC_CLUSTER and OCI_VCN_IP_NATIVE at cluster and pool | No enhanced features or paid virtual pools |
-| Compute | A1 only; default 2 x 1 OCPU / 6 GB; explicit 50 GB boot disks | Free profile fits 2 OCPU / 12 GB; legacy 2 x 8 GB is not copied |
+| Compute | A1 only; default 2 x 1 OCPU / 6 GB; explicit 50 GB boot disks | Free profile fits 2 OCPU / 12 GB; account-wide preflight may impose less |
 | Images/versions | Exact reviewed ARM OKE image, matching region/version; explicit supported version/ADs | No latest-version lookup or x86 fallback |
 
 API permits worker/pod TCP/6443 and 12250; worker/pod NSGs permit the required
@@ -121,26 +121,26 @@ to obtain a passing audit. See the [governance runbook](free-tier-governance.md)
 
 ## Adoption review before any cutover
 
-Prepare a private table with Terraform address/ID, live OCI properties, proposed
+Prepare a private table with external source address/ID, live OCI properties, proposed
 Pulumi unit/type/name/parent/provider, intended operation and independently
 verified owner. Start with this mapping; it is guidance, not executable imports:
 
-| Terraform source | Proposed logical unit / keys | Required decision |
+| External source ownership | Proposed logical unit / keys | Required decision |
 | --- | --- | --- |
 | oci_core_vcn.oke_vcn | oci-network / vcn | Match CIDRs/DNS/compartment; replacement is a stop condition |
 | oci_core_internet_gateway.ig, oci_core_route_table.rt | internet, public-routes | Review service-route addition and subnet attachments |
 | k8s_endpoint_subnet, node_subnet, pod_subnet | api-subnet, worker-subnet, pod-subnet | Pod privacy, routes and security-list changes may be disruptive |
 | api_endpoint_nsg, node_nsg | api-nsg, worker-nsg | Map individual rule OCIDs; explicitly retire unsafe rules |
-| No legacy managed equivalent | services, pod-routes, empty-security, pod-nsg and new scoped rules | New resources, separately reviewed |
+| No existing managed equivalent | services, pod-routes, empty-security, pod-nsg and new scoped rules | New resources, separately reviewed |
 | oci_containerengine_cluster.oke_cluster | oci-oke / cluster | Compare immutable endpoint/CNI/VCN fields before adoption |
 | oci_containerengine_node_pool.oke_node_pool | oci-oke / workers | Review pinned image/version, 8→6 GB sizing, placement and boot disks |
 | OKE-created instances and boot volumes | Observed account inventory, not separate child resources in this graph | Track ownership and retention without double ownership/import |
 
-Component parents change Pulumi URNs. Aliases do not transfer Terraform ownership.
+Component parents change Pulumi URNs. Aliases do not transfer external state ownership.
 Never run two state engines as writers for the same object, bulk-import with
 guessed IDs, or import OKE-managed instances/disks as independently owned resources.
 Keep protect=True; removing protection is an explicit operation-specific review.
-This PR emits no import IDs or aliases and removes nothing from Terraform state.
+The library emits no import IDs or aliases and removes nothing from external state.
 
 Stop before ownership transfer if a preview proposes unapproved replacement,
 destruction, wrong region/account, default security-list exposure, unsupported

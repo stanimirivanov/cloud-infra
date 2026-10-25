@@ -159,7 +159,7 @@ def test_image_fallback_stale_and_cross_region_images_fail(config, field, value)
         foundation_graph(cfg)
 
 
-def test_new_graph_hardens_legacy_security_and_cni(config):
+def test_graph_enforces_security_and_cni(config):
     graph = {item.key: item for item in foundation_graph(config)}
     for role in ("api", "worker", "pod"):
         assert graph[role + "-subnet"].props["security_list_ids"] == [Ref("empty-security")]

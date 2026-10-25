@@ -47,11 +47,6 @@ python_version = "3.12"
 strict = true
 files = ["packages/infra-core/src", "packages/infra-program/src"]
 
-# HCL is heterogeneous parser output; keep Any at this parsing boundary.
-[[tool.mypy.overrides]]
-module = ["hcl2", "hcl2.*"]
-ignore_missing_imports = true
-
 # Generated provider SDK analysis is prohibitively large. Our interfaces remain strict;
 # constructor arguments and wire schemas are checked using the actual SDK in mocks.
 [[tool.mypy.overrides]]

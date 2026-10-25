@@ -23,9 +23,7 @@ class BackendConfig:
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", self.bucket):
             raise ValueError("backend bucket must be an explicit safe S3 bucket name")
         if not re.fullmatch(r"pulumi(?:/[a-z0-9-]+)*", self.prefix):
-            raise ValueError(
-                "backend prefix must be pulumi or a child; Terraform state is excluded"
-            )
+            raise ValueError("backend prefix must be pulumi or a child; external state is excluded")
         if not re.fullmatch(r"[a-z]{2}-[a-z]+-[1-9][0-9]*", self.region):
             raise ValueError("backend region must be an explicit OCI region")
         endpoint = urlsplit(self.endpoint)

@@ -14,16 +14,15 @@ may write only synthetic state in an invocation-specific namespace or a temporar
 local backend. Never mix qualification with imports or resource deployment.
 
 Use typed functions and small explicit data contracts. Any is limited to parsed
-heterogeneous HCL/TOML/JSON and SDK responses at explicit validation boundaries.
+heterogeneous TOML/JSON and SDK responses at explicit validation boundaries.
 Python 3.12 is the supported runtime; .python-version pins the patch for local
 and CI use.
 
-Run subprocess argument arrays with check=True, explicit cwd and bounded timeouts.
-Propagate errors. Render legacy Terragrunt with synthetic inputs in a temporary
-copy; materialize only approved generated filenames. Disable backend access and
-use the readonly provider lock. Legacy validation never plans/applies, runs hooks
-or mutates deployed state. Only opt-in isolated qualification exercises synthetic
-checkpoint operations; it must never target resource stacks.
+Run subprocess argument arrays with explicit cwd and bounded timeouts. Propagate
+failures; replace potentially secret-bearing raw diagnostics with safe errors.
+Normal verification checks Python and tracked artifacts without provider/state
+operations. Only opt-in isolated qualification exercises synthetic checkpoint
+operations; it must never target resource stacks.
 
 Policy changes need negative tests and stable actionable rule IDs. governance/
 owns pure account capacity, replacement peak and monthly usage rules; inventory/

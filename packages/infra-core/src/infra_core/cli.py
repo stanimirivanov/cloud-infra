@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import tomllib
@@ -12,9 +11,8 @@ from pathlib import Path
 
 from infra_core.backend import QualificationError, qualify, validate_receipt
 from infra_core.foundation import deny_deployment, load_foundation
-from infra_core.reporting import render_report
 from infra_core.repository import find_repository
-from infra_core.verification import check_architecture, verify
+from infra_core.verification import verify
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -22,11 +20,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=version("infra-core"))
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
     commands = parser.add_subparsers(dest="command", required=True)
-    verifier = commands.add_parser("verify", help="run the credential-free harness")
-    verifier.add_argument("--scope", choices=("all", "python"), default="all")
-    commands.add_parser("check", help="run the focused HCL architecture policies")
-    reporter = commands.add_parser("report", help="render legacy Terragrunt execution reports")
-    reporter.add_argument("--directory", type=Path, default=Path("terraform"))
+    commands.add_parser("verify", help="run the credential-free Python and artifact checks")
     backend = commands.add_parser("backend", help="inspect or explicitly qualify backend behavior")
     backend_commands = backend.add_subparsers(dest="backend_command", required=True)
     backend_commands.add_parser("inspect", help="show configuration and disabled deployment state")
@@ -232,16 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command in ("preview", "deploy"):
             deny_deployment(load_foundation(root), args.unit)
         elif args.command == "verify":
-            verify(root, scope=args.scope)
-        elif args.command == "report":
-            markdown = render_report(root / args.directory)
-            if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
-                with Path(summary).open("a", encoding="utf-8") as stream:
-                    stream.write(markdown)
-            print(markdown, end="")
-        else:
-            check_architecture(root)
-            print("PASS: HCL architecture policies")
+            verify(root)
     except (subprocess.SubprocessError, RuntimeError, ValueError, OSError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

@@ -235,7 +235,7 @@ Never upload raw state, kubeconfig, secrets or these private reports to public C
    source bindings first; the current combined library must not be aimed at one
    reserved stack. Confirm required main checks and protected-environment reviewers
    administratively. Obtain a separate explicit instruction for operational work.
-2. Freeze every Terraform/Pulumi/recovery writer, including external automation;
+2. Freeze every external-state/Pulumi/recovery writer, including external automation;
    verify idle locks without deleting them. Capture encrypted backups and encrypted
    stack configuration/passphrase recovery material in controlled storage. Rehearse
    single-owner recovery with synthetic isolated state before a maintenance window.
@@ -247,7 +247,7 @@ Never upload raw state, kubeconfig, secrets or these private reports to public C
    verify its versioned contract/source stack, then OKE. Keep resource protection.
    Use operation-specific import/removal steps with one writable owner at every
    checkpoint. Do not bulk import, force state, infer aliases or restore a stale
-   Terraform state after Pulumi has modified resources. This repository currently
+   external state after Pulumi has modified resources. This repository currently
    provides no executor for those steps.
 5. Review and separately authorize any network-policy engine/admission baseline
    installation. Budget it, test API server dry-run and real forbidden-object

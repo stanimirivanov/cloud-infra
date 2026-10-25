@@ -1,6 +1,0 @@
-project_prefix   = "kishu"
-tenancy_ocid     = "ocid1.tenancy.oc1..example"
-user_ocid        = "ocid1.user.oc1..example"
-fingerprint      = "12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef"
-region           = "eu-frankfurt-1"
-compartment_ocid = "ocid1.compartment.oc1..example"
