@@ -113,8 +113,10 @@ def test_altered_archive_fails_before_extraction(tmp_path):
         timeout=30,
         check=False,
     )
-    assert result.returncode != 0
-    assert "TOOL001" in result.stderr and "nothing extracted or executed" in result.stderr
+    assert result.returncode == 1
+    assert result.stderr.splitlines() == [
+        "TOOL001: gitleaks archive checksum mismatch; nothing extracted or executed"
+    ]
 
 
 def test_tool_manifest_matches_locked_versions_and_reviewed_platforms():

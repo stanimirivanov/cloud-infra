@@ -23,7 +23,9 @@ foreach ($name in $Tool) {
         $download
     }
     if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant() -ne $asset.sha256) {
-        throw "TOOL001: $name archive checksum mismatch; nothing extracted or executed"
+        # Emit a machine-readable line; PowerShell exception rendering wraps/styles text.
+        [Console]::Error.WriteLine("TOOL001: $name archive checksum mismatch; nothing extracted or executed")
+        exit 1
     }
     $unpacked = Join-Path $stage 'unpacked'
     New-Item -ItemType Directory -Path $unpacked | Out-Null
