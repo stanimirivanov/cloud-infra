@@ -168,14 +168,14 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status after issue #35 (the remainder of original M03-PR1):
+stay disabled. Status through issue #37 (the M03-PR6 foundation):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
 | PR1: trusted CI chain | SHA pins/installer in #31; verified actionlint and workflow CLI in #35 |
 | PR2: secret scanning | #31: current, staged and reachable history; no exceptions/baseline supported |
 | PR3-PR5: legacy ingress/capacity/image changes | Superseded by retirement in #27; live adoption checks still required |
-| PR6: shared evidence envelopes | Pending; next dependency-free foundation |
+| PR6: shared evidence envelopes | #37: unsigned exact-byte/scope/clock sidecars; consumer migrations remain pending |
 | PR7: secret ingestion/encryption contracts | Pending |
 | PR8: independent recovery | #33 implements rehearsal/measurements; review remaining PR7 custody and wrong-passphrase acceptance |
 | PR9: backend posture | #33 implements read-only collection/checks; shared envelope migration pending PR6 |
@@ -185,3 +185,6 @@ stay disabled. Status after issue #35 (the remainder of original M03-PR1):
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
+
+The [shared evidence contract](docs/runbooks/security-evidence.md) is additive.
+Existing evidence validators remain unchanged until their explicit migration PRs.

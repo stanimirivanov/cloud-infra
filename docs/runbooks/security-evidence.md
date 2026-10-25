@@ -1,0 +1,45 @@
+# Shared security evidence sidecars
+
+M03-PR6 adds infra_core.evidence as a pure consistency API. Existing evidence
+formats and validators are unchanged; later consuming PRs must migrate explicitly.
+
+## Contract
+
+The [in-toto Statement v1 pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
+is adapted with closed repository-specific predicates (Apache-2.0 specification;
+no copied implementation or new dependency). This is an unsigned sidecar, not a
+signed attestation. Predicate URIs are identifiers, not downloadable schemas.
+
+create_envelope returns deterministic UTF-8 JSON bytes; validate_envelope returns
+None on success or raises EvidenceError. Both require kind, artifacts (logical
+role -> immutable bytes), scope, now (aware datetime), and positive max_age
+(timedelta). Creation also requires producer name/version and explicit original
+collection_started_at/collection_completed_at ISO timestamps; it never restamps.
+
+- Statement fields: _type, subject, predicateType, predicate. Each unique subject
+  has name and digest.sha256. Roles start with a lowercase letter and contain only
+  lowercase letters, digits, underscores or hyphens (64 characters maximum).
+- Closed kinds: backend-posture, backend-recovery, oci-inventory, service-usage,
+  cutover-review. Each predicate URI ends in /v1; predicate fields are scope,
+  producer, collection_started_at, collection_completed_at. Unknown fields fail.
+- Scope requires exact account_id, region, unit, commit and configuration_sha256.
+  Commit is 40/64 lowercase hex; configuration digest is 64 lowercase hex. Other
+  scope and producer labels are bounded identifiers; no empty/wildcard scope.
+- Limits: 64 KiB envelope, 1-16 subjects, 10 MiB per artifact, 16 MiB aggregate.
+  Duplicate JSON fields, nonfinite constants, invalid UTF-8 and excessive nesting fail.
+- The consumer supplies expected kind, full subject set, scope, clock and TTL from
+  its own policy. Freshness measures collection start; start <= end <= now. Usage
+  coverage remains a separate subject-payload/domain check. JSON reformatting
+  changes the SHA256: preserve exact captured bytes, including whitespace/newlines.
+
+## Consumer obligations and limits
+
+Keep sidecars/artifacts under ignored .infra; never attach private payloads to PRs.
+Callers must bound file reads before capture, preserve scope from trusted inputs,
+and independently validate payload schemas, completeness, source coverage and
+semantics after binding. EVID001-EVID004 identify schema/subject/scope/clock failures;
+errors omit private values. No filesystem, subprocess, network or cloud I/O occurs.
+A producer label is a claim; an attacker able to replace artifact and sidecar can
+recompute hashes. This proves neither source authenticity, IAM visibility, semantic
+truth nor operational authority. Signatures/trusted provenance and deployment
+policy remain later work; no existing evidence is upgraded by wrapping or restamping.
