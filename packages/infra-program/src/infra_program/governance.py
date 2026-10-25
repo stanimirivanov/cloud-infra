@@ -10,6 +10,8 @@ from infra_core.governance.resources import CAPACITY, footprint
 from infra_core.kubernetes.resources import validate_resource as validate_kubernetes
 from infra_core.oci.security import COMPONENTS, PROVIDER
 from infra_core.oci.security import validate_resource as validate_oci
+from infra_core.services.governance import DNS, PROJECT
+from infra_core.services.governance import validate_resource as validate_service
 from pulumi_policy import (
     EnforcementLevel,
     PolicyPack,
@@ -50,6 +52,43 @@ def validate_resource(args: ResourceValidationArgs, report: ReportViolation) -> 
         return
     try:
         properties = _properties(args.props)
+        if args.resource_type in {DNS, PROJECT}:
+            if args.resource_type == PROJECT:
+                # The generated SDK marks this sensitive input secret. Do not inspect/echo it.
+                if "databasePassword" not in properties:
+                    raise GovernanceError("EXT031: project password input is required")
+                properties = {
+                    key: value for key, value in properties.items() if key != "databasePassword"
+                }
+            validate_service(args.resource_type, properties)
+            return
+        if args.resource_type == "infrastructure:services:Independent":
+            if properties:
+                raise GovernanceError("EXT012: service component inputs must be empty")
+            return
+        if args.resource_type in {"pulumi:providers:cloudflare", "pulumi:providers:supabase"}:
+            is_dns = args.resource_type.endswith(":cloudflare")
+            expected = {"apiToken", "baseUrl"} if is_dns else {"accessToken", "endpoint"}
+            # Provider SDK metadata may also be supplied by the Pulumi engine.
+            if (
+                properties.get("version", "6.23.1" if is_dns else "1.11.0")
+                != ("6.23.1" if is_dns else "1.11.0")
+                or properties.get("pluginDownloadURL", "") != ""
+            ):
+                raise GovernanceError("EXT012: unreviewed provider version/download source")
+            props = {
+                key: value
+                for key, value in properties.items()
+                if key not in {"version", "pluginDownloadURL"}
+            }
+            endpoint = (
+                "https://api.cloudflare.com/client/v4" if is_dns else "https://api.supabase.com"
+            )
+            if set(props) != expected or props.get("baseUrl" if is_dns else "endpoint") != endpoint:
+                raise GovernanceError(
+                    "EXT012: provider fields/endpoint are outside the reviewed subset"
+                )
+            return
         if args.resource_type.startswith("kubernetes:"):
             parts = args.resource_type.split(":")
             if len(parts) != 3 or parts[1] not in {"core/v1", "apps/v1", "networking.k8s.io/v1"}:

@@ -16,10 +16,13 @@ def test_workspace_members_install_from_one_root_lock():
     assert config["tool"]["uv"]["workspace"]["members"] == [
         "packages/infra-core",
         "packages/infra-program",
+        "sdks/supabase",
     ]
     for name in ("infra-core", "infra-program"):
         assert distribution(name).version == "0.1.0"
         assert not (ROOT / "packages" / name / "uv.lock").exists()
+    assert distribution("pulumi-supabase").version == "1.11.0"
+    assert not (ROOT / "sdks/supabase/uv.lock").exists()
     core = tomllib.loads(
         (ROOT / "packages/infra-core/pyproject.toml").read_text(encoding="utf-8-sig")
     )

@@ -12,6 +12,11 @@ capacity or tenancy eligibility. Tekton installation is not implemented.
 Start with [HARNESS.md](HARNESS.md) for the architecture map, scoped agent guides,
 local setup, deterministic checks, CI gates and hardening roadmap.
 
+Independent Cloudflare DNS and Supabase Free project libraries now include offline
+scope/usage preflight and protected Pulumi SDK components. See the
+[independent services runbook](docs/runbooks/independent-services.md) for evidence,
+limits and commands. Deployment remains disabled; no cloud resource is activated.
+
 ```text
 terraform/root.hcl                    Shared generated backend/provider/variables
 terraform/01-infrastructure/vcn.tf    VCN, API/node/pod subnets, routing and NSGs

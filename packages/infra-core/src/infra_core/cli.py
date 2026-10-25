@@ -85,10 +85,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         "check", help="check pinned private review artifacts"
     )
     cutover_check.add_argument("--evidence", type=Path, required=True)
+    services = commands.add_parser("services", help="offline independent-service preflight")
+    services_commands = services.add_subparsers(dest="services_command", required=True)
+    service_audit = services_commands.add_parser(
+        "audit", help="validate and render additive proposal"
+    )
+    service_audit.add_argument("--config", type=Path, required=True)
+    service_audit.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "cutover":
+        if args.command == "services":
+            from infra_core.governance.contracts import mapping
+            from infra_core.services.governance import audit as audit_services
+
+            service_config = mapping(
+                json.loads((root / args.config).read_text(encoding="utf-8")), "service proposal"
+            )
+            service_evidence = json.loads((root / args.evidence).read_text(encoding="utf-8"))
+            with (root / "config/quotas/profiles.toml").open("rb") as stream:
+                service_profiles = tomllib.load(stream)["profiles"]
+            service_profile = service_profiles.get(
+                str(service_config.get("provider")) + "-free", {}
+            )
+            print(
+                json.dumps(
+                    audit_services(service_config, service_evidence, service_profile), indent=2
+                )
+            )
+        elif args.command == "cutover":
             from infra_core.cutover import check
 
             print(

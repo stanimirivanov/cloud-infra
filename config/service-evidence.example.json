@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "provider": "supabase",
+  "account_id": "REPLACE_WITH_USER_ID",
+  "scope_id": "example-org",
+  "scope_name": "example-org",
+  "profile_revision": 1,
+  "verified": false,
+  "verified_at": "1970-01-01T00:00:00+00:00",
+  "observed_at": "1970-01-01T00:00:00+00:00",
+  "complete": false,
+  "source": "REPLACE_WITH_PRIVATE_REVIEW_REFERENCE",
+  "plan": "UNVERIFIED",
+  "other_services_reviewed": false,
+  "coverage": "UNVERIFIED",
+  "usage_month": "1970-01",
+  "resources": [],
+  "usage": {"egress_mb": 0, "cached_egress_mb": 0, "storage_mb": 0, "mau": 0}
+}

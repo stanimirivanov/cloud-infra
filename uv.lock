@@ -7,6 +7,7 @@ members = [
     "infra-core",
     "infra-program",
     "oci-oke-infrastructure",
+    "pulumi-supabase",
 ]
 
 [[package]]
@@ -355,16 +356,20 @@ source = { editable = "packages/infra-program" }
 dependencies = [
     { name = "infra-core" },
     { name = "pulumi" },
+    { name = "pulumi-cloudflare" },
     { name = "pulumi-oci" },
     { name = "pulumi-policy" },
+    { name = "pulumi-supabase" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "infra-core", editable = "packages/infra-core" },
     { name = "pulumi", specifier = ">=3.200,<4" },
+    { name = "pulumi-cloudflare", specifier = "==6.23.1" },
     { name = "pulumi-oci", specifier = "==5.5.0" },
     { name = "pulumi-policy", specifier = ">=1,<2" },
+    { name = "pulumi-supabase", editable = "sdks/supabase" },
 ]
 
 [[package]]
@@ -789,6 +794,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumi-cloudflare"
+version = "6.23.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4b/b7/b81ef9259cc64b248f1ada258f89dc5fd65ef86a686506685d072b4bd9d0/pulumi_cloudflare-6.23.1.tar.gz", hash = "sha256:14e6a1a560d934487424281423f44465654b747f7aab3fb00a1a964d76baef88", size = 2095455, upload-time = "2026-10-21T06:41:04.848Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/54/cbcbe3cb5ba34b530c0d58fadedfcb2507fb3fdc0c0d7ca895b46f3a27ac/pulumi_cloudflare-6.23.1-py3-none-any.whl", hash = "sha256:74ed8e668674afcfbb1e79f7f1c95840b04b0dcfd74361adf83f1ea4359de7ce", size = 3117561, upload-time = "2026-10-21T06:41:02.715Z" },
+]
+
+[[package]]
 name = "pulumi-oci"
 version = "5.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -814,6 +833,24 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/43/e6/afc262c4cb76262c188ab8c0f017925593c681b8af09baee784f5c7f61fa/pulumi_policy-1.21.0-py2.py3-none-any.whl", hash = "sha256:4bdebe88c747a23c1894d696e7e46e8a371920d7d17c333a33a316974dab0d35", size = 20698, upload-time = "2026-05-20T11:13:29.179Z" },
+]
+
+[[package]]
+name = "pulumi-supabase"
+version = "1.11.0"
+source = { editable = "sdks/supabase" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "packaging", specifier = ">=24.0" },
+    { name = "pulumi", specifier = ">=3.247.0,<4.0.0" },
+    { name = "semver", specifier = ">=2.8.1" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.11,<5" },
 ]
 
 [[package]]

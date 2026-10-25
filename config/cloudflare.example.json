@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "provider": "cloudflare",
+  "unit": "cloudflare-edge",
+  "account_id": "REPLACE_WITH_ACCOUNT_ID",
+  "scope_id": "00000000000000000000000000000000",
+  "resources": [{
+    "key": "app",
+    "type": "cloudflare:index/dnsRecord:DnsRecord",
+    "props": {
+      "zoneId": "00000000000000000000000000000000",
+      "name": "app.example.com",
+      "type": "A",
+      "ttl": 300,
+      "content": "192.0.2.1",
+      "proxied": false
+    }
+  }],
+  "growth": {}
+}

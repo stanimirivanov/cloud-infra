@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "provider": "supabase",
+  "unit": "supabase-database",
+  "account_id": "REPLACE_WITH_USER_ID",
+  "scope_id": "example-org",
+  "resources": [{
+    "key": "database",
+    "type": "supabase:index/project:Project",
+    "props": {
+      "organizationId": "example-org",
+      "name": "example-db",
+      "region": "eu-central-1",
+      "instanceSize": "nano",
+      "legacyApiKeysEnabled": false
+    }
+  }],
+  "growth": {"egress_mb": 500, "cached_egress_mb": 500, "storage_mb": 100, "mau": 1000}
+}
