@@ -1,7 +1,7 @@
 # Reviewed release archives only; no downloaded installer scripts or PATH tool reuse.
 [CmdletBinding()]
 param(
-    [ValidateSet('uv', 'pulumi', 'gitleaks')][string[]]$Tool = @('uv', 'pulumi', 'gitleaks'),
+    [ValidateSet('uv', 'pulumi', 'gitleaks', 'actionlint')][string[]]$Tool = @('uv', 'pulumi', 'gitleaks', 'actionlint'),
     [string]$Archive
 )
 $ErrorActionPreference = 'Stop'
@@ -37,11 +37,11 @@ foreach ($name in $Tool) {
     }
     $binary = Join-Path $unpacked $asset.binary
     if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "TOOL001: missing $name binary" }
-    if ($name -eq 'gitleaks') {
+    if ($asset.ContainsKey('binary_sha256')) {
         if ((Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $asset.binary_sha256) {
-            throw 'TOOL001: scanner binary checksum mismatch'
+            throw "TOOL001: $name binary checksum mismatch"
         }
-        $scannerDir = Join-Path $repo '.infra/tools/gitleaks'
+        $scannerDir = Join-Path $repo ('.infra/tools/' + $name)
         New-Item -ItemType Directory -Path $scannerDir -Force | Out-Null
         Copy-Item -LiteralPath $binary -Destination $scannerDir -Force
         $binary = Join-Path $scannerDir (Split-Path $binary -Leaf)

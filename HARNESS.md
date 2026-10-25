@@ -46,8 +46,8 @@ Component factories compose libraries; they do not implement separate-stack depl
 ## Setup and verification
 
 Use Git and PowerShell 7 on Linux/Windows x64. The reviewed installer verifies uv
-**0.12.5**, Pulumi **3.272.0** and Gitleaks **8.30.1** release archives before
-extraction. The shared .python-version pins Python **3.12.14**.
+**0.12.5**, Pulumi **3.272.0**, Gitleaks **8.30.1** and actionlint **1.7.12**
+release archives before extraction. The shared .python-version pins Python **3.12.14**.
 GitHub CLI is needed for the issue/PR workflow. Pulumi CLI **3.272.0** is required
 for explicit backend integration tests and qualification, matching the locked SDK.
 
@@ -67,6 +67,7 @@ add member lockfiles, or edit sys.path to repair imports.
 
 | Purpose | Existing command |
 | --- | --- |
+| Workflow syntax/expressions | `uv run --locked infra security workflows` |
 | Complete shared gate | `uv run --locked infra verify` |
 | Lint | `uv run --locked ruff check .` |
 | Format check | `uv run --locked ruff format --check .` |
@@ -76,7 +77,8 @@ add member lockfiles, or edit sys.path to repair imports.
 | Inspect disabled backend configuration | `uv run --locked infra backend inspect` |
 
 The complete gate checks tracked private artifacts, verified Gitleaks scans, and
-architecture/documentation fitness, then lint, format, types and tests.
+architecture/documentation fitness and verified actionlint, then lint, format,
+types and tests.
 Documentation checks cover root Markdown, docs/,
 first-party package/config/workflow guides and sdks/AGENTS.md: local inline and
 reference links (including ATX Markdown heading anchors) must resolve inside the repo.
@@ -162,3 +164,24 @@ old data. See the backend and governance runbooks above for exact contracts.
 These are bounded synthetic/read-only sensors. Trusted source attestations, live
 least-privilege/coverage proof, production recovery SLOs, protected previews and
 operational drift/cost/availability monitors remain prerequisites for activation.
+
+## M03 implementation status
+
+The original plan remains Security and evidence hardening; resource operations
+stay disabled. Status after issue #35 (the remainder of original M03-PR1):
+
+| Planned task | Implementation / remaining work |
+| --- | --- |
+| PR1: trusted CI chain | SHA pins/installer in #31; verified actionlint and workflow CLI in #35 |
+| PR2: secret scanning | #31: current, staged and reachable history; no exceptions/baseline supported |
+| PR3-PR5: legacy ingress/capacity/image changes | Superseded by retirement in #27; live adoption checks still required |
+| PR6: shared evidence envelopes | Pending; next dependency-free foundation |
+| PR7: secret ingestion/encryption contracts | Pending |
+| PR8: independent recovery | #33 implements rehearsal/measurements; review remaining PR7 custody and wrong-passphrase acceptance |
+| PR9: backend posture | #33 implements read-only collection/checks; shared envelope migration pending PR6 |
+| PR10: protected backend audit workflow | Pending; #33's manual posture-secret handoff does not implement it |
+| PR11: usage coverage | #33 covers OCI; service usage and envelope migration remain pending |
+| PR12: cutover evidence | Pending; consumes remaining evidence contracts and administrative review |
+
+These implementation references are issue numbers. Completion of source checks
+cannot establish live backend/IAM posture, billing eligibility or deployment authority.
