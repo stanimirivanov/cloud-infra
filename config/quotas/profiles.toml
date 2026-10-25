@@ -23,14 +23,22 @@ monthly = { a1_ocpu_hours = 3000, a1_memory_gb_hours = 18000, block_gb_months = 
 # No provider gets implicit coverage from another provider's adapter.
 [profiles.cloudflare-free]
 id = "cloudflare-free"
+revision = 1
 provider = "cloudflare"
-enabled = false
-reason = "Requires organization inventory, metering and reviewed resource classifiers in the edge PR."
+enabled = true
+reviewed_at = "2026-10-25T00:00:00+00:00"
+source = "https://developers.cloudflare.com/dns/manage-dns-records/"
+max_resources = 200
+usage_limits = {}
 [profiles.supabase-free]
 id = "supabase-free"
+revision = 1
 provider = "supabase"
-enabled = false
-reason = "Requires organization/project usage collector and database classifier."
+enabled = true
+reviewed_at = "2026-10-25T00:00:00+00:00"
+source = "https://supabase.com/docs/guides/platform/billing-on-supabase"
+max_resources = 2
+usage_limits = { egress_mb = 5000, cached_egress_mb = 5000, storage_mb = 1000, mau = 50000 }
 [profiles.aws-free]
 id = "aws-free"
 provider = "aws"

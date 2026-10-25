@@ -1,0 +1,10 @@
+{
+  "resource": true,
+  "name": "terraform-provider",
+  "version": "1.5.0",
+  "parameterization": {
+    "name": "supabase",
+    "version": "1.11.0",
+    "value": "eyJyZW1vdGUiOnsidXJsIjoicmVnaXN0cnkub3BlbnRvZnUub3JnL3N1cGFiYXNlL3N1cGFiYXNlIiwidmVyc2lvbiI6IjEuMTEuMCJ9fQ=="
+  }
+}

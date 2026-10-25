@@ -35,8 +35,8 @@ checks cannot establish aggregate account capacity or monthly consumption.
 | --- | --- | --- | --- | --- |
 | oci-free | Verified Free Tier tenancy, home region | 2 OCPUs / 12 GB | 1,500 OCPU-hours / 9,000 GB-hours | 200 GB aggregate |
 | oci-paid-a1 | Separately verified paid-tenancy A1 allowance | 4 OCPUs / 24 GB | 3,000 OCPU-hours / 18,000 GB-hours | 200 GB aggregate |
-| cloudflare-free | Disabled pending inventory, usage and classifier implementation | None | None | None |
-| supabase-free | Disabled pending organization/project governance | None | None | None |
+| cloudflare-free | Separate offline service preflight; deployment disabled | 200 DNS records/zone | None | See independent services runbook |
+| supabase-free | Separate offline service preflight; deployment disabled | 2 Free projects across owned/admin orgs | Org usage + growth | See independent services runbook |
 | aws-free / gcp-free | Disabled pending account-specific eligibility and metering | None | None | None |
 
 Sources reviewed on 2026-10-25: [Oracle Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)

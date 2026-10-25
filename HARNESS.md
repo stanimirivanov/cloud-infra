@@ -31,6 +31,7 @@ packages/
       oci/                           Pure reviewed OCI inputs, graph and security rules
       kubernetes/                    Offline namespace controls and workload/capacity sensors
       cutover.py                     Read-only, commit-bound evidence consistency checks
+      services/                      Independent DNS/database proposals and scope-aware preflight
       policy.py                      Existing parsed-HCL architectural sensors
       verification.py                Python and legacy infrastructure gates
   infra-program/
@@ -40,6 +41,8 @@ packages/
     src/infra_program/qualification.py  Synthetic secret only, no cloud resources
     src/infra_program/governance.py   Pre-registration gate and mandatory policy
     src/infra_program/oci/            Protected native networking/OKE component library
+    src/infra_program/services/       Protected explicit-provider DNS/database components
+sdks/supabase/                        Pinned generated SDK, uv workspace member
 config/quotas/profiles.toml           Dated published entitlement profiles
 policies/                            Mandatory Pulumi Python cost policy pack
 terraform/                           Existing source, scoped guides and provider lock
@@ -93,6 +96,7 @@ uv run --locked infra verify
 
 No environment activation or pip requirements file is needed. The root is a
 non-packaged workspace application that installs both editable member packages.
+The generated Supabase SDK is a third editable workspace member with the same lock.
 infra-program depends on infra-core; infra-core does not import Pulumi. One uv.lock
 resolves runtime and development dependencies across both members. Keep direct
 requirements in pyproject.toml and review uv.lock changes rather than manually
@@ -211,7 +215,12 @@ permissions, storage/retention boundaries, recovery and evidence limitations.
    All deployment/state transitions remain disabled. Separate-stack orchestration,
    live admission/network validation and explicit operational authorization are
    still required before any actual cutover.
-6. Add independent Cloudflare/Supabase services; AWS/GCP remain optional later work.
+6. Delivered: independent Cloudflare DNS-only and Supabase Nano component libraries,
+   account/scope-aware offline preflight, secret/protected SDK adapters and mandatory
+   classifiers; see the [runbook](docs/runbooks/independent-services.md). Evidence
+   collection is an explicit operator review; no deployment or data-plane activation.
+   Runtime monitoring, live credential/account checks and protected stack orchestration
+   remain operational prerequisites. AWS/GCP remain optional later work.
 
 The legacy 4 OCPU / 24 GiB policy is retained as a regression baseline, not verified
 account eligibility. Current Oracle documentation distinguishes free-tenancy

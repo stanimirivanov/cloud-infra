@@ -22,13 +22,15 @@ package = false
 required-version = "==0.12.5"
 
 [tool.uv.workspace]
-members = ["packages/infra-core", "packages/infra-program"]
+members = ["packages/infra-core", "packages/infra-program", "sdks/supabase"]
 
 [tool.uv.sources]
 infra-core = { workspace = true }
 infra-program = { workspace = true }
+pulumi-supabase = { workspace = true }
 
 [tool.ruff]
+extend-exclude = ["sdks"] # Pinned generated SDK; checked through actual SDK serialization tests.
 target-version = "py312"
 line-length = 100
 
@@ -50,8 +52,12 @@ files = ["packages/infra-core/src", "packages/infra-program/src"]
 module = ["hcl2", "hcl2.*"]
 ignore_missing_imports = true
 
-# Generated OCI SDK analysis is prohibitively large. Our interfaces remain strict;
+# Generated provider SDK analysis is prohibitively large. Our interfaces remain strict;
 # constructor arguments and wire schemas are checked using the actual SDK in mocks.
 [[tool.mypy.overrides]]
-module = ["pulumi_oci", "pulumi_oci.*"]
+module = [
+    "pulumi_oci", "pulumi_oci.*",
+    "pulumi_cloudflare", "pulumi_cloudflare.*",
+    "pulumi_supabase", "pulumi_supabase.*",
+]
 follow_imports = "skip"

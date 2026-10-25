@@ -189,6 +189,39 @@ def test_real_policy_protocol_accepts_controls_and_denies_loadbalancer(
             }
             response = analyze("oci:ContainerEngine/nodePool:NodePool", pool)
             assert not response.diagnostics, response
+            external = [
+                (
+                    "cloudflare:index/dnsRecord:DnsRecord",
+                    {
+                        "zoneId": "a" * 32,
+                        "name": "app.example.com",
+                        "type": "A",
+                        "ttl": 300,
+                        "content": "192.0.2.1",
+                        "proxied": False,
+                    },
+                ),
+                (
+                    "supabase:index/project:Project",
+                    {
+                        "organizationId": "example-org",
+                        "name": "example-db",
+                        "region": "eu-central-1",
+                        "instanceSize": "nano",
+                        "legacyApiKeysEnabled": False,
+                        "databasePassword": "synthetic-password",
+                    },
+                ),
+            ]
+            for kind, values in external:
+                assert not analyze(kind, values).diagnostics
+                denied = analyze(kind, {**values, "paidAddon": True}).diagnostics
+                assert len(denied) == 1 and denied[0].enforcementLevel == proto.MANDATORY
+            for kind in (
+                "cloudflare:index/workersScript:WorkersScript",
+                "supabase:index/branch:Branch",
+            ):
+                assert analyze(kind, {}).diagnostics
             props["spec"]["type"] = "LoadBalancer"
             diagnostics = analyze().diagnostics
             assert len(diagnostics) == 1

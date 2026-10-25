@@ -37,3 +37,8 @@ kubernetes/ owns a closed offline manifest subset, namespace envelopes and
 cluster usage/rollout checks. No Kubernetes client, kubeconfig access, controller
 installation or provider activation is part of this stage. cutover.py may read
 private evidence/Git metadata only and must always return authorization=false.
+
+services/ owns independent Cloudflare DNS and Supabase project proposal preflight.
+The infra-program/services adapter may register only after this complete audit;
+normal deployment remains disabled. sdks/supabase is a pinned generated workspace
+dependency. Do not introduce runtime generation, API calls or state coupling.
