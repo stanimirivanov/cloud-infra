@@ -8,16 +8,16 @@ and ownership transfer are disabled. A passing check is not deployment authority
 
 | Location | Responsibility |
 | --- | --- |
-| AGENTS.md | Short agent entry point and Plan -> Execute -> Verify workflow |
-| packages/AGENTS.md | Python ownership and dependency boundaries |
-| packages/infra-core/src/infra_core/ | CLI, pure contracts, governance, optional inventory and verification |
-| packages/infra-program/src/infra_program/ | Pulumi adapters, protected components and disabled program |
-| sdks/AGENTS.md | Generated Supabase SDK provenance and editing restrictions |
-| config/AGENTS.md | Public examples, evidence freshness and disabled deployment identities |
-| .github/AGENTS.md | Credential-free verification and protected qualification boundaries |
-| policies/ | Mandatory resource-local Pulumi policy pack |
-| tests/ | Negative contracts, CLI, SDK serialization and qualification tests |
-| docs/runbooks/ | Operator procedures and detailed contracts |
+| [AGENTS.md](AGENTS.md) | Short agent entry point and Plan -> Execute -> Verify workflow |
+| [packages/AGENTS.md](packages/AGENTS.md) | Python ownership and dependency boundaries |
+| [packages/infra-core/src/infra_core/](packages/infra-core/src/infra_core/) | CLI, pure contracts, governance, optional inventory and verification |
+| [packages/infra-program/src/infra_program/](packages/infra-program/src/infra_program/) | Pulumi adapters, protected components and disabled program |
+| [sdks/AGENTS.md](sdks/AGENTS.md) | Generated Supabase SDK provenance and editing restrictions |
+| [config/AGENTS.md](config/AGENTS.md) | Public examples, evidence freshness and disabled deployment identities |
+| [.github/AGENTS.md](.github/AGENTS.md) | Credential-free verification and protected qualification boundaries |
+| [policies/](policies/) | Mandatory resource-local Pulumi policy pack |
+| [tests/](tests/) | Negative contracts, CLI, SDK serialization and qualification tests |
+| [docs/runbooks/](docs/runbooks/) | Operator procedures and detailed contracts |
 
 Read the nearest scoped guide for OCI, Kubernetes or independent services when
 working in that directory. [The harness audit](docs/harness-audit.md) distinguishes
@@ -35,9 +35,13 @@ documented intentions from their mechanical enforcement.
 | Kubernetes governance | Offline closed manifest subset; no cluster client or installation |
 | cutover preparation | Read/hash private evidence and Git metadata; never grant authority |
 
-The package manifests and selected tests enforce parts of these contracts.
-There is no comprehensive Python import-boundary linter yet. Component factories
-compose libraries; they do not implement separate-stack deployment orchestration.
+AST fitness checks enforce first-party imports: infra-core cannot import Pulumi or
+infra-program; pure domains may import only reviewed standard-library modules,
+their own domain and governance. Only inventory/oci.py may import the optional OCI
+SDK. Relative, lazy and literal dynamic imports follow the same rules; unresolved
+dynamic imports fail. Generated SDKs are excluded. This is a static dependency
+sensor, not an OS sandbox or proof that Python code cannot perform I/O.
+Component factories compose libraries; they do not implement separate-stack deployment orchestration.
 
 ## Setup and verification
 
@@ -58,16 +62,22 @@ add member lockfiles, or edit sys.path to repair imports.
 
 | Purpose | Existing command |
 | --- | --- |
-| Complete shared gate | uv run --locked infra verify |
-| Lint | uv run --locked ruff check . |
-| Format check | uv run --locked ruff format --check . |
-| Strict typing | uv run --locked mypy |
-| Regression tests | uv run --locked pytest |
-| Package build | uv build --all-packages |
-| Inspect disabled backend configuration | uv run --locked infra backend inspect |
+| Complete shared gate | `uv run --locked infra verify` |
+| Lint | `uv run --locked ruff check .` |
+| Format check | `uv run --locked ruff format --check .` |
+| Strict typing | `uv run --locked mypy` |
+| Regression tests | `uv run --locked pytest` |
+| Package build | `uv build --all-packages` |
+| Inspect disabled backend configuration | `uv run --locked infra backend inspect` |
 
-The complete gate checks tracked private artifacts, then lint, format, types and
-tests. It uses a temporary pytest directory/cache and propagates subprocess errors
+The complete gate checks tracked private artifacts, architecture and documentation,
+then lint, format, types and tests. Documentation checks cover root Markdown, docs/,
+first-party package/config/workflow guides and sdks/AGENTS.md: local inline and
+reference links (including ATX Markdown heading anchors) must resolve inside the repo.
+Document full infra invocations in inline code or sh/bash/shell/console fences;
+examples are checked against the real argparse parser, never executed. Other tool
+commands, remote URLs, HTML links and documentation freshness are not validated.
+The gate uses a temporary pytest directory/cache and propagates subprocess errors
 with a five-minute timeout. It needs no cloud credentials, provider plugins or
 deployed-state access. Generated SDK code is excluded from Ruff/mypy traversal;
 actual adapter serialization is exercised using the generated SDK in mocks.
@@ -109,7 +119,7 @@ Resource preview/deployment requests still fail.
 Required status checks, reviewer rules, main-only environment branches, effective
 IAM scope and bucket retention must be verified outside this YAML. Action references
 still use mutable version tags. There is no general secret scanner, documentation
-health linter, scheduled drift monitor or measured performance budget yet.
+freshness check, scheduled drift monitor or measured performance budget yet.
 
 ## Milestones and retained ownership
 
