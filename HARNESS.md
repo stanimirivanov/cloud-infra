@@ -26,6 +26,8 @@ packages/
       config.py                      Immutable account/provider/unit contracts
       foundation.py                  Explicit backend and disabled stack identities
       backend.py                     Opt-in isolated qualification and evidence
+      governance/                    Pure account-wide cost/usage evaluator
+      inventory/oci.py               Optional paginated read-only tenancy scanner
       policy.py                      Existing parsed-HCL architectural sensors
       verification.py                Python and legacy infrastructure gates
   infra-program/
@@ -33,6 +35,9 @@ packages/
     Pulumi.yaml                     Shared runtime entry point, no implicit backend
     src/infra_program/__main__.py    Resource deployment disabled
     src/infra_program/qualification.py  Synthetic secret only, no cloud resources
+    src/infra_program/governance.py   Pre-registration gate and mandatory policy
+config/quotas/profiles.toml           Dated published entitlement profiles
+policies/                            Mandatory Pulumi Python cost policy pack
 terraform/                           Existing source, scoped guides and provider lock
 tests/                               pytest regression, CLI, config and SDK tests
 .github/workflows/verify.yml         Linux full gate; Windows Python gate
@@ -189,7 +194,10 @@ permissions, storage/retention boundaries, recovery and evidence limitations.
 2. Delivered: validated backend/stack identities, encrypted secret/checkpoint and
    locking/recovery qualification tooling, manual protected workflow, and legacy
    writer freeze. Actual OCI qualification remains an explicit credentialed gate.
-3. Add account-aware quota/inventory governance and mandatory resource policies.
+3. Delivered: account-aware capacity, peak and monthly usage evaluator, read-only
+   OCI inventory and mandatory resource policy; see the
+   [governance runbook](docs/runbooks/free-tier-governance.md). Live account
+   eligibility, usage and external-service review remain explicit operator gates.
 4. Implement OCI networking and OKE components with reviewed adoption contracts.
 5. Add Kubernetes resource governance and execute a separately authorized cutover.
 6. Add independent Cloudflare/Supabase services; AWS/GCP remain optional later work.
@@ -197,8 +205,9 @@ permissions, storage/retention boundaries, recovery and evidence limitations.
 The legacy 4 OCPU / 24 GiB policy is retained as a regression baseline, not verified
 account eligibility. Current Oracle documentation distinguishes free-tenancy
 2 OCPU / 12 GB allowances from paid-tenancy monthly allowances. Existing source
-uses 2 OCPUs / 16 GB. Account-aware limits and remediation belong to the governance
-and compute PRs; a green development harness does not establish zero billing.
+uses 2 OCPUs / 16 GB. The new governance engine rejects that memory total for the
+free profile. Resizing/adoption belongs to the compute PR; a green development
+harness does not establish zero billing.
 See [Oracle Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
 and the [OCI price list](https://www.oracle.com/cloud/price-list/).
 

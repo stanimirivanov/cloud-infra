@@ -12,8 +12,9 @@ may write only synthetic state in an invocation-specific namespace or a temporar
 local backend. Never mix qualification with imports or resource deployment.
 
 Use typed functions and small explicit data contracts. Any is limited to parsed
-heterogeneous HCL/TOML/JSON at explicit validation boundaries. Python 3.12 is the supported
-runtime; .python-version pins the patch for local and CI use.
+heterogeneous HCL/TOML/JSON and SDK responses at explicit validation boundaries.
+Python 3.12 is the supported runtime; .python-version pins the patch for local
+and CI use.
 
 Run subprocess argument arrays with check=True, explicit cwd and bounded timeouts.
 Propagate errors. Render legacy Terragrunt with synthetic inputs in a temporary
@@ -22,6 +23,10 @@ use the readonly provider lock. Legacy validation never plans/applies, runs hook
 or mutates deployed state. Only opt-in isolated qualification exercises synthetic
 checkpoint operations; it must never target resource stacks.
 
-Policy changes need negative tests and stable actionable rule IDs. This packaging
-migration preserves the legacy architecture and cost policy; account-aware quotas
-are a later change, not an implied result of passing the current harness.
+Policy changes need negative tests and stable actionable rule IDs. governance/
+owns pure account capacity, replacement peak and monthly usage rules; inventory/
+owns optional read-only provider adapters. Never import an SDK in the pure engine
+or infer ownership from tags. Missing inventory/usage is a failure, not zero.
+infra-program may wrap the pure rules as mandatory policies, but resource-local
+policy checks never replace account-wide pre-registration checks. See
+docs/runbooks/free-tier-governance.md before changing accounting contracts.

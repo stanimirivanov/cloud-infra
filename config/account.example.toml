@@ -1,0 +1,13 @@
+# Copy to .infra/account.toml and supply reviewed evidence, never credentials.
+provider = "oci"
+account_id = "ocid1.tenancy.oc1..example"
+home_region = "eu-frankfurt-1"
+profile = "oci-free"
+profile_revision = 1
+verified = false
+verified_at = ""
+other_services_reviewed = false
+[reservations]
+ocpus = 0
+memory_gb = 0
+block_gb = 0
