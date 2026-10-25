@@ -6,6 +6,8 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from infra_core.fitness import check_fitness
+
 
 def run(
     args: Sequence[str], root: Path, *, capture: bool = False
@@ -44,6 +46,7 @@ def check_tracked_artifacts(root: Path) -> None:
 
 def verify(root: Path) -> None:
     check_tracked_artifacts(root)
+    check_fitness(root)
     for args in (
         ["ruff", "check", "."],
         ["ruff", "format", "--check", "."],
@@ -65,5 +68,5 @@ def verify(root: Path) -> None:
             ],
             root,
         )
-    print("PASS: private artifacts, Python lint, format, types and tests")
+    print("PASS: private artifacts, architecture, documentation, lint, format, types and tests")
     print("No live provider, billing or deployed-state checks were performed.")

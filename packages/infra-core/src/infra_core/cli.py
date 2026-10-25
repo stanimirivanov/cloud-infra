@@ -15,7 +15,8 @@ from infra_core.repository import find_repository
 from infra_core.verification import verify
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Describe the CLI without running commands or accessing infrastructure."""
     parser = argparse.ArgumentParser(prog="infra", description=__doc__)
     parser.add_argument("--version", action="version", version=version("infra-core"))
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
@@ -86,7 +87,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     try:
         root = find_repository(args.root)
         if args.command == "services":

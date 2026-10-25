@@ -5,6 +5,16 @@ Terraform/Terragrunt execution. This is a source/workflow and local-verification
 review; GitHub administration, OCI IAM, bucket settings and deployed resources were
 not inspected. No cloud or state operation is authorized by this report.
 
+## Follow-up: architecture and documentation fitness
+
+Issue #29 implements upgrade 1 through infra verify. Static first-party import rules
+now reject forbidden package/domain edges, including relative/lazy and literal
+dynamic imports; nonliteral dynamic imports fail. Local guide links/Markdown
+anchors and full infra examples are checked without executing examples. Mutation
+tests exercise each failure path. The remaining findings below describe the
+original review: runtime capability isolation, remote-link/freshness checks and
+external enforcement remain outside these sensors.
+
 ## Assessment
 
 The repository has a useful deterministic development baseline: one locked gate,
@@ -88,7 +98,7 @@ backend guarantee should be inferred from a green local suite.
    reviewed inventory adapters explicitly. Add local documentation-link and CLI
    command-reference validation without executing operator examples. Run these from
    infra verify on both CI platforms; a deliberate forbidden import and a removed
-   documented command must both fail. These are proposed additions, not current gates.
+   documented command must both fail. Implemented in issue #29 within the static scope documented above; no runtime sandbox is claimed.
 
 2. **Harden the trusted execution chain.** Implement M03's reviewed Action SHA pins,
    verified tool installs and redacted tracked-content/history secret scanning.

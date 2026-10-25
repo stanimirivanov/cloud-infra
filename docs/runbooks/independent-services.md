@@ -2,7 +2,7 @@
 
 This library adds offline service preflight and protected Pulumi components. It
 does not activate deployments. `config/pulumi.toml` identities remain disabled;
-the normal program, `infra preview` and `infra deploy` still reject provisioning.
+the normal program, `infra preview --unit NAME` and `infra deploy --unit NAME` still reject provisioning.
 There is no Terraform adoption, OCI output dependency, Kubernetes integration,
 DNS zone creation, SQL migration, token lookup or cloud API collector here.
 
