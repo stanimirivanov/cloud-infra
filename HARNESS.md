@@ -45,11 +45,16 @@ Component factories compose libraries; they do not implement separate-stack depl
 
 ## Setup and verification
 
-Install uv **0.12.5** and Git. The shared .python-version pins Python **3.12.14**.
+Use Git and PowerShell 7 on Linux/Windows x64. The reviewed installer verifies uv
+**0.12.5**, Pulumi **3.272.0** and Gitleaks **8.30.1** release archives before
+extraction. The shared .python-version pins Python **3.12.14**.
 GitHub CLI is needed for the issue/PR workflow. Pulumi CLI **3.272.0** is required
-only for explicit backend integration tests and qualification, matching the locked SDK.
+for explicit backend integration tests and qualification, matching the locked SDK.
 
-```sh
+In a PowerShell 7 session:
+
+```shell
+./.github/scripts/install-tools.ps1
 uv sync --locked --all-groups
 uv run --locked pre-commit install
 uv run --locked infra verify
@@ -70,8 +75,9 @@ add member lockfiles, or edit sys.path to repair imports.
 | Package build | `uv build --all-packages` |
 | Inspect disabled backend configuration | `uv run --locked infra backend inspect` |
 
-The complete gate checks tracked private artifacts, architecture and documentation,
-then lint, format, types and tests. Documentation checks cover root Markdown, docs/,
+The complete gate checks tracked private artifacts, verified Gitleaks scans, and
+architecture/documentation fitness, then lint, format, types and tests.
+Documentation checks cover root Markdown, docs/,
 first-party package/config/workflow guides and sdks/AGENTS.md: local inline and
 reference links (including ATX Markdown heading anchors) must resolve inside the repo.
 Document full infra invocations in inline code or sh/bash/shell/console fences;
@@ -106,6 +112,11 @@ freshness or entitlement merely to pass a check.
 
 ## CI and operational limits
 
+The [trusted-toolchain runbook](docs/runbooks/trusted-toolchain.md) describes
+reviewed Action SHA pins, archive/binary verification, mandatory redacted current,
+staged and reachable-history scans, and tool update/incident procedures. The gate
+fails on missing/tampered scanners or shallow clones and never downloads tools.
+
 The Harness workflow runs the same complete gate and package build on Linux and
 Windows for every PR and main push, without secrets or deployment environments.
 The pre-commit hook invokes the same gate; it is convenience, not remote enforcement.
@@ -117,9 +128,12 @@ credentials and a passphrase. Only its sanitized receipt is uploaded.
 Resource preview/deployment requests still fail.
 
 Required status checks, reviewer rules, main-only environment branches, effective
-IAM scope and bucket retention must be verified outside this YAML. Action references
-still use mutable version tags. There is no general secret scanner, documentation
-freshness check, scheduled drift monitor or measured performance budget yet.
+IAM scope and bucket retention must be verified outside this YAML. Inspection for
+issue #31 reported no effective main rules and no classic branch protection; the
+qualification-environment endpoint returned 404 (absent or inaccessible). Workflow
+checks cannot replace administrator-owned required checks and approvals. There is
+no documentation freshness check, scheduled drift monitor or measured performance
+budget yet.
 
 ## Milestones and retained ownership
 

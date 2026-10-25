@@ -1,0 +1,3 @@
+title = "Repository secret scanning (review changes; no broad exceptions)"
+[extend]
+useDefault = true

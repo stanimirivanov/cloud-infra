@@ -60,7 +60,9 @@ def test_command_runner_propagates_failures_and_bounds_execution():
     assert error.value.returncode == 9
 
 
-def test_verification_needs_only_git_and_python_tools(monkeypatch, capsys):
+def test_verification_runs_secret_gate_before_python_tools(monkeypatch, capsys):
+    checked = []
+    monkeypatch.setattr(verification, "check_secrets", lambda root: checked.append(root))
     calls = []
 
     def record(args, root, **kwargs):
@@ -70,6 +72,7 @@ def test_verification_needs_only_git_and_python_tools(monkeypatch, capsys):
 
     monkeypatch.setattr(verification, "run", record)
     verification.verify(ROOT)
+    assert checked == [ROOT]
     assert calls[0] == ["git", "ls-files", "-z"]
     assert all(args[0] == sys.executable for args in calls[1:])
     assert [args[2] for args in calls[1:]] == ["ruff", "ruff", "mypy", "pytest"]
@@ -81,6 +84,7 @@ def test_verification_needs_only_git_and_python_tools(monkeypatch, capsys):
 
 
 def test_failed_gate_stops_before_tests(monkeypatch):
+    monkeypatch.setattr(verification, "check_secrets", lambda root: None)
     calls = []
 
     def fail(args, root, **kwargs):

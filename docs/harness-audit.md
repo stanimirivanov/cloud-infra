@@ -15,6 +15,19 @@ tests exercise each failure path. The remaining findings below describe the
 original review: runtime capability isolation, remote-link/freshness checks and
 external enforcement remain outside these sensors.
 
+## Follow-up: trusted execution chain
+
+Issue #31 pins external Actions, replaces tool setup Actions with checksum-verified
+release archives, and adds mandatory Gitleaks scans of current/staged content and
+all locally reachable history. Binary verification precedes scanner execution;
+missing tools and shallow clones fail closed. Negative fixtures cover tampered
+archives, planted/deleted secrets and unsafe workflow changes. See the
+[trusted-toolchain runbook](runbooks/trusted-toolchain.md) for provenance and limits.
+Read-only GitHub inspection reported no classic main protection or effective main
+rules; the qualification-environment endpoint returned 404. These external gaps
+remain administrator prerequisites. The original assessment below predates these
+code changes; operational evidence upgrade 3 remains outstanding.
+
 ## Assessment
 
 The repository has a useful deterministic development baseline: one locked gate,

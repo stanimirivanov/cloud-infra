@@ -9,15 +9,17 @@ Account eligibility and measured usage must be verified before deployment.
 
 ## Development
 
-Install uv **0.12.5**, then run from the repository root:
+From the repository root in PowerShell 7 on Linux/Windows x64:
 
-```sh
+```shell
+./.github/scripts/install-tools.ps1
 uv sync --locked --all-groups
 uv run --locked infra verify
 ```
 
-The shared gate checks private artifacts, formatting, lint, strict typing, and
-tests without cloud credentials. CI runs it on Linux and Windows.
+The shared gate checks secrets, private artifacts, architecture, documentation,
+formatting, lint, typing and tests without cloud credentials. CI runs it on Linux
+and Windows.
 
 See [HARNESS.md](HARNESS.md) for the architecture, commands, and operational
 boundaries.

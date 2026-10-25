@@ -33,18 +33,15 @@ jobs:
     timeout-minutes: 20
     environment: pulumi-backend-qualification
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.12.5'
-          enable-cache: false
+          fetch-depth: 0
+      - name: Install checksum-verified tools
+        shell: pwsh
+        run: ./.github/scripts/install-tools.ps1
       - run: uv sync --locked --all-groups
-      - uses: pulumi/actions@v7
-        with:
-          pulumi-version: '3.272.0'
       - name: Inspect backend foundation
         if: inputs.operation == 'inspect'
         run: uv run --locked infra backend inspect
@@ -63,7 +60,7 @@ jobs:
         run: uv run --locked infra "$REQUESTED_OPERATION" --unit "$REQUESTED_UNIT"
       - name: Save sanitized qualification evidence
         if: success() && inputs.operation == 'qualify'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-qualification
           path: .infra/qualification.json
