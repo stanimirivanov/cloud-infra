@@ -1,0 +1,52 @@
+{
+  "api_ingress_public_6443": {
+    "network_security_group_id": "${oci_core_network_security_group.api_endpoint_nsg.id}",
+    "direction": "INGRESS",
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "source_type": "CIDR_BLOCK",
+    "tcp_options": [
+      {
+        "destination_port_range": [
+          {
+            "min": 6443,
+            "max": 6443
+          }
+        ]
+      }
+    ]
+  },
+  "api_icmp_ingress": {
+    "network_security_group_id": "${oci_core_network_security_group.api_endpoint_nsg.id}",
+    "direction": "INGRESS",
+    "protocol": "1",
+    "source": "0.0.0.0/0",
+    "source_type": "CIDR_BLOCK",
+    "icmp_options": [
+      {
+        "type": 3,
+        "code": 4
+      }
+    ]
+  },
+  "node_ingress_nodeports": {
+    "network_security_group_id": "${oci_core_network_security_group.node_nsg.id}",
+    "direction": "INGRESS",
+    "protocol": "all",
+    "source": "0.0.0.0/0",
+    "source_type": "CIDR_BLOCK"
+  },
+  "node_icmp_ingress": {
+    "network_security_group_id": "${oci_core_network_security_group.node_nsg.id}",
+    "direction": "INGRESS",
+    "protocol": "1",
+    "source": "0.0.0.0/0",
+    "source_type": "CIDR_BLOCK",
+    "icmp_options": [
+      {
+        "type": 3,
+        "code": 4
+      }
+    ]
+  }
+}
