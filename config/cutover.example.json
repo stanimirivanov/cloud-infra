@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "commit": "",
+  "account_id": "",
+  "cluster_id": "",
+  "region": "eu-frankfurt-1",
+  "configuration_sha256": "",
+  "captured_at": "",
+  "artifacts": {
+    "backend_receipt": {"path": ".infra/qualification.json", "sha256": ""},
+    "account": {"path": ".infra/account.toml", "sha256": ""},
+    "inventory": {"path": ".infra/inventory.json", "sha256": ""},
+    "oci_proposal": {"path": ".infra/adoption-account-proposal.json", "sha256": ""},
+    "oci_config": {"path": ".infra/oci.toml", "sha256": ""},
+    "kubernetes_config": {"path": ".infra/kubernetes.toml", "sha256": ""},
+    "kubernetes_inventory": {"path": ".infra/cluster-inventory.json", "sha256": ""},
+    "kubernetes_resources": {"path": ".infra/kubernetes-resources.json", "sha256": ""},
+    "ownership": {"path": ".infra/ownership-review.json", "sha256": ""},
+    "preview": {"path": ".infra/preview-review.json", "sha256": ""},
+    "health": {"path": ".infra/health-review.json", "sha256": ""},
+    "rollback": {"path": ".infra/rollback-review.json", "sha256": ""}
+  }
+}

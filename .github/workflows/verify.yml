@@ -49,4 +49,6 @@ jobs:
       - name: Qualify disposable local backend (no cloud credentials)
         env:
           RUN_PULUMI_LOCAL_QUALIFICATION: '1'
-        run: uv run --locked pytest -q -m backend_integration --basetemp .infra/pytest-backend -o cache_dir=.infra/pytest-cache
+        run: |
+          uv run --locked python -c "from pathlib import Path; Path('.infra').mkdir(exist_ok=True)"
+          uv run --locked pytest -q -m backend_integration --basetemp .infra/pytest-backend -o cache_dir=.infra/pytest-cache

@@ -68,6 +68,15 @@ proposal with `infra oci proposal --config .infra/oci.toml --account-id <tenancy
 The template is deliberately incomplete; provisioning and ownership transfer
 remain disabled. Existing Terraform resources and state are untouched.
 
+## Kubernetes governance and cutover preparation
+
+`infra kubernetes render/audit` prepares namespace admission controls and checks
+bounded stateless workloads against measured cluster capacity. The mandatory
+Pulumi policy rejects paid service/storage resources and unsupported workload
+forms. `infra cutover check` validates private, commit-bound evidence without
+performing state transitions or granting deployment permission. See the
+[Kubernetes and cutover runbook](docs/runbooks/kubernetes-cutover.md).
+
 ## CI/CD
 
 The Harness workflow runs credential-free checks on every PR and main push, plus

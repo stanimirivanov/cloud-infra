@@ -1,0 +1,22 @@
+# Copy to .infra and supply measured cluster identity/capacity evidence before audit.
+[cluster]
+account_id = ""
+cluster_id = ""
+region = "eu-frankfurt-1"
+policy_version = ""
+
+# Additional platform/growth headroom beyond current unmanaged/system usage.
+[reserved]
+cpu_m = 500
+memory_mi = 1024
+ephemeral_mi = 1024
+pods = 10
+
+[[namespaces]]
+name = "applications"
+cpu_m = 500
+memory_mi = 1024
+ephemeral_mi = 1024
+pods = 4
+services = 4
+deployments = 2
