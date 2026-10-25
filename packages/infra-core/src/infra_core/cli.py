@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from collections.abc import Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -46,10 +47,70 @@ def main(argv: Sequence[str] | None = None) -> int:
             operation, help="readiness check; resource operations are disabled"
         )
         deployment.add_argument("--unit", required=True)
+    governance = commands.add_parser(
+        "governance", help="account-wide cost preflight; no deployment"
+    )
+    governance_commands = governance.add_subparsers(dest="governance_command", required=True)
+    auditor = governance_commands.add_parser(
+        "audit", help="audit normalized proposed changes against account evidence"
+    )
+    auditor.add_argument("--account", type=Path, required=True)
+    auditor.add_argument("--inventory", type=Path, required=True)
+    auditor.add_argument("--plan", type=Path, required=True)
+    inventory = governance_commands.add_parser("inventory", help="read-only OCI tenancy scan")
+    inventory.add_argument("--account", type=Path, required=True)
+    inventory.add_argument("--oci-config", type=Path, required=True)
+    inventory.add_argument("--oci-profile", default="DEFAULT")
+    inventory.add_argument("--usage", type=Path)
+    inventory.add_argument("--output", type=Path, default=Path(".infra/inventory.json"))
     args = parser.parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "backend":
+        if args.command == "governance":
+            from infra_core.governance.audit import audit
+            from infra_core.inventory.oci import OCIReader, collect
+
+            with (root / args.account).open("rb") as stream:
+                account = tomllib.load(stream)
+            if args.governance_command == "audit":
+                with (root / "config/quotas/profiles.toml").open("rb") as stream:
+                    profiles = tomllib.load(stream)["profiles"]
+                profile = profiles.get(account.get("profile"), {})
+                result = audit(
+                    account,
+                    profile,
+                    json.loads((root / args.inventory).read_text(encoding="utf-8")),
+                    json.loads((root / args.plan).read_text(encoding="utf-8")),
+                )
+                print(json.dumps(result, sort_keys=True, indent=2))
+            else:
+                if account.get("provider") != "oci":
+                    raise ValueError("GOV006: only the OCI read-only collector is implemented")
+                destination = (root / args.output).resolve()
+                if not destination.is_relative_to(root.resolve() / ".infra"):
+                    raise ValueError("GOV003: inventory output must stay under .infra")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.unlink(missing_ok=True)
+                usage = json.loads((root / args.usage).read_text()) if args.usage else None
+                try:
+                    reader = OCIReader(
+                        str((root / args.oci_config).resolve()),
+                        args.oci_profile,
+                        account["account_id"],
+                    )
+                    snapshot = collect(
+                        reader, account["account_id"], account["home_region"], usage=usage
+                    )
+                except Exception:
+                    raise ValueError(
+                        "GOV040: OCI collection failed; inspect credentials/permissions privately"
+                    ) from None
+                destination.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+                print(
+                    "Collected supported OCI families; "
+                    "monthly usage/entitlement still require audit"
+                )
+        elif args.command == "backend":
             config = load_foundation(root)
             if args.backend_command == "inspect":
                 print(

@@ -1,0 +1,43 @@
+# Published limits are distinct from verified account eligibility.
+# Refresh source review at least every 90 days; account verification expires after 30.
+[profiles.oci-free]
+id = "oci-free"
+revision = 1
+provider = "oci"
+enabled = true
+reviewed_at = "2026-10-25T00:00:00+00:00"
+source = "https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm"
+capacity = { ocpus = 2, memory_gb = 12, block_gb = 200 }
+monthly = { a1_ocpu_hours = 1500, a1_memory_gb_hours = 9000, block_gb_months = 200 }
+
+[profiles.oci-paid-a1]
+id = "oci-paid-a1"
+revision = 1
+provider = "oci"
+enabled = true
+reviewed_at = "2026-10-25T00:00:00+00:00"
+source = "https://www.oracle.com/cloud/price-list/"
+capacity = { ocpus = 4, memory_gb = 24, block_gb = 200 }
+monthly = { a1_ocpu_hours = 3000, a1_memory_gb_hours = 18000, block_gb_months = 200 }
+
+# No provider gets implicit coverage from another provider's adapter.
+[profiles.cloudflare-free]
+id = "cloudflare-free"
+provider = "cloudflare"
+enabled = false
+reason = "Requires organization inventory, metering and reviewed resource classifiers in the edge PR."
+[profiles.supabase-free]
+id = "supabase-free"
+provider = "supabase"
+enabled = false
+reason = "Requires organization/project usage collector and database classifier."
+[profiles.aws-free]
+id = "aws-free"
+provider = "aws"
+enabled = false
+reason = "Account-specific eligibility and metering must be implemented first."
+[profiles.gcp-free]
+id = "gcp-free"
+provider = "gcp"
+enabled = false
+reason = "Billing-account eligibility and metering must be implemented first."

@@ -4,6 +4,9 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = ["infra-core", "infra-program"]
 
+[project.optional-dependencies]
+inventory-oci = ["infra-core[inventory-oci]"]
+
 [dependency-groups]
 dev = [
     "ruff==0.14.2",

@@ -1,0 +1,6 @@
+name: always-free-governance
+runtime:
+  name: python
+  options:
+    virtualenv: ../.venv
+main: .

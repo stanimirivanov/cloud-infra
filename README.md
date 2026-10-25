@@ -49,6 +49,15 @@ manual workflow. Resource preview/deploy intentionally fail until later governan
 and adoption PRs; Terraform writes are frozen. Existing Terraform source and state
 keys are preserved for reference and credential-free schema validation.
 
+## Account governance
+
+Account-wide OCI capacity, replacement overlap and monthly-usage checks are
+available through `infra governance inventory` and `infra governance audit`.
+See the [governance runbook](docs/runbooks/free-tier-governance.md) for the
+optional read-only SDK, explicit entitlement profiles, evidence contracts and
+mandatory Pulumi policy. Passing these checks does not enable provisioning;
+other providers remain disabled until their collectors and rules exist.
+
 ## CI/CD
 
 The Harness workflow runs credential-free checks on every PR and main push, plus
