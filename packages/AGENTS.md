@@ -7,7 +7,9 @@ Do not create member lockfiles, install dependencies dynamically or edit sys.pat
 
 infra-core owns CLI, pure configuration and verification. It must not depend on
 infra-program or Pulumi. infra-program may depend on infra-core and the Pulumi SDK;
-normal provider resources and deployment units remain disabled. Backend qualification
+normal program/CLI resource operations and deployment units remain disabled.
+The OCI component library may register only after its complete preflight gate;
+credential-free tests use Pulumi mocks. Backend qualification
 may write only synthetic state in an invocation-specific namespace or a temporary
 local backend. Never mix qualification with imports or resource deployment.
 

@@ -58,6 +58,16 @@ optional read-only SDK, explicit entitlement profiles, evidence contracts and
 mandatory Pulumi policy. Passing these checks does not enable provisioning;
 other providers remain disabled until their collectors and rules exist.
 
+## OCI components
+
+Protected native Pulumi networking and OKE components are available for offline
+development. They share a pure resource graph with governance, require reviewed
+versions/ARM images, restrict API/worker ingress and use explicit pod NSGs. See the
+[OCI component and adoption runbook](docs/runbooks/oci-components.md). Render a
+proposal with `infra oci proposal --config .infra/oci.toml --account-id <tenancy>`.
+The template is deliberately incomplete; provisioning and ownership transfer
+remain disabled. Existing Terraform resources and state are untouched.
+
 ## CI/CD
 
 The Harness workflow runs credential-free checks on every PR and main push, plus

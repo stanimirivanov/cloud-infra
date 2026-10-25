@@ -49,3 +49,9 @@ files = ["packages/infra-core/src", "packages/infra-program/src"]
 [[tool.mypy.overrides]]
 module = ["hcl2", "hcl2.*"]
 ignore_missing_imports = true
+
+# Generated OCI SDK analysis is prohibitively large. Our interfaces remain strict;
+# constructor arguments and wire schemas are checked using the actual SDK in mocks.
+[[tool.mypy.overrides]]
+module = ["pulumi_oci", "pulumi_oci.*"]
+follow_imports = "skip"

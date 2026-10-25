@@ -28,6 +28,7 @@ packages/
       backend.py                     Opt-in isolated qualification and evidence
       governance/                    Pure account-wide cost/usage evaluator
       inventory/oci.py               Optional paginated read-only tenancy scanner
+      oci/                           Pure reviewed OCI inputs, graph and security rules
       policy.py                      Existing parsed-HCL architectural sensors
       verification.py                Python and legacy infrastructure gates
   infra-program/
@@ -36,6 +37,7 @@ packages/
     src/infra_program/__main__.py    Resource deployment disabled
     src/infra_program/qualification.py  Synthetic secret only, no cloud resources
     src/infra_program/governance.py   Pre-registration gate and mandatory policy
+    src/infra_program/oci/            Protected native networking/OKE component library
 config/quotas/profiles.toml           Dated published entitlement profiles
 policies/                            Mandatory Pulumi Python cost policy pack
 terraform/                           Existing source, scoped guides and provider lock
@@ -198,7 +200,10 @@ permissions, storage/retention boundaries, recovery and evidence limitations.
    OCI inventory and mandatory resource policy; see the
    [governance runbook](docs/runbooks/free-tier-governance.md). Live account
    eligibility, usage and external-service review remain explicit operator gates.
-4. Implement OCI networking and OKE components with reviewed adoption contracts.
+4. Delivered: protected native OCI networking/OKE components, pure graph-to-SDK
+   equivalence tests, reviewed image/version inputs, hardened NSGs and an
+   [adoption contract](docs/runbooks/oci-components.md). No state transfer or
+   resource activation; separate stack orchestration remains a cutover prerequisite.
 5. Add Kubernetes resource governance and execute a separately authorized cutover.
 6. Add independent Cloudflare/Supabase services; AWS/GCP remain optional later work.
 

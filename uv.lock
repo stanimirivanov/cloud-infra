@@ -355,6 +355,7 @@ source = { editable = "packages/infra-program" }
 dependencies = [
     { name = "infra-core" },
     { name = "pulumi" },
+    { name = "pulumi-oci" },
     { name = "pulumi-policy" },
 ]
 
@@ -362,6 +363,7 @@ dependencies = [
 requires-dist = [
     { name = "infra-core", editable = "packages/infra-core" },
     { name = "pulumi", specifier = ">=3.200,<4" },
+    { name = "pulumi-oci", specifier = "==5.5.0" },
     { name = "pulumi-policy", specifier = ">=1,<2" },
 ]
 
@@ -784,6 +786,20 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/be/50/ceba43d892bebd64fbbe173b37e568bcee019c1577a11d528c4877e664fb/pulumi-3.272.0-py3-none-any.whl", hash = "sha256:e6184b2c213eaa13bbb76fe946e0cfc413d53c86ea16e1e7a14d60b8859b41ac", size = 441614, upload-time = "2026-10-22T21:30:41.886Z" },
+]
+
+[[package]]
+name = "pulumi-oci"
+version = "5.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7a/f8/7d8d462bdffd95bf0189f222878f947d84f62674864809064451ed4c9053/pulumi_oci-5.5.0.tar.gz", hash = "sha256:8563ffca55eb8aa07d131d5f3725642d1ea0c2c546fcc4522dc9b81ca3585644", size = 12122430, upload-time = "2026-10-22T05:26:00.879Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/a9/910573c0cf1b6cf66b3af81ef88d79714b31653b982db07e403768e4b269/pulumi_oci-5.5.0-py3-none-any.whl", hash = "sha256:f7f5ff1fe0d1594df77f908971362b0b379c213037b5a1f9dd5fee9b42377446", size = 17142836, upload-time = "2026-10-22T05:25:57.495Z" },
 ]
 
 [[package]]

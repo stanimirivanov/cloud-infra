@@ -344,7 +344,7 @@ def test_instance_boot_and_basic_cluster_classification():
     )
     assert instance == {"ocpus": Decimal(1), "memory_gb": Decimal(6), "block_gb": Decimal(50)}
     assert sum(footprint(CLUSTER, {"type": "BASIC_CLUSTER"}, planned=True).values()) == 0
-    assert sum(footprint("oci:core/vcn:Vcn", {}, planned=True).values()) == 0
+    assert sum(footprint("oci:Core/vcn:Vcn", {}, planned=True).values()) == 0
 
 
 def test_cross_region_and_monthly_account_mismatch_fail(evidence):

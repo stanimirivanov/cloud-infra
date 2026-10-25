@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "infra-core",
     "pulumi>=3.200,<4",
+    "pulumi-oci==5.5.0",
     "pulumi-policy>=1,<2",
 ]
 

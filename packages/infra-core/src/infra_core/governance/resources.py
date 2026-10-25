@@ -5,18 +5,20 @@ from typing import Any
 
 from infra_core.governance.contracts import mapping, number, require
 
-INSTANCE = "oci:core/instance:Instance"
-NODE_POOL = "oci:containerengine/nodePool:NodePool"
-BOOT = "oci:core/bootVolume:BootVolume"
-VOLUME = "oci:core/volume:Volume"
-CLUSTER = "oci:containerengine/cluster:Cluster"
+INSTANCE = "oci:Core/instance:Instance"
+NODE_POOL = "oci:ContainerEngine/nodePool:NodePool"
+BOOT = "oci:Core/bootVolume:BootVolume"
+VOLUME = "oci:Core/volume:Volume"
+CLUSTER = "oci:ContainerEngine/cluster:Cluster"
 NETWORK = {
-    "oci:core/vcn:Vcn",
-    "oci:core/subnet:Subnet",
-    "oci:core/internetGateway:InternetGateway",
-    "oci:core/routeTable:RouteTable",
-    "oci:core/networkSecurityGroup:NetworkSecurityGroup",
-    "oci:core/networkSecurityGroupSecurityRule:NetworkSecurityGroupSecurityRule",
+    "oci:Core/vcn:Vcn",
+    "oci:Core/subnet:Subnet",
+    "oci:Core/internetGateway:InternetGateway",
+    "oci:Core/routeTable:RouteTable",
+    "oci:Core/networkSecurityGroup:NetworkSecurityGroup",
+    "oci:Core/networkSecurityGroupSecurityRule:NetworkSecurityGroupSecurityRule",
+    "oci:Core/securityList:SecurityList",
+    "oci:Core/serviceGateway:ServiceGateway",
 }
 CAPACITY = {"ocpus", "memory_gb", "block_gb"}
 MONTHLY = {

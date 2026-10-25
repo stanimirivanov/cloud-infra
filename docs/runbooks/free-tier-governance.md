@@ -148,7 +148,7 @@ stack proposal complete and treat it as account proof.
       "action": "create",
       "existing_ids": [],
       "resource": {
-        "type": "oci:containerengine/nodePool:NodePool",
+        "type": "oci:ContainerEngine/nodePool:NodePool",
         "region": "eu-frankfurt-1",
         "props": {
           "nodeShape": "VM.Standard.A1.Flex",

@@ -63,10 +63,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     inventory.add_argument("--oci-profile", default="DEFAULT")
     inventory.add_argument("--usage", type=Path)
     inventory.add_argument("--output", type=Path, default=Path(".infra/inventory.json"))
+    oci = commands.add_parser("oci", help="render a pure OCI component proposal; no provider calls")
+    oci_commands = oci.add_subparsers(dest="oci_command", required=True)
+    oci_proposal = oci_commands.add_parser(
+        "proposal", help="render the complete disabled OCI graph"
+    )
+    oci_proposal.add_argument("--config", type=Path, required=True)
+    oci_proposal.add_argument("--account-id", required=True)
     args = parser.parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "governance":
+        if args.command == "oci":
+            from infra_core.oci.config import load_config
+            from infra_core.oci.graph import foundation_graph, proposal
+
+            config_oci = load_config(root / args.config)
+            print(
+                json.dumps(
+                    proposal(foundation_graph(config_oci), args.account_id, config_oci.region),
+                    indent=2,
+                )
+            )
+        elif args.command == "governance":
             from infra_core.governance.audit import audit
             from infra_core.inventory.oci import OCIReader, collect
 
