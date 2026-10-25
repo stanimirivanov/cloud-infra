@@ -1,0 +1,55 @@
+{
+  "actions": {
+    "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
+    "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
+  "tools": {
+    "uv": {
+      "version": "0.12.5",
+      "assets": {
+        "windows-x64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-pc-windows-msvc.zip",
+          "sha256": "4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a",
+          "binary": "uv.exe"
+        },
+        "linux-x64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2",
+          "binary": "uv-x86_64-unknown-linux-gnu/uv"
+        }
+      }
+    },
+    "pulumi": {
+      "version": "3.272.0",
+      "assets": {
+        "windows-x64": {
+          "url": "https://github.com/pulumi/pulumi/releases/download/v3.272.0/pulumi-v3.272.0-windows-x64.zip",
+          "sha256": "cb0826d18d5b8b17a5faa9c818c24fc98c42adb475aed85d2ea5f3bd5f56769c",
+          "binary": "Pulumi/bin/pulumi.exe"
+        },
+        "linux-x64": {
+          "url": "https://github.com/pulumi/pulumi/releases/download/v3.272.0/pulumi-v3.272.0-linux-x64.tar.gz",
+          "sha256": "58d545f2b98761051922008ebd381ecef95484d7f7a5ff7faa15d7a780ea84f6",
+          "binary": "pulumi/pulumi"
+        }
+      }
+    },
+    "gitleaks": {
+      "version": "8.30.1",
+      "assets": {
+        "windows-x64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
+          "sha256": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
+          "binary": "gitleaks.exe",
+          "binary_sha256": "17157e2ee8b76fc8b1d8bee607a250e34b8a8023c8bc81822d4b5ee4d78fcb7c"
+        },
+        "linux-x64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+          "binary": "gitleaks",
+          "binary_sha256": "88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509"
+        }
+      }
+    }
+  }
+}

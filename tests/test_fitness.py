@@ -121,6 +121,7 @@ def test_real_repository_satisfies_fitness_contracts():
 
 def test_failed_fitness_stops_verification_before_tools(tmp_path, monkeypatch):
     monkeypatch.setattr(verification, "check_tracked_artifacts", lambda root: None)
+    monkeypatch.setattr(verification, "check_secrets", lambda root: None)
     docs(tmp_path, "[Missing](missing.md)")
     monkeypatch.setattr(verification, "run", lambda *args, **kw: pytest.fail("ran tools"))
     with pytest.raises(RuntimeError, match="DOC001"):
@@ -145,6 +146,7 @@ def test_sdk_exception_does_not_spread_to_other_inventory_modules(tmp_path):
 
 def test_forbidden_import_stops_the_shared_gate(tmp_path, monkeypatch):
     monkeypatch.setattr(verification, "check_tracked_artifacts", lambda root: None)
+    monkeypatch.setattr(verification, "check_secrets", lambda root: None)
     docs(tmp_path, "# Map\n")
     write(tmp_path, "packages/infra-core/src/infra_core/oci/graph.py", "import pulumi")
     monkeypatch.setattr(verification, "run", lambda *args, **kw: pytest.fail("ran tools"))

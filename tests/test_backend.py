@@ -222,8 +222,9 @@ def test_protected_workflow_has_no_pr_trigger_or_resource_credentials(config):
     assert job["environment"] == "pulumi-backend-qualification"
     assert "refs/heads/main" in job["if"] and "github.repository_owner" in job["if"]
     steps = job["steps"]
-    setup = next(step for step in steps if step.get("uses", "").startswith("pulumi/actions@"))
-    assert setup["with"] == {"pulumi-version": config.pulumi_version}
+    setup = next(step for step in steps if step.get("name") == "Install checksum-verified tools")
+    assert setup["run"] == "./.github/scripts/install-tools.ps1"
+    assert setup["shell"] == "pwsh"
     assert not any(
         name in text for name in ("OCI_CLI_KEY_CONTENT", "PULUMI_ACCESS_TOKEN", "state push")
     )
