@@ -1,0 +1,29 @@
+# Deliberately incomplete: copy privately to .infra and obtain current OCI evidence.
+[foundation]
+name = "oke"
+region = "eu-frankfurt-1"
+compartment_id = ""
+administrator_cidrs = []
+service_id = ""
+service_cidr = ""
+availability_domains = []
+kubernetes_version = ""
+supported_versions = []
+nodes = 2
+ocpus_per_node = 1
+memory_gb_per_node = 6
+boot_gb_per_node = 50
+max_pods_per_node = 10
+vcn_cidr = "10.0.0.0/16"
+api_cidr = "10.0.0.0/28"
+worker_cidr = "10.0.10.0/24"
+pod_cidr = "10.0.20.0/24"
+services_cidr = "10.96.0.0/16"
+
+[image]
+image_id = ""
+region = "eu-frankfurt-1"
+architecture = "aarch64"
+kubernetes_version = ""
+reviewed_at = ""
+source = ""

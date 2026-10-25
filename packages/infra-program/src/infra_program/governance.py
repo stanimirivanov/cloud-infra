@@ -6,6 +6,8 @@ from typing import Any
 from infra_core.governance.audit import audit
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import CAPACITY, footprint
+from infra_core.oci.security import COMPONENTS, PROVIDER
+from infra_core.oci.security import validate_resource as validate_oci
 from pulumi_policy import (
     EnforcementLevel,
     PolicyPack,
@@ -30,7 +32,11 @@ def validate_resource(args: ResourceValidationArgs, report: ReportViolation) -> 
     if args.resource_type == "pulumi:pulumi:Stack":
         return
     try:
+        if args.resource_type in COMPONENTS or args.resource_type == PROVIDER:
+            validate_oci(args.resource_type, dict(args.props))
+            return
         modeled = footprint(args.resource_type, dict(args.props), planned=True)
+        validate_oci(args.resource_type, dict(args.props))
         # Resource-local ceilings supplement account-wide preflight; never replace it.
         ceilings = {"ocpus": 4, "memory_gb": 24, "block_gb": 200}
         for metric in CAPACITY:

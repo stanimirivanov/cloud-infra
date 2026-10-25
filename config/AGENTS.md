@@ -14,3 +14,8 @@ account/inventory/usage documents belong under ignored .infra, never config/.
 account.example.toml must remain unverified and unusable as deployment evidence.
 Increment profile revision whenever eligibility or limits change; account evidence
 must bind to that revision and be verified again, never silently inherit new limits.
+
+oci.example.toml stays incomplete. Actual administrator CIDRs, image/version/AD
+and regional service evidence belong in ignored .infra. Do not introduce lookup
+fallbacks, paid routing or expand ingress to make a cluster appear ready. See
+docs/runbooks/oci-components.md before changing these contracts.
