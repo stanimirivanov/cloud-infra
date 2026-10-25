@@ -26,7 +26,19 @@ archives, planted/deleted secrets and unsafe workflow changes. See the
 Read-only GitHub inspection reported no classic main protection or effective main
 rules; the qualification-environment endpoint returned 404. These external gaps
 remain administrator prerequisites. The original assessment below predates these
-code changes; operational evidence upgrade 3 remains outstanding.
+code changes; the measured-evidence follow-up below addresses the first part of upgrade 3;
+operational activation remains outstanding.
+
+## Follow-up: measured evidence before operations
+
+Issue #33 adds fresh-session synthetic recovery after stack loss, measured restore
+and backup-age timings, encrypted checkpoint size/hash, read-only bucket posture
+checks, and inventory/usage coverage clocks with an exact successful-query matrix.
+Old receipts and inventories fail closed. Remote qualification requires fresh
+posture through a manually protected evidence handoff. These measurements remain
+unsigned and do not prove production/data recovery, IAM completeness or live
+operational readiness. Protected previews, trusted provenance, recovery SLOs and
+operational monitoring remain later activation work. No resource operations are enabled.
 
 ## Assessment
 

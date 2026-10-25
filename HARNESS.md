@@ -91,7 +91,9 @@ actual adapter serialization is exercised using the generated SDK in mocks.
 Default tests skip three opt-in backend/policy-host integration tests. CI explicitly
 sets RUN_PULUMI_LOCAL_QUALIFICATION=1 and runs the backend_integration marker with the
 pinned CLI on disposable local storage. This tests encryption, locking, recovery
-and policy protocol behavior without creating provider/cloud resources.
+and policy protocol behavior without creating provider/cloud resources. Recovery
+now includes synthetic stack loss and fresh-workspace/HOME restore with measured
+backup age, restore duration and encrypted checkpoint size/hash.
 
 ## Domain commands and runbooks
 
@@ -148,3 +150,15 @@ unchanged. Never reuse or delete externally owned state during verification.
 Supabase's pinned Terraform-provider bridge is part of the Pulumi SDK, not a
 repository deployment workflow. External ownership fields remain necessary in the
 read-only cutover evidence contract.
+
+
+## Measured-evidence follow-up
+
+Issue #33 adds schema-v2 independent recovery receipts, read-only backend posture
+collection/checks and inventory scope/query/clock validation. Remote qualification
+now requires fresh private posture evidence; its protected secret handoff is manual.
+Regenerate old receipts/inventories and supply usage covered_through; never restamp
+old data. See the backend and governance runbooks above for exact contracts.
+These are bounded synthetic/read-only sensors. Trusted source attestations, live
+least-privilege/coverage proof, production recovery SLOs, protected previews and
+operational drift/cost/availability monitors remain prerequisites for activation.

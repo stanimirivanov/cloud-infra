@@ -113,6 +113,7 @@ has no consumption. The explicit --usage JSON contract is:
   "provider": "oci",
   "month": "2026-10",
   "observed_at": "2026-10-25T10:00:00+00:00",
+  "covered_through": "2026-10-25T09:59:00+00:00",
   "source": "Operator reference to authoritative billing/usage evidence",
   "values": {
     "a1_ocpu_hours": 1200,
@@ -170,7 +171,7 @@ props. The collector assigns owner=null to every object: tags do not prove
 ownership. It marks volumes retained=true. Subtraction is therefore blocked for
 collector-only evidence until a later reviewed adoption/ownership mechanism.
 
-Inventory schema_version=1 includes account_id, provider, observed_at, complete,
+Inventory schema_version=2 includes account_id, provider, observed_at, complete,
 all_regions, all_compartments, covered_types, resources and usage. covered_types
 must enumerate Instance, BootVolume, Volume and Cluster native OCI Pulumi tokens.
 Every resource has id, type, region, owner, retained and props. Instance props use
@@ -242,3 +243,36 @@ contracts, handling of currently external services, protected-environment approv
 and tests tying the generated proposal to the registered resource graph. Until
 then the resource entry point and CLI preview/deploy remain unconditional denials.
 Do not weaken these gates to compensate for incomplete evidence.
+
+
+## Evidence clocks and coverage migration
+
+Recollect inventory to produce schema v2; do not relabel v1 snapshots. In addition
+to existing resource/account fields, v2 includes collection_started_at,
+collection_completed_at and coverage. observed_at must equal the original start;
+start <= completion <= audit time and the entire scan must be under 15 minutes old.
+Fresh completion cannot hide an old scan or re-date old records.
+
+coverage contains unique regions/compartments, per-region availability_domains,
+and successful queries. Every query records operation, region, compartment,
+availability_domain (null unless applicable), and raw result count. Validation
+requires exactly the region/compartment discovery calls, AD discovery per region,
+instances/volumes/clusters/virtual_pools per scope, and boots per AD/scope. Missing,
+extra or duplicate queries, discovery counts inconsistent with declared scope,
+nonzero virtual pools, missing root/home scope, invalid counts and counts
+smaller than retained resource records fail. Raw counts can include terminated
+objects filtered out of final inventory. Completeness booleans alone cannot pass.
+
+Usage now requires covered_through separately from observed_at: the time through
+which billing values are complete versus when the report was observed. Both must
+be fresh within 15 minutes, in the current UTC month, and coverage cannot follow
+observation. Remaining usage is conservatively forecast from covered_through, so
+reporting latency cannot erase unmeasured consumption. Re-collect stale usage;
+never set covered_through to report-download time without authoritative support.
+
+The scope matrix records what the reader discovered and successfully queried;
+it does not prove permission to discover every compartment, that scope stayed
+unchanged during a multi-request scan, or that unsigned JSON was not edited.
+Effective IAM/discovery coverage and trusted provenance still need independent
+review before any future operation. This implementation does not enable deployment,
+assert live eligibility, establish operational SLOs or install drift/cost monitors.

@@ -127,3 +127,95 @@ def test_sdk_dispatch_is_paginated_read_only_and_sanitizes_failures(monkeypatch)
         reader.list("compartments", region="home", compartment="tenancy")
     with pytest.raises(GovernanceError, match="GOV007"):
         OCIReader("synthetic-config", "DEFAULT", "another-tenancy")
+
+
+def test_collection_records_scope_queries_and_distinct_clocks():
+    reader = FakeReader()
+    inventory = collect(reader, "tenancy", "home")
+    assert inventory["schema_version"] == 2
+    assert inventory["observed_at"] == inventory["collection_started_at"]
+    assert inventory["collection_completed_at"] >= inventory["collection_started_at"]
+    coverage = inventory["coverage"]
+    assert coverage["regions"] == ["home", "other"]
+    assert coverage["compartments"] == ["tenancy", "child"]
+    assert coverage["availability_domains"] == {"home": ["ad1", "ad2"], "other": ["ad1", "ad2"]}
+    assert [
+        (row["operation"], row["region"], row["compartment"], row["availability_domain"])
+        for row in coverage["queries"]
+    ] == reader.calls
+    assert len(coverage["queries"]) == 28
+    assert sum(row["count"] for row in coverage["queries"]) == 17
+
+
+def test_bucket_posture_adapter_reads_only_metadata_and_sanitizes_errors(monkeypatch):
+    from pathlib import Path
+
+    from infra_core.backend_posture import validate_posture
+    from infra_core.foundation import load_foundation
+
+    config = load_foundation(Path(__file__).resolve().parents[1])
+    namespace = config.backend.endpoint.split("//")[1].split(".")[0]
+    calls = []
+
+    class Storage:
+        fail = False
+
+        def __init__(self, credentials, **kwargs):
+            calls.append(("client", credentials["region"]))
+
+        def get_namespace(self, **kwargs):
+            calls.append(("namespace", kwargs))
+            return SimpleNamespace(data=namespace)
+
+        def get_bucket(self, ns, bucket):
+            calls.append(("bucket", ns, bucket))
+            if self.fail:
+                raise RuntimeError("SECRET_KEY_MUST_NOT_ESCAPE")
+            return SimpleNamespace(
+                data={
+                    "name": bucket,
+                    "public_access_type": "NoPublicAccess",
+                    "versioning": "Enabled",
+                    "storage_tier": "Standard",
+                    "is_read_only": False,
+                    "object_lifecycle_policy_etag": None,
+                }
+            )
+
+        def list_retention_rules(self, *args):
+            calls.append(("retention", args))
+            return SimpleNamespace(data=[])
+
+        def list_preauthenticated_requests(self, *args):
+            calls.append(("PARs", args))
+            return SimpleNamespace(data=[])
+
+    sdk = SimpleNamespace(
+        config=SimpleNamespace(from_file=lambda path, profile: {"tenancy": "tenancy"}),
+        object_storage=SimpleNamespace(ObjectStorageClient=Storage),
+        pagination=SimpleNamespace(list_call_get_all_results=lambda method, *args: method(*args)),
+        util=SimpleNamespace(to_dict=lambda data: data),
+    )
+    monkeypatch.setattr("infra_core.inventory.oci.importlib.import_module", lambda name: sdk)
+    reader = OCIReader("synthetic-config", "DEFAULT", "tenancy")
+    posture = reader.backend_posture(config)
+    assert validate_posture(config, posture)["deployment_authorized"] is False
+    assert [call[0] for call in calls] == ["client", "namespace", "bucket", "retention", "PARs"]
+    Storage.fail = True
+    with pytest.raises(GovernanceError, match="BACKEND005") as error:
+        reader.backend_posture(config)
+    assert "SECRET_KEY" not in str(error.value)
+
+
+def test_removing_scope_and_its_queries_cannot_hide_discovered_regions():
+    from datetime import UTC, datetime
+
+    from infra_core.governance.coverage import validate_coverage
+
+    inventory = collect(FakeReader(), "tenancy", "home")
+    coverage = inventory["coverage"]
+    coverage["regions"].remove("other")
+    del coverage["availability_domains"]["other"]
+    coverage["queries"] = [row for row in coverage["queries"] if row["region"] != "other"]
+    with pytest.raises(GovernanceError, match="GOV042"):
+        validate_coverage(inventory, "home", datetime.now(UTC))

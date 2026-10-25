@@ -4,7 +4,9 @@ import importlib
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from infra_core.foundation import FoundationConfig
 from infra_core.governance.contracts import GovernanceError, require
+from infra_core.governance.coverage import validate_coverage
 from infra_core.governance.resources import BOOT, CLUSTER, INSTANCE, INVENTORY_TYPES, VOLUME
 
 
@@ -84,6 +86,47 @@ class OCIReader:
                 f"GOV040: OCI {operation} scan failed; no complete snapshot produced"
             ) from None
 
+    def backend_posture(self, config: FoundationConfig) -> dict[str, Any]:
+        started = datetime.now(UTC).isoformat()
+        try:
+            client = self.sdk.object_storage.ObjectStorageClient(
+                self.config | {"region": config.backend.region}, timeout=(10, 30)
+            )
+            namespace = client.get_namespace(compartment_id=self.config["tenancy"]).data
+            require(
+                namespace == config.backend.endpoint.split("//")[1].split(".")[0],
+                "BACKEND001",
+                "OCI namespace does not match backend",
+            )
+            bucket = self.sdk.util.to_dict(client.get_bucket(namespace, config.backend.bucket).data)
+            retention = self.sdk.pagination.list_call_get_all_results(
+                client.list_retention_rules, namespace, config.backend.bucket
+            ).data
+            grants = self.sdk.pagination.list_call_get_all_results(
+                client.list_preauthenticated_requests, namespace, config.backend.bucket
+            ).data
+            return {
+                "schema_version": 1,
+                "configuration_sha256": config.digest,
+                "account_id": self.config["tenancy"],
+                "namespace": namespace,
+                "bucket": bucket["name"],
+                "region": config.backend.region,
+                "collection_started_at": started,
+                "collection_completed_at": datetime.now(UTC).isoformat(),
+                **{
+                    key: bucket[key]
+                    for key in ("public_access_type", "versioning", "storage_tier", "is_read_only")
+                },
+                "lifecycle_policy_etag": bucket["object_lifecycle_policy_etag"],
+                "retention_rule_count": len(retention),
+                "preauthenticated_request_count": len(grants),
+            }
+        except Exception:
+            raise GovernanceError(
+                "BACKEND005: read-only bucket posture collection failed; raw details withheld"
+            ) from None
+
 
 def collect(
     reader: Reader,
@@ -93,7 +136,30 @@ def collect(
     usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     observed_at = datetime.now(UTC).isoformat()
-    regions = reader.list("regions", region=home_region, compartment=account_id)
+    queries = []
+    domains = {}
+
+    def scan(
+        operation: str, *, region: str, compartment: str, availability_domain: str | None = None
+    ) -> list[dict[str, Any]]:
+        result = reader.list(
+            operation,
+            region=region,
+            compartment=compartment,
+            availability_domain=availability_domain,
+        )
+        queries.append(
+            {
+                "operation": operation,
+                "region": region,
+                "compartment": compartment,
+                "availability_domain": availability_domain,
+                "count": len(result),
+            }
+        )
+        return result
+
+    regions = scan("regions", region=home_region, compartment=account_id)
     require(
         bool(regions) and all(region.get("status") == "READY" for region in regions),
         "GOV041",
@@ -105,7 +171,7 @@ def collect(
         "GOV010",
         "configured home region does not match OCI",
     )
-    compartments = reader.list("compartments", region=home_region, compartment=account_id)
+    compartments = scan("compartments", region=home_region, compartment=account_id)
     ids = [account_id] + [
         item["id"] for item in compartments if item.get("lifecycle_state") != "DELETED"
     ]
@@ -113,10 +179,11 @@ def collect(
     resources = []
     for subscription in regions:
         region = subscription["region_name"]
-        ads = reader.list("ads", region=region, compartment=account_id)
+        ads = scan("ads", region=region, compartment=account_id)
         require(bool(ads), "GOV041", "availability-domain coverage is missing")
+        domains[region] = [ad["name"] for ad in ads]
         for compartment in ids:
-            for item in reader.list("instances", region=region, compartment=compartment):
+            for item in scan("instances", region=region, compartment=compartment):
                 if item.get("lifecycle_state") == "TERMINATED":
                     continue
                 shape = item.get("shape_config") or {}
@@ -135,19 +202,19 @@ def collect(
                     )
                 )
             for ad in ads:
-                for item in reader.list(
+                for item in scan(
                     "boots", region=region, compartment=compartment, availability_domain=ad["name"]
                 ):
                     if item.get("lifecycle_state") != "TERMINATED":
                         resources.append(_volume(item, BOOT, region))
-            for item in reader.list("volumes", region=region, compartment=compartment):
+            for item in scan("volumes", region=region, compartment=compartment):
                 if item.get("lifecycle_state") != "TERMINATED":
                     resources.append(_volume(item, VOLUME, region))
-            for item in reader.list("clusters", region=region, compartment=compartment):
+            for item in scan("clusters", region=region, compartment=compartment):
                 if item.get("lifecycle_state") != "DELETED":
                     resources.append(_record(item, CLUSTER, region, {"type": item.get("type")}))
             require(
-                not reader.list("virtual_pools", region=region, compartment=compartment),
+                not scan("virtual_pools", region=region, compartment=compartment),
                 "GOV022",
                 "virtual node pools are not free-tier classified",
             )
@@ -157,11 +224,19 @@ def collect(
         "GOV009",
         "duplicate resources in regional scan",
     )
-    return {
-        "schema_version": 1,
+    snapshot = {
+        "schema_version": 2,
         "provider": "oci",
         "account_id": account_id,
         "observed_at": observed_at,
+        "collection_started_at": observed_at,
+        "collection_completed_at": datetime.now(UTC).isoformat(),
+        "coverage": {
+            "regions": [item["region_name"] for item in regions],
+            "compartments": ids,
+            "availability_domains": domains,
+            "queries": queries,
+        },
         "complete": True,
         "all_regions": True,
         "all_compartments": True,
@@ -169,6 +244,9 @@ def collect(
         "resources": sorted(resources, key=lambda item: item["id"]),
         "usage": usage,
     }
+
+    validate_coverage(snapshot, home_region, datetime.now(UTC))
+    return snapshot
 
 
 def _record(item: dict[str, Any], kind: str, region: str, props: dict[str, Any]) -> dict[str, Any]:

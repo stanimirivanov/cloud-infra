@@ -1,7 +1,10 @@
 """Opt-in, isolated Pulumi backend qualification. Never manages cloud resources."""
 
+import hashlib
 import json
+import math
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -13,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from infra_core.backend_posture import validate_posture
 from infra_core.foundation import FoundationConfig
 
 
@@ -100,7 +104,16 @@ def qualification_environment(source: dict[str, str], home: Path, *, local: bool
         key: value
         for key, value in source.items()
         if not key.upper().startswith(
-            ("AWS_", "OCI_", "PULUMI_", "TF_", "TG_", "TERRAGRUNT_", "INFRA_QUALIFICATION_")
+            (
+                "AWS_",
+                "OCI_",
+                "PULUMI_",
+                "TF_",
+                "TG_",
+                "TERRAGRUNT_",
+                "INFRA_QUALIFICATION_",
+                "BACKEND_POSTURE_",
+            )
         )
     }
     if local:
@@ -128,11 +141,21 @@ def qualification_environment(source: dict[str, str], home: Path, *, local: bool
     return env
 
 
-def qualify(config: FoundationConfig, *, local: bool, allow_writes: bool) -> dict[str, Any]:
+def qualify(
+    config: FoundationConfig,
+    *,
+    local: bool,
+    allow_writes: bool,
+    posture: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if not allow_writes:
         raise QualificationError(
             "qualification writes isolated test state; pass --allow-backend-writes"
         )
+    if not local:
+        if posture is None:
+            raise QualificationError("BACKEND001: fresh backend posture evidence is required")
+        validate_posture(config, posture)
     if version("pulumi") != config.pulumi_version:
         raise QualificationError("Pulumi CLI pin must match the locked Python SDK")
     run_id = uuid4().hex
@@ -170,6 +193,7 @@ def qualify(config: FoundationConfig, *, local: bool, allow_writes: bool) -> dic
             checkpoint = session.run("export", ["stack", "export", "--stack", stack])
             if sentinel in checkpoint or len(checkpoint.encode()) > 1024 * 1024:
                 raise QualificationError("encryption: plaintext sentinel or oversized checkpoint")
+            exported_at = time.perf_counter()
             document = json.loads(checkpoint)
             resources = document["deployment"]["resources"]
             if any(resource["type"] != "pulumi:pulumi:Stack" for resource in resources):
@@ -184,13 +208,9 @@ def qualify(config: FoundationConfig, *, local: bool, allow_writes: bool) -> dic
             session.check_lock(stack, work / "holder")
             backup = work / "encrypted-checkpoint.json"
             backup.write_text(checkpoint, encoding="utf-8")
-            session.run("restore", ["stack", "import", "--file", str(backup), "--stack", stack])
-            restored = session.run(
-                "readback",
-                ["stack", "output", "sentinel", "--show-secrets", "--json", "--stack", stack],
+            recovery = _rehearse_recovery(
+                session, work, env, backend, stack, backup, sentinel, exported_at
             )
-            if json.loads(restored) != sentinel:
-                raise QualificationError("recovery: restored secret did not decrypt correctly")
             complete = True
         finally:
             # Only this invocation's generated stack in its unique namespace may be removed.
@@ -199,7 +219,8 @@ def qualify(config: FoundationConfig, *, local: bool, allow_writes: bool) -> dic
         if not complete:
             raise QualificationError("qualification did not complete")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "recovery": recovery,
         "kind": "local" if local else "oci-s3",
         "configuration_sha256": config.digest,
         "pulumi_version": config.pulumi_version,
@@ -210,8 +231,49 @@ def qualify(config: FoundationConfig, *, local: bool, allow_writes: bool) -> dic
             "encrypted-checkpoint",
             "lock-contention",
             "restore-readback",
+            "independent-recovery",
         ],
         "deployment_authorized": False,
+    }
+
+
+def _rehearse_recovery(
+    session: PulumiSession,
+    work: Path,
+    env: dict[str, str],
+    backend: str,
+    stack: str,
+    backup: Path,
+    sentinel: str,
+    exported_at: float,
+) -> dict[str, Any]:
+    if not re.fullmatch(r"qualification-[a-f0-9]{32}", stack):
+        raise QualificationError("recovery is limited to a generated qualification stack")
+    encrypted_config = (work / f"Pulumi.{stack}.yaml").read_bytes()
+    recovered = work / "recovery-workspace"
+    recovered.mkdir()
+    for name in ("Pulumi.yaml", "__main__.py"):
+        (recovered / name).write_bytes((work / name).read_bytes())
+    # This stack was generated here and checked to contain only a synthetic root.
+    session.run("simulate-loss", ["stack", "rm", stack, "--yes"])
+    started = time.perf_counter()
+    independent = PulumiSession(recovered, env | {"PULUMI_HOME": str(work / "recovery-home")})
+    independent.run("recovery-login", ["login", backend])
+    independent.run(
+        "recovery-initialize", ["stack", "init", stack, "--secrets-provider", "passphrase"]
+    )
+    (recovered / f"Pulumi.{stack}.yaml").write_bytes(encrypted_config)
+    independent.run("restore", ["stack", "import", "--file", str(backup), "--stack", stack])
+    restored = independent.run(
+        "readback", ["stack", "output", "sentinel", "--show-secrets", "--json", "--stack", stack]
+    )
+    if json.loads(restored) != sentinel:
+        raise QualificationError("recovery: restored secret did not decrypt correctly")
+    return {
+        "checkpoint_sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
+        "checkpoint_bytes": backup.stat().st_size,
+        "backup_age_seconds": started - exported_at,
+        "restore_seconds": time.perf_counter() - started,
     }
 
 
@@ -221,24 +283,50 @@ def validate_receipt(config: FoundationConfig, receipt: dict[str, Any]) -> None:
         "encrypted-checkpoint",
         "lock-contention",
         "restore-readback",
+        "independent-recovery",
     }
     if (
         not isinstance(receipt, dict)
-        or receipt.get("schema_version") != 1
+        or type(receipt.get("schema_version")) is not int
+        or receipt.get("schema_version") != 2
         or receipt.get("kind") != "oci-s3"
         or receipt.get("configuration_sha256") != config.digest
         or receipt.get("pulumi_version") != config.pulumi_version
         or not isinstance(receipt.get("checks"), list)
         or any(not isinstance(check, str) for check in receipt["checks"])
         or set(receipt["checks"]) != expected_checks
+        or len(receipt["checks"]) != len(expected_checks)
         or receipt.get("deployment_authorized") is not False
     ):
         raise QualificationError(
             "receipt does not match the configured OCI backend and required checks"
         )
+    recovery = receipt.get("recovery")
+    if (
+        not isinstance(recovery, dict)
+        or set(recovery)
+        != {"checkpoint_sha256", "checkpoint_bytes", "backup_age_seconds", "restore_seconds"}
+        or not isinstance(recovery["checkpoint_sha256"], str)
+        or not re.fullmatch(r"[a-f0-9]{64}", recovery["checkpoint_sha256"])
+        or type(recovery["checkpoint_bytes"]) is not int
+        or not 0 < recovery["checkpoint_bytes"] <= 1024 * 1024
+        or any(
+            type(recovery[key]) not in (int, float)
+            or not math.isfinite(recovery[key])
+            or recovery[key] < 0
+            for key in ("backup_age_seconds", "restore_seconds")
+        )
+        or recovery["restore_seconds"] == 0
+        or not isinstance(receipt.get("run_id"), str)
+        or not re.fullmatch(r"[a-f0-9]{32}", receipt["run_id"])
+    ):
+        raise QualificationError("recovery evidence is missing or not measured")
     if not isinstance(receipt.get("completed_at"), str):
         raise QualificationError("qualification receipt has no valid timestamp")
-    completed = datetime.fromisoformat(receipt["completed_at"])
+    try:
+        completed = datetime.fromisoformat(receipt["completed_at"])
+    except ValueError:
+        raise QualificationError("qualification receipt has an invalid timestamp") from None
     now = datetime.now(UTC)
     if (
         completed.tzinfo is None

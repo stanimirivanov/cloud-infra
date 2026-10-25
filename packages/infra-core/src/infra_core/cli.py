@@ -10,6 +10,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from infra_core.backend import QualificationError, qualify, validate_receipt
+from infra_core.backend_posture import validate_posture
 from infra_core.foundation import deny_deployment, load_foundation
 from infra_core.repository import find_repository
 from infra_core.verification import verify
@@ -32,11 +33,23 @@ def build_parser() -> argparse.ArgumentParser:
     qualifier.add_argument(
         "--local-test", action="store_true", help="isolated filesystem backend, not OCI evidence"
     )
+    qualifier.add_argument("--posture", type=Path, default=Path(".infra/backend-posture.json"))
     qualifier.add_argument("--receipt", type=Path, default=Path(".infra/qualification.json"))
     receipt_check = backend_commands.add_parser(
         "check-receipt", help="check OCI evidence freshness/binding"
     )
     receipt_check.add_argument("--receipt", type=Path, default=Path(".infra/qualification.json"))
+    posture_check = backend_commands.add_parser(
+        "check-posture", help="validate read-only OCI bucket evidence"
+    )
+    posture_check.add_argument("--evidence", type=Path, default=Path(".infra/backend-posture.json"))
+    posture_collect = backend_commands.add_parser(
+        "collect-posture", help="read-only OCI bucket metadata scan"
+    )
+    posture_collect.add_argument("--account-id", required=True)
+    posture_collect.add_argument("--oci-config", type=Path, required=True)
+    posture_collect.add_argument("--oci-profile", default="DEFAULT")
+    posture_collect.add_argument("--output", type=Path, default=Path(".infra/backend-posture.json"))
     for operation in ("preview", "deploy"):
         deployment = commands.add_parser(
             operation, help="readiness check; resource operations are disabled"
@@ -194,7 +207,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
         elif args.command == "backend":
             config = load_foundation(root)
-            if args.backend_command == "inspect":
+            if args.backend_command == "collect-posture":
+                from infra_core.inventory.oci import OCIReader
+
+                destination = (root / args.output).resolve()
+                if not destination.is_relative_to(root / ".infra"):
+                    raise ValueError("BACKEND001: posture output must stay under .infra")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.unlink(missing_ok=True)
+                try:
+                    reader = OCIReader(
+                        str((root / args.oci_config).resolve()), args.oci_profile, args.account_id
+                    )
+                    posture = reader.backend_posture(config)
+                except Exception:
+                    raise ValueError(
+                        "BACKEND005: OCI posture collection failed; inspect credentials privately"
+                    ) from None
+                validate_posture(config, posture)
+                destination.write_text(json.dumps(posture, indent=2) + "\n", encoding="utf-8")
+                print("PASS: read-only backend posture collected; deployment disabled")
+            elif args.backend_command == "check-posture":
+                print(
+                    json.dumps(
+                        validate_posture(
+                            config, json.loads((root / args.evidence).read_text(encoding="utf-8"))
+                        )
+                    )
+                )
+            elif args.backend_command == "inspect":
                 print(
                     json.dumps(
                         {
@@ -219,7 +260,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.unlink(missing_ok=True)
                 receipt = qualify(
-                    config, local=args.local_test, allow_writes=args.allow_backend_writes
+                    config,
+                    local=args.local_test,
+                    allow_writes=args.allow_backend_writes,
+                    posture=None
+                    if args.local_test
+                    else json.loads((root / args.posture).read_text(encoding="utf-8")),
                 )
                 destination.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
                 print(f"PASS: {receipt['kind']} backend qualified; resource deployment disabled")
