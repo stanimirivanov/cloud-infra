@@ -6,6 +6,7 @@ import tomllib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from infra_core.governance.contracts import require, timestamp
 
@@ -205,12 +206,17 @@ class FoundationConfig:
 
 def load_config(path: Path) -> FoundationConfig:
     """Strict TOML boundary; reject accidental/misspelled configuration keys."""
+    return parse_config(tomllib.loads(path.read_text(encoding="utf-8")))
+
+
+def parse_config(value: dict[str, Any]) -> FoundationConfig:
+    """Validate already captured TOML, including hash-bound cutover evidence."""
     from dataclasses import fields
 
     from infra_core.governance.contracts import fields as exact_fields
 
     data = exact_fields(
-        tomllib.loads(path.read_text(encoding="utf-8")),
+        value,
         {"foundation", "image"},
         "OCI configuration",
     )

@@ -19,3 +19,8 @@ oci.example.toml stays incomplete. Actual administrator CIDRs, image/version/AD
 and regional service evidence belong in ignored .infra. Do not introduce lookup
 fallbacks, paid routing or expand ingress to make a cluster appear ready. See
 docs/runbooks/oci-components.md before changing these contracts.
+
+kubernetes.example.toml and cutover.example.json are deliberately incomplete.
+Keep real cluster usage, ownership maps, review reports and hashed evidence under
+ignored .infra. Never advance dates, assert network-policy enforcement, or grant
+cutover authority simply to satisfy static checks. See the Kubernetes cutover runbook.

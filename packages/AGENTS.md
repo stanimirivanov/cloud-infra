@@ -32,3 +32,8 @@ or infer ownership from tags. Missing inventory/usage is a failure, not zero.
 infra-program may wrap the pure rules as mandatory policies, but resource-local
 policy checks never replace account-wide pre-registration checks. See
 docs/runbooks/free-tier-governance.md before changing accounting contracts.
+
+kubernetes/ owns a closed offline manifest subset, namespace envelopes and
+cluster usage/rollout checks. No Kubernetes client, kubeconfig access, controller
+installation or provider activation is part of this stage. cutover.py may read
+private evidence/Git metadata only and must always return authorization=false.

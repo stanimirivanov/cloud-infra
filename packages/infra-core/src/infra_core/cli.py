@@ -70,10 +70,50 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     oci_proposal.add_argument("--config", type=Path, required=True)
     oci_proposal.add_argument("--account-id", required=True)
+    kubernetes = commands.add_parser("kubernetes", help="offline namespace/workload governance")
+    kube_commands = kubernetes.add_subparsers(dest="kubernetes_command", required=True)
+    kube_render = kube_commands.add_parser("render", help="render disabled namespace controls")
+    kube_render.add_argument("--config", type=Path, required=True)
+    kube_audit = kube_commands.add_parser(
+        "audit", help="check full bundle against cluster evidence"
+    )
+    for name in ("config", "inventory", "resources"):
+        kube_audit.add_argument("--" + name, type=Path, required=True)
+    cutover = commands.add_parser("cutover", help="offline evidence checks; never an executor")
+    cutover_commands = cutover.add_subparsers(dest="cutover_command", required=True)
+    cutover_check = cutover_commands.add_parser(
+        "check", help="check pinned private review artifacts"
+    )
+    cutover_check.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "oci":
+        if args.command == "cutover":
+            from infra_core.cutover import check
+
+            print(
+                json.dumps(
+                    check(root, json.loads((root / args.evidence).read_text(encoding="utf-8"))),
+                    indent=2,
+                )
+            )
+        elif args.command == "kubernetes":
+            from infra_core.kubernetes.audit import audit as audit_kubernetes
+            from infra_core.kubernetes.config import load_config as load_kubernetes
+            from infra_core.kubernetes.resources import render
+
+            kube_config = load_kubernetes(root / args.config)
+            result_kube = (
+                render(kube_config)
+                if args.kubernetes_command == "render"
+                else audit_kubernetes(
+                    kube_config,
+                    json.loads((root / args.inventory).read_text(encoding="utf-8")),
+                    json.loads((root / args.resources).read_text(encoding="utf-8")),
+                )
+            )
+            print(json.dumps(result_kube, indent=2))
+        elif args.command == "oci":
             from infra_core.oci.config import load_config
             from infra_core.oci.graph import foundation_graph, proposal
 

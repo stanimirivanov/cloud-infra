@@ -29,6 +29,8 @@ packages/
       governance/                    Pure account-wide cost/usage evaluator
       inventory/oci.py               Optional paginated read-only tenancy scanner
       oci/                           Pure reviewed OCI inputs, graph and security rules
+      kubernetes/                    Offline namespace controls and workload/capacity sensors
+      cutover.py                     Read-only, commit-bound evidence consistency checks
       policy.py                      Existing parsed-HCL architectural sensors
       verification.py                Python and legacy infrastructure gates
   infra-program/
@@ -204,7 +206,11 @@ permissions, storage/retention boundaries, recovery and evidence limitations.
    equivalence tests, reviewed image/version inputs, hardened NSGs and an
    [adoption contract](docs/runbooks/oci-components.md). No state transfer or
    resource activation; separate stack orchestration remains a cutover prerequisite.
-5. Add Kubernetes resource governance and execute a separately authorized cutover.
+5. Delivered: Kubernetes namespace/workload governance and read-only cutover
+   evidence preparation; see the [runbook](docs/runbooks/kubernetes-cutover.md).
+   All deployment/state transitions remain disabled. Separate-stack orchestration,
+   live admission/network validation and explicit operational authorization are
+   still required before any actual cutover.
 6. Add independent Cloudflare/Supabase services; AWS/GCP remain optional later work.
 
 The legacy 4 OCPU / 24 GiB policy is retained as a regression baseline, not verified
