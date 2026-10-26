@@ -52,6 +52,43 @@ class PulumiSession:
             )
         return result.stdout
 
+    def check_decryption_rejected(self, stack: str, sentinel: str) -> None:
+        """Require recognized wrong-key failures for both config and checkpoint reads."""
+        if not re.fullmatch(r"qualification-[a-f0-9]{32}", stack):
+            raise QualificationError("wrong-passphrase checks require a generated stack")
+        for source, args in (
+            ("config", ["config", "get", "sentinel", "--stack", stack]),
+            (
+                "checkpoint",
+                ["stack", "output", "sentinel", "--show-secrets", "--json", "--stack", stack],
+            ),
+        ):
+            try:
+                result = subprocess.run(
+                    self.command(args),
+                    cwd=self.cwd,
+                    env=self.env,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                raise QualificationError(
+                    f"wrong-passphrase-{source}: CLI unavailable or timed out; raw output withheld"
+                ) from None
+            # Pinned passphrase manager reports ErrIncorrectPassphrase. An arbitrary
+            # nonzero exit (missing state, auth/network failure, crash) is not evidence.
+            if (
+                result.returncode not in (1, 255)
+                or "incorrect passphrase" not in result.stderr.lower()
+                or sentinel in result.stdout + result.stderr
+            ):
+                raise QualificationError(
+                    f"wrong-passphrase-{source}: decryption rejection not established; "
+                    "raw output withheld"
+                )
+
     def check_lock(self, stack: str, marker: Path) -> None:
         env = self.env | {"INFRA_QUALIFICATION_HOLD": str(marker)}
         holder = subprocess.Popen(
@@ -221,7 +258,7 @@ def qualify(
         if not complete:
             raise QualificationError("qualification did not complete")
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "recovery": recovery,
         "kind": "local" if local else "oci-s3",
         "configuration_sha256": config.digest,
@@ -234,6 +271,7 @@ def qualify(
             "lock-contention",
             "restore-readback",
             "independent-recovery",
+            "wrong-passphrase-rejected",
         ],
         "deployment_authorized": False,
     }
@@ -269,6 +307,25 @@ def _rehearse_recovery(
     )
     (recovered / f"Pulumi.{stack}.yaml").write_bytes(encrypted_config)
     independent.run("restore", ["stack", "import", "--file", str(backup), "--stack", stack])
+    # The deliberately wrong key gets neither the original nor recovery HOME/cache.
+    denied_work = work / "wrong-passphrase-workspace"
+    denied_work.mkdir()
+    for name in ("Pulumi.yaml", "__main__.py", f"Pulumi.{stack}.yaml"):
+        (denied_work / name).write_bytes((recovered / name).read_bytes())
+    wrong_passphrase = secrets.token_urlsafe(32)
+    if wrong_passphrase == env["PULUMI_CONFIG_PASSPHRASE"]:
+        wrong_passphrase += "-different"
+    denied = PulumiSession(
+        denied_work,
+        env
+        | {
+            "PULUMI_HOME": str(work / "wrong-passphrase-home"),
+            "PULUMI_CONFIG_PASSPHRASE": wrong_passphrase,
+        },
+    )
+    denied.run("wrong-passphrase-login", ["login", backend])
+    denied.check_decryption_rejected(stack, sentinel)
+    # A correct-key read after rejection proves the failed reads did not lose recovery.
     restored = independent.run(
         "readback", ["stack", "output", "sentinel", "--show-secrets", "--json", "--stack", stack]
     )
@@ -289,11 +346,12 @@ def validate_receipt(config: FoundationConfig, receipt: dict[str, Any]) -> None:
         "lock-contention",
         "restore-readback",
         "independent-recovery",
+        "wrong-passphrase-rejected",
     }
     if (
         not isinstance(receipt, dict)
         or type(receipt.get("schema_version")) is not int
-        or receipt.get("schema_version") != 2
+        or receipt.get("schema_version") != 3
         or receipt.get("kind") != "oci-s3"
         or receipt.get("configuration_sha256") != config.digest
         or receipt.get("pulumi_version") != config.pulumi_version

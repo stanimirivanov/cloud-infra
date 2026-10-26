@@ -127,7 +127,7 @@ def test_raw_cli_output_is_never_returned_on_failure(monkeypatch, tmp_path):
 
 def receipt(config):
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "run_id": "a" * 32,
         "recovery": recovery_metrics(),
         "kind": "oci-s3",
@@ -140,6 +140,7 @@ def receipt(config):
             "lock-contention",
             "restore-readback",
             "independent-recovery",
+            "wrong-passphrase-rejected",
         ],
         "deployment_authorized": False,
     }
@@ -177,6 +178,8 @@ def test_receipt_binding_is_not_resource_authorization(config):
         "recovery-login",
         "recovery-initialize",
         "restore",
+        "wrong-passphrase-login",
+        "wrong-passphrase-check",
         "readback",
         "cleanup",
     ],
@@ -190,7 +193,7 @@ def test_failed_qualification_never_returns_success_and_cleans_own_stack(
         sentinel = None
 
         def __init__(self, cwd, env):
-            self.cwd = cwd
+            self.cwd, self.env = cwd, env
 
         def run(self, phase, args):
             events.append((phase, args))
@@ -219,6 +222,11 @@ def test_failed_qualification_never_returns_success_and_cleans_own_stack(
             if phase == "readback":
                 return json.dumps(FakeSession.sentinel)
             return ""
+
+        def check_decryption_rejected(self, stack, sentinel):
+            events.append(("wrong-passphrase-check", [stack]))
+            if bad_phase == "wrong-passphrase-check":
+                raise backend.QualificationError("synthetic rejection failure")
 
         def check_lock(self, stack, marker):
             events.append(("locking", [stack]))
@@ -264,10 +272,11 @@ def test_protected_workflow_has_no_pr_trigger_or_resource_credentials(config):
 )
 def test_real_local_backend_encryption_lock_and_recovery(config):
     evidence = backend.qualify(config, local=True, allow_writes=True)
-    assert evidence["schema_version"] == 2
+    assert evidence["schema_version"] == 3
     assert evidence["recovery"]["restore_seconds"] > 0
     assert evidence["recovery"]["backup_age_seconds"] >= 0
     assert "independent-recovery" in evidence["checks"]
+    assert "wrong-passphrase-rejected" in evidence["checks"]
     assert evidence["kind"] == "local"
     assert evidence["deployment_authorized"] is False
     with pytest.raises(backend.QualificationError):

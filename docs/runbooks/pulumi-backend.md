@@ -23,7 +23,8 @@ Never use qualification tooling against an adopted resource stack.
 Foundation schema 2 requires `secrets_provider = "passphrase"`. Other providers,
 implicit defaults and schema 1 fail closed; no KMS/Vault service is provisioned.
 Both synthetic initial and recovery stack initialization use this reviewed policy.
-Backend bucket/prefix/region, disabled units and receipt schema 2 stay unchanged.
+Backend bucket/prefix/region and disabled units stay unchanged. The current
+qualification receipt version is described below.
 
 **Migration:** the new policy is included in the configuration digest. Old
 qualification receipts and backend-posture documents therefore fail binding even
@@ -168,6 +169,18 @@ and reconstructs it from the encrypted checkpoint/configuration in a fresh works
 and PULUMI_HOME. Fresh-session secret readback must match. The separately retained
 passphrase is supplied explicitly. The restoring CLI uses a new home/current
 working directory and an explicit backup set on the same temporary filesystem.
+Before correct-key readback, another fresh workspace/home copies only the
+project/program and encrypted stack config, logs in to the same isolated backend,
+and receives a separately generated, deliberately different passphrase. It runs
+only config get and checkpoint output reads of the synthetic sentinel. Neither a
+new stack nor an update/import is attempted with that key. Each read must exit
+with a recognized error exit (1 or 255) and the pinned CLI's incorrect-passphrase
+diagnostic on stderr, without returning the plaintext sentinel. Success, unrelated errors, timeouts, unavailable
+CLI and signal termination all fail qualification. Raw output is withheld.
+Correct-key readback after these rejections must still match the original sentinel.
+The wrong-key value is passed only through the subprocess environment, never CLI
+arguments, logs or the receipt. No automatic fallback to a working key is allowed.
+
 This does not exercise off-host backup retrieval, independent credential recovery
 or loss of the entire machine. The runner captures raw CLI
 output, including the synthetic plaintext readback, without printing it. Failures
@@ -183,11 +196,15 @@ artifact retention). It records the run UUID, configuration digest, tool version
 time, check names, encrypted checkpoint SHA-256/byte size, backup age and measured
 restore seconds, plus `deployment_authorized=false`. Timings use a high-resolution
 performance clock: backup age spans export through simulated loss; restore spans
-fresh login/init/import/readback, excluding loss simulation and cleanup. These
-observations are not an agreed production RTO/RPO or a data-recovery guarantee.
-Schema-v1 receipts lack independent-recovery measurements and are rejected; run a
-new qualification to produce v2. Never edit timestamps/check names to upgrade one. No raw output, checkpoint,
-stack configuration, passphrase or credential is uploaded. It expires within the
+fresh login/init/import, both wrong-key rejection probes and final correct-key
+readback, excluding loss simulation and cleanup. Schema-v3 timings include this
+additional negative acceptance work and are not directly comparable to v2 timings.
+These observations are not an agreed production RTO/RPO or a data-recovery guarantee.
+Schema-v1/v2 receipts are rejected. Receipt schema 3 requires the exact
+wrong-passphrase-rejected check in addition to the existing five checks; that check
+means both config and checkpoint rejection completed. Run a new qualification to
+obtain v3; never edit versions, timestamps or check names to upgrade old evidence.
+No raw output, checkpoint, stack configuration, passphrase or credential is uploaded. It expires within the
 configured maximum 24 hours and configuration changes invalidate it.
 
 The receipt is unsigned diagnostic evidence, not a tamper-proof attestation or an
@@ -229,3 +246,13 @@ with a conflicting identity or silently switch to Pulumi Cloud/local storage.
 
 Posture field semantics follow [Oracle bucket metadata](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/object_storage/models/oci.object_storage.models.Bucket.html)
 and [read/list Object Storage APIs](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/object_storage/client/oci.object_storage.ObjectStorageClient.html).
+
+Wrong-key detection follows the [pinned Pulumi passphrase manager](https://github.com/pulumi/pulumi/blob/v3.272.0/pkg/secrets/passphrase/manager.go):
+ErrIncorrectPassphrase and its locked-decrypter error identify cryptographic
+rejection. CLI upgrades must review this classifier and rerun the real local
+backend_integration test. An unsupported diagnostic fails closed, not as proof of
+rejection. This adapts the existing Apache-2.0 Pulumi CLI contract without adding a
+dependency. The opt-in local integration (also run in CI) exercises both incorrect
+and matching keys; ordinary offline mocks cannot prove that a real cipher rejected
+an incorrect key. Same-host synthetic acceptance does not verify off-host backups,
+independent human custody, live principal access, credential rotation or production DR.
