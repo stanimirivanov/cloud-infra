@@ -66,7 +66,7 @@ def service(request):
         ],
     }
     evidence = {
-        "schema_version": 1,
+        "schema_version": 2,
         "provider": provider,
         "account_id": "synthetic-account",
         "scope_id": scope,
@@ -75,13 +75,28 @@ def service(request):
         "verified": True,
         "verified_at": now.isoformat(),
         "observed_at": now.isoformat(),
+        "collection_started_at": now.isoformat(),
+        "collection_completed_at": now.isoformat(),
         "complete": True,
         "source": "synthetic-test",
         "plan": "free",
         "other_services_reviewed": True,
         "usage_month": now.strftime("%Y-%m"),
         "resources": [],
-        "usage": metrics.copy(),
+        "usage": {
+            metric: (
+                {"value": value, "as_of": now.isoformat()}
+                if metric == "storage_mb"
+                else {
+                    "value": value,
+                    "covered_from": now.replace(
+                        day=1, hour=0, minute=0, second=0, microsecond=0
+                    ).isoformat(),
+                    "covered_through": now.isoformat(),
+                }
+            )
+            for metric, value in metrics.items()
+        },
         "coverage": (
             "all-zone-dns-records"
             if provider == "cloudflare"
@@ -131,10 +146,11 @@ def test_untrusted_or_wrong_scope_evidence_is_rejected(service, field, value, co
 
 def test_partial_unknown_future_and_duplicate_documents_fail(service):
     config, evidence, profile = service
+    original_observation = evidence["observed_at"]
     evidence["observed_at"] = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     with pytest.raises(GovernanceError, match="EXT002"):
         audit(config, evidence, profile)
-    evidence["observed_at"] = datetime.now(UTC).isoformat()
+    evidence["observed_at"] = original_observation
     config["resources"] *= 2
     with pytest.raises(GovernanceError, match="EXT005"):
         audit(config, evidence, profile)
@@ -303,6 +319,13 @@ def test_cli_audits_same_proposal_and_fails_closed(service, tmp_path, capsys):
     e.write_text(json.dumps(evidence))
     assert main(argv) == 1
     assert "EXT003" in capsys.readouterr().err
+    evidence["complete"] = True
+    evidence["collection_started_at"] = (
+        datetime.fromisoformat(evidence["observed_at"]) - timedelta(hours=1)
+    ).isoformat()
+    e.write_text(json.dumps(evidence))
+    assert main(argv) == 1
+    assert "EXT022" in capsys.readouterr().err
     c.write_text("[]")
     assert main(argv) == 1
     assert "GOV003" in capsys.readouterr().err
@@ -317,6 +340,8 @@ def test_actual_sdks_emit_only_audited_protected_secret_resources(service, tmp_p
         r"""
 import json
 import sys
+from copy import deepcopy
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 import pulumi
@@ -348,6 +373,27 @@ def register_package(request):
     packages.append(request)
     return real_package(request)
 monitor.RegisterPackage = register_package
+bad_coverage = deepcopy(evidence)
+bad_coverage['collection_started_at'] = (
+    datetime.fromisoformat(evidence['observed_at']) - timedelta(hours=1)).isoformat()
+bad_readings = [bad_coverage]
+if config['provider'] == 'supabase':
+    stale_metric = deepcopy(evidence)
+    stale_metric['usage']['egress_mb']['covered_through'] = (
+        datetime.fromisoformat(evidence['observed_at']) - timedelta(hours=1)).isoformat()
+    bad_readings.append(stale_metric)
+with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret lookup')), \
+     patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early resource')):
+    for bad in bad_readings:
+        for factory in (register_services_from_config,
+                        lambda c, e, p: register_services(c, e, p, None, {})):
+            try:
+                factory(config, bad, profile)
+                raise AssertionError('stale coverage passed')
+            except ValueError as error:
+                assert 'EXT022' in str(error)
+assert not observed
+
 token = pulumi.Output.secret('synthetic-token')
 passwords = ({'app': pulumi.Output.secret('synthetic-password')}
              if config['provider'] == 'supabase' else {})
