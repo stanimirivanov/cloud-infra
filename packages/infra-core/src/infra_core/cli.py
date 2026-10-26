@@ -198,6 +198,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "governance":
             from infra_core.governance.audit import audit
             from infra_core.inventory.oci import OCIReader, collect
+            from infra_core.inventory_evidence import (
+                capture_inventory,
+                read_inventory_pair,
+                reviewed_commit,
+                validate_inventory_evidence,
+            )
 
             with (root / args.account).open("rb") as stream:
                 account = tomllib.load(stream)
@@ -205,12 +211,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 with (root / "config/quotas/profiles.toml").open("rb") as stream:
                     profiles = tomllib.load(stream)["profiles"]
                 profile = profiles.get(account.get("profile"), {})
+                commit = reviewed_commit(root)
+                payload, envelope = read_inventory_pair(root / args.inventory)
                 result = audit(
                     account,
                     profile,
-                    json.loads((root / args.inventory).read_text(encoding="utf-8")),
+                    validate_inventory_evidence(account, profile, payload, envelope, commit=commit),
                     json.loads((root / args.plan).read_text(encoding="utf-8")),
                 )
+                if reviewed_commit(root) != commit:
+                    raise ValueError("GOV043: checkout changed during inventory audit")
                 print(json.dumps(result, sort_keys=True, indent=2))
             else:
                 if account.get("provider") != "oci":
@@ -219,9 +229,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not destination.is_relative_to(root.resolve() / ".infra"):
                     raise ValueError("GOV003: inventory output must stay under .infra")
                 destination.parent.mkdir(parents=True, exist_ok=True)
+                sidecar = envelope_path(destination)
                 destination.unlink(missing_ok=True)
-                usage = json.loads((root / args.usage).read_text()) if args.usage else None
+                sidecar.unlink(missing_ok=True)
                 try:
+                    commit = reviewed_commit(root)
+                    with (root / "config/quotas/profiles.toml").open("rb") as stream:
+                        profiles = tomllib.load(stream)["profiles"]
+                    profile = profiles.get(account.get("profile"), {})
+                    usage = json.loads((root / args.usage).read_text()) if args.usage else None
                     reader = OCIReader(
                         str((root / args.oci_config).resolve()),
                         args.oci_profile,
@@ -230,11 +246,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                     snapshot = collect(
                         reader, account["account_id"], account["home_region"], usage=usage
                     )
+                    payload, envelope = capture_inventory(account, profile, snapshot, commit=commit)
+                    if reviewed_commit(root) != commit:
+                        raise ValueError("GOV043: checkout changed during inventory collection")
+                    destination.write_bytes(payload)
+                    sidecar.write_bytes(envelope)
                 except Exception:
+                    destination.unlink(missing_ok=True)
+                    sidecar.unlink(missing_ok=True)
                     raise ValueError(
-                        "GOV040: OCI collection failed; inspect credentials/permissions privately"
+                        "GOV040: collection/binding failed; inspect inputs/permissions privately"
                     ) from None
-                destination.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
                 print(
                     "Collected supported OCI families; "
                     "monthly usage/entitlement still require audit"

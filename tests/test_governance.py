@@ -368,6 +368,8 @@ def test_preflight_success_calls_registration_only_after_audit(evidence, monkeyp
 def test_cli_reports_failed_audit_without_traceback(tmp_path, evidence, monkeypatch, capsys):
     from infra_core import cli
 
+    monkeypatch.setattr("infra_core.inventory_evidence.reviewed_commit", lambda root: "a" * 40)
+
     (tmp_path / "pyproject.toml").write_text('[project]\nname="oci-oke-infrastructure"\n')
     (tmp_path / "config/quotas").mkdir(parents=True)
     (tmp_path / "config/quotas/profiles.toml").write_bytes(
@@ -393,13 +395,16 @@ def test_cli_reports_failed_audit_without_traceback(tmp_path, evidence, monkeypa
         )
         == 1
     )
-    assert "GOV003" in capsys.readouterr().err
+    assert "GOV043" in capsys.readouterr().err
 
 
 def test_cli_failed_inventory_removes_stale_snapshot_and_rejects_escape(tmp_path, monkeypatch):
     from infra_core import cli
 
+    monkeypatch.setattr("infra_core.inventory_evidence.reviewed_commit", lambda root: "a" * 40)
     (tmp_path / "pyproject.toml").write_text('[project]\nname="oci-oke-infrastructure"\n')
+    (tmp_path / "config/quotas").mkdir(parents=True)
+    (tmp_path / "config/quotas/profiles.toml").write_text("[profiles]\n")
     (tmp_path / "account.toml").write_text(
         'provider="oci"\naccount_id="synthetic-tenancy"\nhome_region="home"\n'
     )

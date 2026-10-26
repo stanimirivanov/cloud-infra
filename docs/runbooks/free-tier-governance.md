@@ -84,7 +84,7 @@ On PowerShell, run the command on one line (the backslashes above are POSIX shel
 line continuations). Keep account, usage, inventory and proposals under ignored
 .infra; never upload them as PR artifacts. Credential file contents and raw SDK
 errors are withheld from CLI diagnostics. Failed collection removes any old
-destination snapshot so a previous success cannot silently survive a retry.
+destination payload and sidecar so a previous success cannot silently survive a retry.
 
 The adapter enumerates every subscribed READY region and the tenancy root plus
 all non-deleted descendant compartments, using list_compartments with subtree
@@ -128,6 +128,39 @@ required, as of an explicit timezone-aware timestamp no more than 15 minutes old
 for the current UTC month and matching tenancy. If billing telemetry cannot
 provide sufficiently fresh complete values, the audit fails; do not invent them.
 Omitting --usage allows collection for investigation but cannot pass audit.
+
+## OCI inventory sidecars (M03-PR11 CLI slice)
+
+**Breaking transport migration:** collection publishes inventory.json and adjacent
+inventory.json.envelope.json under ignored .infra; governance audit requires both.
+Preserve exact bytes: reformatting invalidates SHA256. Recollect legacy standalone
+JSON with current reviewed code/configuration; never restamp old observations.
+
+The [shared envelope contract](security-evidence.md) adapts the Apache-2.0
+[in-toto Statement pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
+without dependencies. The oci-inventory predicate binds role inventory to original
+collection start/end, configured account_id/home_region, unit=oci-account, clean
+HEAD and a full account/profile digest: SHA256 of UTF-8 JSON of
+{account: account_config, profile: selected_profile}, using sorted keys, compact
+separators, ASCII escaping and rejection of nonfinite values. Reservations,
+verification and profile revision/limits bind; TOML formatting does not. Inventory
+intentionally does not bind a future proposal; full accounting still audits each plan.
+
+Both CLI operations require stable clean HEAD before/after work. Collection removes
+an old pair before SDK access and removes incomplete output on collection, binding
+or write failure. Two writes are not an atomic transaction: a crash may leave a
+partial pair, which consumers reject. Audit bounds reads to 10 MiB payload/64 KiB
+sidecar, checks strict JSON, byte/scope/clock binding and measured coverage, then
+runs all existing eligibility/usage/plan rules. Freshness stays 15 minutes from
+original collection start; sidecar/payload clocks must match exactly. GOV043 covers
+transport/checkout failures, EVID001-EVID004 shared checks, GOV040 sanitized collection.
+
+infra_core.inventory_evidence.capture_inventory preserves schema-2 observations;
+usage=null remains investigatory and cannot pass billing audit. Sidecars prove
+unsigned consistency, not authenticity, complete IAM visibility or deployment
+authority. Pure accounting, OCI component preflight and cutover still accept
+dictionaries until explicit consumer migrations. Operations stay disabled. Rollback
+needs compatible code/contracts and weakens transport checks without granting authority.
 
 ## Proposal and accounting contracts
 
