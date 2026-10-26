@@ -97,5 +97,45 @@ def administration_responses(policy, commit):
             "total_count": 1,
             "branch_policies": [{"id": 9, "name": "main", "type": "branch"}],
         },
+        "checks": {
+            item["context"]: {
+                "total_count": 1,
+                "check_runs": [
+                    {
+                        "id": index + 100,
+                        "name": item["context"],
+                        "head_sha": commit,
+                        "app": {"id": item["app_id"]},
+                        "check_suite": {"id": 21},
+                        "status": "completed",
+                        "conclusion": "success",
+                        "started_at": "2026-01-01T00:00:01Z",
+                        "completed_at": "2026-01-01T00:00:02Z",
+                    }
+                ],
+            }
+            for index, item in enumerate(policy["required_checks"])
+        },
+        "workflow_runs": {
+            "total_count": 1,
+            "workflow_runs": [
+                {
+                    "id": 22,
+                    "workflow_id": policy["workflow"]["id"],
+                    "path": policy["workflow"]["path"],
+                    "head_sha": commit,
+                    "head_branch": "main",
+                    "event": "push",
+                    "check_suite_id": 21,
+                    "repository": {"id": policy["repository_id"]},
+                    "head_repository": {"id": policy["repository_id"]},
+                    "status": "completed",
+                    "conclusion": "success",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "run_started_at": "2026-01-01T00:00:00Z",
+                    "updated_at": "2026-01-01T00:00:03Z",
+                }
+            ],
+        },
     }
     return responses

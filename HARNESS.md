@@ -176,7 +176,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #71 (M03-PR12 administrative consumption slice):
+stay disabled. Status through issue #73 (M03-PR12 required-check execution slice):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -189,7 +189,7 @@ stay disabled. Status through issue #71 (M03-PR12 administrative consumption sli
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
 | PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; #51: factory envelopes before secret lookup/registration; #53: OCI collector/audit envelopes; #55: OCI preflight/composer envelopes; #57: cutover inventory consumer; #59: Supabase anniversary billing periods; #61: mandatory cumulative storage GB-hours and remaining-cycle budgets; source collection/authenticity and runtime cost controls remain prerequisites |
-| PR12: cutover evidence | #57: inventory consumer; #63: exact review-input envelopes; #65: DSSE/Ed25519 configured-key authentication; #67: read-only classic main administrative observations; #69: schema-2 environment reviewer/branch observations; #71: signed cutover administrative snapshot/policy consumption; independent key enrollment/custody, administrator bypass and protected-commit proof remain pending |
+| PR12: cutover evidence | #57: inventory consumer; #63: exact review-input envelopes; #65: DSSE/Ed25519 configured-key authentication; #67: read-only classic main administrative observations; #69: schema-2 environment reviewer/branch observations; #71: signed cutover administrative snapshot/policy consumption; #73: successful required checks linked to the pinned main workflow; independent key enrollment/custody, administrator bypass and protected-commit proof remain pending |
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
@@ -197,7 +197,7 @@ cannot establish live backend/IAM posture, billing eligibility or deployment aut
 The [shared evidence contract](docs/runbooks/security-evidence.md) now gates backend
 posture collection/checks, remote qualification, service CLI audits and both service
 factory entry points, OCI inventory collection/audit and OCI pre-registration.
-Schema-5 cutover bundles validate that inventory pair and schema-2 administrative
-observations/policy, four review-input sidecars and four DSSE signatures against
+Schema-5 cutover bundles validate that inventory pair and schema-3 administrative
+observations/policy and required-check execution, four review-input sidecars and four DSSE signatures against
 a disabled-by-default reviewer policy. All 17 subjects use the captured bytes.
 Other report/evidence consumers retain their contracts until explicit migrations.

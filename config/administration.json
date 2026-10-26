@@ -1,8 +1,9 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "repository": "stanimirivanov/oci-oke-terraform",
   "repository_id": 1323328453,
   "environment": "pulumi-backend-qualification",
+  "workflow": {"id": 395674516, "path": ".github/workflows/verify.yml"},
   "required_checks": [
     {
       "context": "Credential-free verification (ubuntu-24.04)",

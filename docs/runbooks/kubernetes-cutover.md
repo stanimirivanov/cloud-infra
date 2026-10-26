@@ -225,7 +225,7 @@ artifact roles (including the OCI inventory envelope and all four report payload
 plus quota_profiles, reviewer_policy and administrative_policy, the exact bytes of
 tracked config/quotas/profiles.toml, config/cutover-reviewers.toml and
 config/administration.json. The administration role contains the original private
-schema-2 main/environment observation snapshot. The four review
+schema-3 main/environment observation snapshot. The four review
 envelopes and four DSSE signature artifacts are excluded from subjects
 to avoid cycles. Finalize the reports and their actual reviewed inputs before
 creating these sidecars. Changing any subject, even formatting or an unrelated quota
@@ -321,7 +321,7 @@ exceptions in infra_core.review_signatures; pure domains retain their import rul
 ### Administrative observation consumption (M03-PR12)
 
 The mandatory administration artifact pins a distinct private JSON file, normally
-.infra/administration.json. Its original schema-2 bytes and the tracked
+.infra/administration.json. Its original schema-3 bytes and the tracked
 config/administration.json bytes join every role's signed subject set. Recollect
 with the [administrative sensor](github-administration.md) at the actual clean main
 commit; finalize subjects, review envelopes, external signatures and a schema-5
@@ -333,7 +333,8 @@ After authenticating all four reviews, cutover passes the already captured snaps
 administrative policy and reviewer policy bytes to
 infra_core.administration.validate_snapshot with the independent clean commit and
 review clock. The validator performs no Git, file access, source collection or gh
-calls. Both policy hashes and existing main/environment rules are required. CUT011
+calls. Both policy hashes, main/environment rules and successful required-check
+execution from the pinned main workflow are required. CUT011
 covers unavailable administrative policy; ADMIN diagnostics retain their meanings.
 Signing these bytes authenticates the configured key holders' review, not the
 GitHub server, source truth, human independence or protected-commit history.
