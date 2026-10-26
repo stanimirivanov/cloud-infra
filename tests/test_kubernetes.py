@@ -82,13 +82,16 @@ def test_cross_namespace_allocations_reserve_platform_capacity(kube_config, kube
         ("cluster_id", "other"),
         ("policy_version", "v1.33"),
         ("schema_version", True),
-        ("observed_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()),
-        ("observed_at", (datetime.now(UTC) + timedelta(minutes=1)).isoformat()),
+        ("observed_at", timedelta(minutes=-16)),
+        ("observed_at", timedelta(minutes=1)),
     ],
 )
 def test_missing_stale_partial_wrong_scope_evidence_fails(
     kube_config, kube_inventory, field, value
 ):
+    # Relative evidence clocks must be evaluated at execution, not module collection.
+    if isinstance(value, timedelta):
+        value = (datetime.now(UTC) + value).isoformat()
     kube_inventory[field] = value
     with pytest.raises(GovernanceError, match="K8S020"):
         audit(kube_config, kube_inventory, render(kube_config))
