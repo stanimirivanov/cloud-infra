@@ -66,7 +66,7 @@ def service(request):
         ],
     }
     evidence = {
-        "schema_version": 2,
+        "schema_version": 3,
         "provider": provider,
         "account_id": "synthetic-account",
         "scope_id": scope,
@@ -81,7 +81,19 @@ def service(request):
         "source": "synthetic-test",
         "plan": "free",
         "other_services_reviewed": True,
-        "usage_month": now.strftime("%Y-%m"),
+        "billing_period": (
+            None
+            if provider == "cloudflare"
+            else {
+                "anchor_at": "2020-01-01T00:00:00+00:00",
+                "starts_at": now.replace(
+                    day=1, hour=0, minute=0, second=0, microsecond=0
+                ).isoformat(),
+                "ends_at": (now.replace(day=1) + timedelta(days=32))
+                .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                .isoformat(),
+            }
+        ),
         "resources": [],
         "usage": {
             metric: (
@@ -106,6 +118,7 @@ def service(request):
     profile = tomllib.loads((ROOT / "config/quotas/profiles.toml").read_text())["profiles"][
         provider + "-free"
     ]
+    evidence["profile_revision"] = profile["revision"]
     return config, evidence, profile
 
 
@@ -131,8 +144,7 @@ def test_audit_is_offline_bound_and_never_authorizes(service):
         ("scope_id", "other", "EXT004"),
         ("provider", "oci", "EXT004"),
         ("coverage", "one-project", "EXT003"),
-        ("profile_revision", 2, "EXT001"),
-        ("usage_month", "2000-01", "EXT002"),
+        ("profile_revision", 999, "EXT001"),
         ("observed_at", "2000-01-01T00:00:00+00:00", "EXT002"),
         ("verified_at", "2000-01-01T00:00:00+00:00", "EXT002"),
     ],
@@ -419,7 +431,7 @@ assert not observed
 with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret lookup')), \
      patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early resource')):
     cases = ['missing', 'bytes', 'dictionary', 'mutable', 'account', 'unit', 'scope',
-             'profile', 'commit', 'region', 'stale', 'clock', 'json', 'kind']
+             'profile', 'commit', 'region', 'stale', 'clock', 'json', 'kind', 'period', 'legacy']
     for case in cases:
         c, p = deepcopy((config, profile))
         payload, envelope = base_payload, base_envelope
@@ -439,6 +451,14 @@ with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret loo
             p['revision'] += 1
         elif case == 'commit':
             commit = 'b' * 40
+        elif case in ('period', 'legacy'):
+            bad = deepcopy(evidence)
+            if case == 'legacy':
+                bad['schema_version'], code = 2, 'EXT001'
+            else:
+                bad['billing_period'] = {}
+                code = 'GOV003' if config['provider'] == 'supabase' else 'EXT024'
+            payload, envelope = pack(c, bad, p)
         elif case == 'json':
             payload, code = b'{"PRIVATE":', 'EXT023'
             sidecar = json.loads(envelope)

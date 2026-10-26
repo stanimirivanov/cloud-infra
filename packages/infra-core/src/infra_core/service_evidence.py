@@ -131,7 +131,7 @@ def capture_service_evidence(
     commit: str,
     now: datetime | None = None,
 ) -> bytes:
-    """Create a sidecar for original schema-2 bytes; never rewrite or restamp readings."""
+    """Create a sidecar for original schema-3 bytes; never rewrite or restamp readings."""
     config, profile = deepcopy((config, profile))
     now = now or datetime.now(UTC)
     data = _payload(payload)

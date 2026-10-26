@@ -15,6 +15,7 @@ from infra_core.governance.contracts import (
     text,
     timestamp,
 )
+from infra_core.services.billing import billing_period
 from infra_core.services.coverage import usage_coverage
 
 DNS = "cloudflare:index/dnsRecord:DnsRecord"
@@ -111,7 +112,7 @@ def audit(
     """Audit all new objects without subtracting any live object or trusting tags.
 
     Evidence is an operator attestation, not an API collector or deployment permit.
-    Growth is a conservative remaining-month traffic budget, not a rate prediction.
+    Growth is a conservative remaining-cycle traffic budget, not a rate prediction.
     """
     now = now or datetime.now(UTC)
     require(now.tzinfo is not None, "EXT002", "clock must include a timezone")
@@ -142,7 +143,7 @@ def audit(
             "coverage",
             "resources",
             "usage",
-            "usage_month",
+            "billing_period",
         },
         "service evidence",
     )
@@ -156,7 +157,7 @@ def audit(
         type(config["schema_version"]) is int
         and type(evidence["schema_version"]) is int
         and config["schema_version"] == 1
-        and evidence["schema_version"] == 2,
+        and evidence["schema_version"] == 3,
         "EXT001",
         "unsupported schema",
     )
@@ -180,13 +181,9 @@ def audit(
     )
     _fresh(evidence["verified_at"], now, 30)
     _fresh(evidence["observed_at"], now)
-    require(
-        evidence["usage_month"] == now.strftime("%Y-%m"),
-        "EXT002",
-        "usage evidence must refer to the current billing month",
-    )
+    period = billing_period(evidence["billing_period"], metered=provider == "supabase", now=now)
     metrics = set() if provider == "cloudflare" else METRICS
-    usage, coverage = usage_coverage(evidence, metrics, now)
+    usage, coverage = usage_coverage(evidence, metrics, now, period)
     text(evidence["source"], "evidence source")
     for key in ("provider", "account_id", "scope_id"):
         require(text(config[key], key) == evidence[key], "EXT004", "evidence billing scope differs")
@@ -285,7 +282,7 @@ def audit(
         "EXT020",
         "additive peak exceeds the conservative service capacity",
     )
-    growth = fields(config["growth"], metrics, "remaining-month growth budget")
+    growth = fields(config["growth"], metrics, "remaining-cycle growth budget")
     limits = fields(profile.get("usage_limits"), metrics, "published usage limits")
     forecasts = {}
     for metric in sorted(metrics):
@@ -296,7 +293,7 @@ def audit(
         )
         forecasts[metric] = str(projected)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "provider": provider,
         "unit": config["unit"],
         "account_id": config["account_id"],
@@ -305,5 +302,6 @@ def audit(
         "peak_resources": peak,
         "forecast": forecasts,
         "usage_coverage": coverage,
+        "billing_period": period,
         "deployment_authorized": False,
     }
