@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from evidence_helpers import administration_responses
 from infra_core import administration as admin
 from infra_core import cli
 
@@ -22,50 +23,7 @@ def observation(tmp_path, monkeypatch):
         (tmp_path / name).write_bytes((ROOT / name).read_bytes())
     monkeypatch.setattr(admin, "repository_state", lambda root: (COMMIT, True))
     policy = json.loads((tmp_path / admin.POLICY).read_bytes())
-    base = "https://api.github.com/repos/" + policy["repository"]
-    responses = {
-        "repository": {
-            "id": policy["repository_id"],
-            "full_name": policy["repository"],
-            "default_branch": "main",
-        },
-        "branch": {"name": "main", "protected": True, "commit": {"sha": COMMIT}},
-        "protection": {
-            "url": base + "/branches/main/protection",
-            "enforce_admins": {"enabled": True},
-            "allow_force_pushes": {"enabled": False},
-            "allow_deletions": {"enabled": False},
-            "required_status_checks": {
-                "strict": True,
-                "checks": deepcopy(policy["required_checks"]),
-            },
-            "required_pull_request_reviews": {
-                "required_approving_review_count": 1,
-                "dismiss_stale_reviews": True,
-                "require_last_push_approval": True,
-            },
-        },
-        "environment": {
-            "id": 11,
-            "name": policy["environment"],
-            "url": base + "/environments/" + policy["environment"],
-            "protection_rules": [
-                {
-                    "type": "required_reviewers",
-                    "prevent_self_review": True,
-                    "reviewers": [{"type": "User", "reviewer": {"id": 7}}],
-                }
-            ],
-            "deployment_branch_policy": {
-                "protected_branches": False,
-                "custom_branch_policies": True,
-            },
-        },
-        "branches": {
-            "total_count": 1,
-            "branch_policies": [{"id": 9, "name": "main", "type": "branch"}],
-        },
-    }
+    responses = administration_responses(policy, COMMIT)
     calls = []
 
     def query(endpoint):
@@ -282,6 +240,38 @@ def test_get_parses_a_successful_fixed_host_get(tmp_path, monkeypatch):
         lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, b'{"id": 7}', b""),
     )
     assert admin._get(tmp_path, "repos/owner/repo") == {"id": 7}
+
+
+@pytest.mark.parametrize("mutable", [None, "payload", "policy", "reviewer_policy"])
+def test_rootless_validator_uses_only_supplied_immutable_bytes(observation, monkeypatch, mutable):
+    root, document, _ = observation
+    inputs = {
+        "payload": encoded(document),
+        "policy": (root / admin.POLICY).read_bytes(),
+        "reviewer_policy": (root / admin.KEYS).read_bytes(),
+    }
+    if mutable:
+        inputs[mutable] = bytearray(inputs[mutable])
+
+    def unavailable(*args, **kwargs):
+        pytest.fail("rootless validation attempted external access")
+
+    with monkeypatch.context() as isolated:
+        for name in ("_context", "_get", "repository_state"):
+            isolated.setattr(admin, name, unavailable)
+        isolated.setattr(Path, "open", unavailable)
+        if mutable:
+            with pytest.raises(ValueError, match="ADMIN001"):
+                admin.validate_snapshot(
+                    **inputs, commit=COMMIT, now=datetime.fromisoformat(document["completed_at"])
+                )
+        else:
+            assert (
+                admin.validate_snapshot(
+                    **inputs, commit=COMMIT, now=datetime.fromisoformat(document["completed_at"])
+                )["cutover_authorized"]
+                is False
+            )
 
 
 def test_policy_check_names_match_both_workflow_matrix_jobs():

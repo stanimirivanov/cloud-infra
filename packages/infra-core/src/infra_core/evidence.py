@@ -21,7 +21,7 @@ PREDICATES = {
 MAX_ENVELOPE_BYTES = 64 * 1024
 MAX_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
-MAX_SUBJECTS = 16
+MAX_SUBJECTS = 17  # Full cutover set including administrative observations and policy.
 SCOPE = {"account_id", "region", "unit", "commit", "configuration_sha256"}
 
 

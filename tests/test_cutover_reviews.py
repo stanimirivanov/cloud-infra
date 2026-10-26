@@ -27,6 +27,7 @@ def snapshot(root, document):
     }
     subjects["quota_profiles"] = (root / "config/quotas/profiles.toml").read_bytes()
     subjects["reviewer_policy"] = (root / "config/cutover-reviewers.toml").read_bytes()
+    subjects["administrative_policy"] = (root / "config/administration.json").read_bytes()
     return subjects
 
 
@@ -205,10 +206,11 @@ def test_review_set_and_profiles_use_the_hashed_capture_without_reopening(review
 
     def change_after_capture(*args):
         original(*args)
-        for role in REPORTS | SIDECARS | SIGNATURES:
+        for role in REPORTS | SIDECARS | SIGNATURES | {"administration"}:
             (root / document["artifacts"][role]["path"]).write_bytes(b"changed after capture")
         (root / "config/quotas/profiles.toml").write_bytes(b"changed after capture")
         (root / "config/cutover-reviewers.toml").write_bytes(b"changed after capture")
+        (root / "config/administration.json").write_bytes(b"changed after capture")
 
     monkeypatch.setattr(cutover, "validate_receipt", change_after_capture)
     assert cutover.check(root, document)["status"] == "evidence-consistent"

@@ -33,7 +33,7 @@ def _json(payload: bytes) -> dict[str, Any]:
         raise ValueError("ADMIN001: invalid administrative JSON") from None
 
 
-def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
+def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, bytes]]:
     commit, clean = repository_state(root)
     require(
         clean and re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", commit) is not None,
@@ -46,8 +46,12 @@ def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
             payload = stream.read(MAX_BYTES + 1)
         require(len(payload) <= MAX_BYTES, "ADMIN001", "policy exceeds size limit")
         snapshots[name] = payload
+    return _policy(snapshots[POLICY]), commit, snapshots
+
+
+def _policy(payload: bytes) -> dict[str, Any]:
     policy = fields(
-        _json(snapshots[POLICY]),
+        _json(payload),
         {"schema_version", "repository", "repository_id", "environment", "required_checks"},
         "administrative policy",
     )
@@ -82,11 +86,14 @@ def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
             "required check identity must be unique and app-bound",
         )
         seen.add(check["context"])
-    return (
-        policy,
-        commit,
-        {name: hashlib.sha256(data).hexdigest() for name, data in snapshots.items()},
-    )
+    return policy
+
+
+def _bindings(policy: bytes, reviewer_policy: bytes) -> dict[str, str]:
+    return {
+        POLICY: hashlib.sha256(policy).hexdigest(),
+        KEYS: hashlib.sha256(reviewer_policy).hexdigest(),
+    }
 
 
 def _get(root: Path, endpoint: str) -> dict[str, Any]:
@@ -228,8 +235,25 @@ def _environment(policy: dict[str, Any], responses: dict[str, Any]) -> None:
     )
 
 
-def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[str, Any]:
-    policy, commit, bindings = _context(root)
+def validate_snapshot(
+    payload: bytes, *, policy: bytes, reviewer_policy: bytes, commit: str, now: datetime
+) -> dict[str, Any]:
+    """Validate captured immutable inputs only; no Git, filesystem or network access."""
+    require(
+        all(
+            type(value) is bytes and len(value) <= MAX_BYTES
+            for value in (payload, policy, reviewer_policy)
+        ),
+        "ADMIN001",
+        "administrative inputs require bounded immutable bytes",
+    )
+    require(
+        isinstance(commit, str) and re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", commit) is not None,
+        "ADMIN002",
+        "expected commit must be explicit",
+    )
+    bindings = _bindings(policy, reviewer_policy)
+    expected = _policy(policy)
     data = fields(
         _json(payload),
         {"schema_version", "commit", "policy_sha256", "started_at", "completed_at", "responses"},
@@ -243,7 +267,7 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
         "ADMIN002",
         "administrative snapshot commit/policy binding differs",
     )
-    clock = now or datetime.now(UTC)
+    clock = now
     require(clock.tzinfo is not None, "ADMIN002", "clock requires timezone")
     start, end = (
         timestamp(data["started_at"], "collection start"),
@@ -261,11 +285,8 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
         {"repository", "branch", "protection", "environment", "branches"},
         "GitHub observations",
     )
-    _controls(policy, responses, commit)
-    _environment(policy, responses)
-    require(
-        repository_state(root) == (commit, True), "ADMIN002", "checkout changed during validation"
-    )
+    _controls(expected, responses, commit)
+    _environment(expected, responses)
     return {
         "status": "observed-controls-consistent",
         "deployment_authorized": False,
@@ -278,8 +299,23 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
     }
 
 
+def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[str, Any]:
+    _, commit, snapshots = _context(root)
+    result = validate_snapshot(
+        payload,
+        policy=snapshots[POLICY],
+        reviewer_policy=snapshots[KEYS],
+        commit=commit,
+        now=now or datetime.now(UTC),
+    )
+    require(
+        repository_state(root) == (commit, True), "ADMIN002", "checkout changed during validation"
+    )
+    return result
+
+
 def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None) -> bytes:
-    policy, commit, bindings = _context(root)
+    policy, commit, snapshots = _context(root)
     start = datetime.now(UTC)
     base = "repos/" + policy["repository"]
     environment = base + "/environments/" + policy["environment"]
@@ -296,7 +332,7 @@ def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None)
         {
             "schema_version": 2,
             "commit": commit,
-            "policy_sha256": bindings,
+            "policy_sha256": _bindings(snapshots[POLICY], snapshots[KEYS]),
             "started_at": start.isoformat(),
             "completed_at": datetime.now(UTC).isoformat(),
             "responses": responses,

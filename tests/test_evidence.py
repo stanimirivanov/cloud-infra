@@ -53,6 +53,18 @@ def test_round_trip_all_reviewed_kinds_and_deterministic_serialization(kind):
     assert "authorized" not in encoded.decode()
 
 
+def test_exact_cutover_subject_capacity_stays_bounded_on_both_apis():
+    assert evidence.MAX_SUBJECTS == 17
+    artifacts = {f"item_{index}": b"x" for index in range(17)}
+    envelope = create(artifacts=artifacts)
+    assert evidence.validate_envelope(envelope, **options(artifacts=artifacts)) is None
+    artifacts["item_17"] = b"x"
+    with pytest.raises(evidence.EvidenceError, match="EVID002"):
+        create(artifacts=artifacts)
+    with pytest.raises(evidence.EvidenceError, match="EVID002"):
+        evidence.validate_envelope(envelope, **options(artifacts=artifacts))
+
+
 @pytest.mark.parametrize(
     "change",
     [

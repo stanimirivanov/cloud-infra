@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "commit": "",
   "account_id": "",
   "cluster_id": "",
@@ -7,6 +7,7 @@
   "configuration_sha256": "",
   "captured_at": "",
   "artifacts": {
+    "administration": {"path": ".infra/administration.json", "sha256": ""},
     "backend_receipt": {"path": ".infra/qualification.json", "sha256": ""},
     "account": {"path": ".infra/account.toml", "sha256": ""},
     "inventory": {"path": ".infra/inventory.json", "sha256": ""},

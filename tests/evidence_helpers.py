@@ -1,5 +1,7 @@
 """Synthetic evidence constructors; never valid operational observations."""
 
+from copy import deepcopy
+
 
 def upgrade_inventory(inventory, home):
     identity = inventory["account_id"]
@@ -48,3 +50,52 @@ def recovery_metrics():
         "backup_age_seconds": 0.1,
         "restore_seconds": 0.1,
     }
+
+
+def administration_responses(policy, commit):
+    """Synthetic metadata shared by the standalone and signed cutover harnesses."""
+    base = "https://api.github.com/repos/" + policy["repository"]
+    responses = {
+        "repository": {
+            "id": policy["repository_id"],
+            "full_name": policy["repository"],
+            "default_branch": "main",
+        },
+        "branch": {"name": "main", "protected": True, "commit": {"sha": commit}},
+        "protection": {
+            "url": base + "/branches/main/protection",
+            "enforce_admins": {"enabled": True},
+            "allow_force_pushes": {"enabled": False},
+            "allow_deletions": {"enabled": False},
+            "required_status_checks": {
+                "strict": True,
+                "checks": deepcopy(policy["required_checks"]),
+            },
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 1,
+                "dismiss_stale_reviews": True,
+                "require_last_push_approval": True,
+            },
+        },
+        "environment": {
+            "id": 11,
+            "name": policy["environment"],
+            "url": base + "/environments/" + policy["environment"],
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": True,
+                    "reviewers": [{"type": "User", "reviewer": {"id": 7}}],
+                }
+            ],
+            "deployment_branch_policy": {
+                "protected_branches": False,
+                "custom_branch_policies": True,
+            },
+        },
+        "branches": {
+            "total_count": 1,
+            "branch_policies": [{"id": 9, "name": "main", "type": "branch"}],
+        },
+    }
+    return responses

@@ -84,8 +84,13 @@ team membership, independent
 human identity, key custody, effective IAM or secret visibility. More restrictive
 rulesets may coexist; ruleset-only equivalence is not implemented.
 
-Cutover bundle consumption, independently reviewed
-reviewer-key enrollment/custody and protected-commit evidence remain separate M03 work.
+The [schema-5 cutover consumer](kubernetes-cutover.md#administrative-observation-consumption-m03-pr12)
+now binds these original bytes and the administrative policy into all four signed
+reviews. It calls infra_core.administration.validate_snapshot with captured immutable
+payload/policy/reviewer_policy bytes, an independent expected commit and clock;
+that API performs no I/O. The CLI wrapper still enforces clean Git before/after.
+Independent reviewer-key enrollment/custody and protected-commit evidence remain
+separate M03 work.
 Deployment and cutover stay disabled. Keep the raw snapshot private; do not upload
 it to public CI or treat it as an approval token.
 

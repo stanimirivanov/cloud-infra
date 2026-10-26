@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from evidence_helpers import recovery_metrics, upgrade_inventory
+from evidence_helpers import administration_responses, recovery_metrics, upgrade_inventory
 from infra_core import cli, cutover
 from infra_core.cutover_evidence import (
     REPORTS,
@@ -67,6 +67,9 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
         encoding="utf-8",
     )
     (root / "pyproject.toml").write_text('[project]\nname="oci-oke-infrastructure"\n')
+    (root / "config/administration.json").write_bytes(
+        (ROOT / "config/administration.json").read_bytes()
+    )
     (root / "config/pulumi.toml").write_bytes((ROOT / "config/pulumi.toml").read_bytes())
     monkeypatch.setattr(cutover, "repository_state", lambda root: (COMMIT, True))
     now = datetime.now(UTC).isoformat()
@@ -191,7 +194,21 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
     kube_text = table("cluster", values) + table("reserved", reserved)
     for namespace in namespaces:
         kube_text += "\n" + table("namespaces", namespace).replace("[namespaces]", "[[namespaces]]")
+    administrative_policy = (root / "config/administration.json").read_bytes()
+    key_policy = (root / "config/cutover-reviewers.toml").read_bytes()
+    administration = {
+        "schema_version": 2,
+        "commit": COMMIT,
+        "policy_sha256": {
+            "config/administration.json": hashlib.sha256(administrative_policy).hexdigest(),
+            "config/cutover-reviewers.toml": hashlib.sha256(key_policy).hexdigest(),
+        },
+        "started_at": now,
+        "completed_at": now,
+        "responses": administration_responses(json.loads(administrative_policy), COMMIT),
+    }
     artifacts = {
+        "administration": administration,
         "account": table("account", account).removeprefix("[account]\n") + "\n[reservations]\n",
         "oci_config": table("foundation", oci_values) + table("image", image),
         "kubernetes_config": kube_text,
@@ -243,7 +260,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
         "rollback": {**header, "checks": sorted(cutover.ROLLBACK)},
     }
     document = {
-        "schema_version": 4,
+        "schema_version": 5,
         "commit": COMMIT,
         "account_id": kube_config.account_id,
         "cluster_id": kube_config.cluster_id,
@@ -276,6 +293,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
             subjects = dict(subject_bytes)
             subjects["quota_profiles"] = (root / "config/quotas/profiles.toml").read_bytes()
             subjects["reviewer_policy"] = (root / "config/cutover-reviewers.toml").read_bytes()
+            subjects["administrative_policy"] = (root / "config/administration.json").read_bytes()
             for report in sorted(REPORTS):
                 scope = review_scope(
                     report,
@@ -328,6 +346,7 @@ def test_complete_bundle_is_consistent_but_never_authorizes_cutover(review):
         ("schema_version", 1),
         ("schema_version", 2),
         ("schema_version", 3),
+        ("schema_version", 4),
         ("captured_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()),
     ],
 )
