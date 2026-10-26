@@ -45,6 +45,26 @@ def observation(tmp_path, monkeypatch):
                 "require_last_push_approval": True,
             },
         },
+        "environment": {
+            "id": 11,
+            "name": policy["environment"],
+            "url": base + "/environments/" + policy["environment"],
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": True,
+                    "reviewers": [{"type": "User", "reviewer": {"id": 7}}],
+                }
+            ],
+            "deployment_branch_policy": {
+                "protected_branches": False,
+                "custom_branch_policies": True,
+            },
+        },
+        "branches": {
+            "total_count": 1,
+            "branch_policies": [{"id": 9, "name": "main", "type": "branch"}],
+        },
     }
     calls = []
 
@@ -62,15 +82,14 @@ def encoded(document):
 
 def test_collection_and_offline_revalidation_preserve_disabled_authority(observation):
     root, document, calls = observation
-    assert len(calls) == 3
-    assert calls[-1].endswith("/branches/main/protection")
+    assert len(calls) == 5
+    policy = json.loads((root / admin.POLICY).read_bytes())
+    base = "repos/" + policy["repository"] + "/environments/" + policy["environment"]
+    assert calls[-2:] == [base, base + "/deployment-branch-policies?per_page=100&page=1"]
     result = admin.check(root, encoded(document))
     assert result["status"] == "observed-controls-consistent"
     assert result["deployment_authorized"] is result["cutover_authorized"] is False
-    assert (
-        "environment approval, branch restrictions and administrator bypass verified"
-        in result["remaining_gates"]
-    )
+    assert "environment administrator bypass independently verified" in result["remaining_gates"]
 
 
 @pytest.mark.parametrize(
@@ -245,7 +264,7 @@ def test_collection_rejects_head_changed_during_observation(observation):
     def query(endpoint):
         nonlocal position
         assert endpoint == calls[position]
-        name = ["repository", "branch", "protection"][position]
+        name = ["repository", "branch", "protection", "environment", "branches"][position]
         response = deepcopy(document["responses"][name])
         position += 1
         if name == "branch":
@@ -274,3 +293,138 @@ def test_policy_check_names_match_both_workflow_matrix_jobs():
     assert {check["context"] for check in policy["required_checks"]} == {
         job["name"].replace("${{ matrix.os }}", os) for os in job["strategy"]["matrix"]["os"]
     }
+    foundation = yaml.load(
+        (ROOT / ".github/workflows/pulumi.yml").read_text(), Loader=yaml.BaseLoader
+    )
+    assert foundation["jobs"]["foundation"]["environment"] == policy["environment"]
+
+
+@pytest.mark.parametrize(
+    "section,path,value",
+    [
+        ("environment", "name", "PRIVATE"),
+        ("environment", "url", "https://other/PRIVATE"),
+        ("environment", "id", True),
+        ("environment", "protection_rules", []),
+        ("environment", "can_admins_bypass", True),
+        ("environment", "can_admins_bypass", None),
+        ("environment", "protection_rules.0.prevent_self_review", False),
+        ("environment", "protection_rules.0.reviewers", []),
+        ("environment", "protection_rules.0.reviewers.0.type", "Bot"),
+        ("environment", "protection_rules.0.reviewers.0.type", []),
+        ("environment", "protection_rules.0.reviewers.0.reviewer.id", True),
+        ("environment", "protection_rules.0.reviewers.0.reviewer.id", -1),
+        ("environment", "deployment_branch_policy", None),
+        ("environment", "deployment_branch_policy.protected_branches", True),
+        ("environment", "deployment_branch_policy.custom_branch_policies", False),
+        ("branches", "total_count", 2),
+        ("branches", "total_count", True),
+        ("branches", "branch_policies", []),
+        ("branches", "branch_policies.0.name", "*"),
+        ("branches", "branch_policies.0.type", "tag"),
+    ],
+)
+def test_environment_settings_fail_closed(observation, section, path, value):
+    root, document, _ = observation
+    target = document["responses"][section]
+    keys = path.split(".")
+    for key in keys[:-1]:
+        target = target[int(key)] if isinstance(target, list) else target[key]
+    target[keys[-1]] = value
+    with pytest.raises(ValueError, match="ADMIN002|ADMIN003|GOV003") as error:
+        admin.check(root, encoded(document))
+    assert "PRIVATE" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "duplicate-rule",
+        "duplicate-reviewer",
+        "too-many-reviewers",
+        "extra-policy",
+        "missing-type",
+        "missing-count",
+        "missing-self-review",
+    ],
+)
+def test_ambiguous_or_incomplete_environment_evidence_fails(observation, fault):
+    root, document, _ = observation
+    environment = document["responses"]["environment"]
+    branches = document["responses"]["branches"]
+    rule = environment["protection_rules"][0]
+    if fault == "duplicate-rule":
+        environment["protection_rules"].append(deepcopy(rule))
+    elif fault == "duplicate-reviewer":
+        rule["reviewers"].append(deepcopy(rule["reviewers"][0]))
+    elif fault == "too-many-reviewers":
+        rule["reviewers"] = [{"type": "User", "reviewer": {"id": i}} for i in range(1, 8)]
+    elif fault == "extra-policy":
+        branches["branch_policies"].append({"name": "release/*", "type": "branch"})
+    elif fault == "missing-type":
+        branches["branch_policies"][0].pop("type")
+    elif fault == "missing-count":
+        branches.pop("total_count")
+    else:
+        rule.pop("prevent_self_review")
+    with pytest.raises(ValueError, match="ADMIN003"):
+        admin.check(root, encoded(document))
+
+
+def test_team_review_and_additional_restrictive_rules_leave_unproven_gates(observation):
+    root, document, _ = observation
+    environment = document["responses"]["environment"]
+    environment["protection_rules"][0]["reviewers"][0]["type"] = "Team"
+    environment["protection_rules"].append({"type": "wait_timer", "wait_timer": 30})
+    environment["can_admins_bypass"] = False
+    result = admin.check(root, encoded(document))
+    assert result["cutover_authorized"] is result["deployment_authorized"] is False
+    assert "environment administrator bypass independently verified" in result["remaining_gates"]
+
+
+@pytest.mark.parametrize("fault", ["old-snapshot", "main-only", "old-policy", "policy-environment"])
+def test_main_only_evidence_cannot_satisfy_schema_two(observation, fault):
+    root, document, _ = observation
+    if fault == "old-snapshot":
+        document["schema_version"] = 1
+    elif fault == "main-only":
+        document["responses"].pop("environment")
+        document["responses"].pop("branches")
+    else:
+        path = root / admin.POLICY
+        policy = json.loads(path.read_bytes())
+        if fault == "old-policy":
+            policy["schema_version"] = 1
+            policy.pop("environment")
+        else:
+            policy["environment"] = "../PRIVATE"
+        path.write_bytes(encoded(policy))
+    with pytest.raises(ValueError, match="ADMIN001|ADMIN002|GOV003") as error:
+        admin.check(root, encoded(document))
+    assert "PRIVATE" not in str(error.value)
+
+
+@pytest.mark.parametrize("fault", ["denied", "unsafe"])
+def test_environment_collection_failure_does_not_write_a_successful_snapshot(
+    observation, monkeypatch, capsys, fault
+):
+    root, document, calls = observation
+    position = 0
+
+    def get(root, endpoint):
+        nonlocal position
+        assert endpoint == calls[position]
+        name = ["repository", "branch", "protection", "environment", "branches"][position]
+        position += 1
+        if name == "environment" and fault == "denied":
+            raise ValueError("ADMIN004: denied or unavailable")
+        response = deepcopy(document["responses"][name])
+        if name == "environment":
+            response["protection_rules"][0]["prevent_self_review"] = False
+        return response
+
+    monkeypatch.setattr(admin, "_get", get)
+    monkeypatch.setattr(cli, "find_repository", lambda start: root)
+    assert cli.main(["security", "collect-administration"]) == 1
+    assert "FAIL:" in capsys.readouterr().err
+    assert not (root / ".infra/administration.json").exists()
