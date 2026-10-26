@@ -48,12 +48,12 @@ def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
         snapshots[name] = payload
     policy = fields(
         _json(snapshots[POLICY]),
-        {"schema_version", "repository", "repository_id", "required_checks"},
+        {"schema_version", "repository", "repository_id", "environment", "required_checks"},
         "administrative policy",
     )
     require(
         type(policy["schema_version"]) is int
-        and policy["schema_version"] == 1
+        and policy["schema_version"] == 2
         and isinstance(policy["repository"], str)
         and re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}", policy["repository"]
@@ -61,7 +61,9 @@ def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, str]]:
         is not None
         and policy["repository"].split("/")[1] not in {".", ".."}
         and type(policy["repository_id"]) is int
-        and policy["repository_id"] > 0,
+        and policy["repository_id"] > 0
+        and isinstance(policy["environment"], str)
+        and re.fullmatch(r"[A-Za-z0-9_-]{1,100}", policy["environment"]) is not None,
         "ADMIN001",
         "unsupported administrative policy identity",
     )
@@ -175,6 +177,57 @@ def _controls(policy: dict[str, Any], responses: dict[str, Any], commit: str) ->
     )
 
 
+def _environment(policy: dict[str, Any], responses: dict[str, Any]) -> None:
+    environment = mapping(responses["environment"], "environment observation")
+    branches = mapping(responses["branches"], "environment branch observations")
+    require(
+        environment.get("name") == policy["environment"]
+        and environment.get("url")
+        == "https://api.github.com/repos/"
+        + policy["repository"]
+        + "/environments/"
+        + policy["environment"]
+        and type(environment.get("id")) is int
+        and environment["id"] > 0,
+        "ADMIN002",
+        "environment identity differs from reviewed policy",
+    )
+    rules = records(environment.get("protection_rules"), "environment rules")
+    reviewers = [rule for rule in rules if rule.get("type") == "required_reviewers"]
+    require(
+        len(reviewers) == 1
+        and reviewers[0].get("prevent_self_review") is True
+        and environment.get("can_admins_bypass", False) is False,
+        "ADMIN003",
+        "environment requires self-review prevention and no observed admin bypass",
+    )
+    people = records(reviewers[0].get("reviewers"), "environment reviewers")
+    identities = [(p.get("type"), mapping(p.get("reviewer"), "reviewer").get("id")) for p in people]
+    require(
+        1 <= len(people) <= 6
+        and all(
+            kind in ("User", "Team") and type(identity) is int and identity > 0
+            for kind, identity in identities
+        )
+        and len(set(identities)) == len(identities),
+        "ADMIN003",
+        "environment reviewer identities must be explicit and unique",
+    )
+    selection = mapping(environment.get("deployment_branch_policy"), "environment selection")
+    policies = records(branches.get("branch_policies"), "environment branch policies")
+    require(
+        selection.get("protected_branches") is False
+        and selection.get("custom_branch_policies") is True
+        and type(branches.get("total_count")) is int
+        and branches["total_count"] == 1
+        and len(policies) == 1
+        and policies[0].get("name") == "main"
+        and policies[0].get("type") == "branch",
+        "ADMIN003",
+        "environment must select only main branch; incomplete lists/tags unsupported",
+    )
+
+
 def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[str, Any]:
     policy, commit, bindings = _context(root)
     data = fields(
@@ -184,7 +237,7 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
     )
     require(
         type(data["schema_version"]) is int
-        and data["schema_version"] == 1
+        and data["schema_version"] == 2
         and data["commit"] == commit
         and data["policy_sha256"] == bindings,
         "ADMIN002",
@@ -205,10 +258,11 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
     )
     responses = fields(
         data["responses"],
-        {"repository", "branch", "protection"},
+        {"repository", "branch", "protection", "environment", "branches"},
         "GitHub observations",
     )
     _controls(policy, responses, commit)
+    _environment(policy, responses)
     require(
         repository_state(root) == (commit, True), "ADMIN002", "checkout changed during validation"
     )
@@ -217,7 +271,7 @@ def check(root: Path, payload: bytes, *, now: datetime | None = None) -> dict[st
         "deployment_authorized": False,
         "cutover_authorized": False,
         "remaining_gates": [
-            "environment approval, branch restrictions and administrator bypass verified",
+            "environment administrator bypass independently verified",
             "reviewer identity, key enrollment/custody and protected commit provenance",
             "cutover evidence consumption and explicit operational approval",
         ],
@@ -228,16 +282,19 @@ def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None)
     policy, commit, bindings = _context(root)
     start = datetime.now(UTC)
     base = "repos/" + policy["repository"]
+    environment = base + "/environments/" + policy["environment"]
     endpoints = {
         "repository": base,
         "branch": base + "/branches/main",
         "protection": base + "/branches/main/protection",
+        "environment": environment,
+        "branches": environment + "/deployment-branch-policies?per_page=100&page=1",
     }
     fetch = query or (lambda endpoint: _get(root, endpoint))
     responses = {name: fetch(endpoint) for name, endpoint in endpoints.items()}
     payload = json.dumps(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "commit": commit,
             "policy_sha256": bindings,
             "started_at": start.isoformat(),
