@@ -4,8 +4,9 @@ PR validation is credential-free and runs the complete shared gate on Linux and
 Windows for every PR without path filters or actor exclusions. Do not use
 pull_request_target to execute PR code. The manual Pulumi foundation workflow
 depends on shared verification, requires main and owner checks, and uses the
-dedicated protected environment. Secrets belong only to isolated qualification,
-never PR validation or disabled resource preview/deploy. Configuration of required
+dedicated protected environment. OCI signing credentials belong only to its
+read-only audit step; S3 credentials and passphrase belong only to isolated
+qualification. Never expose either to PR validation or disabled resource operations. Configuration of required
 reviewers/main-only environment branches is an administrator prerequisite.
 
 Pin external Actions to reviewed full SHAs in config/toolchain.json. Install tools

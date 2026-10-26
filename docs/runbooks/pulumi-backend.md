@@ -85,10 +85,9 @@ installed by uv. No deployment-time pip install is performed.
 For a real OCI test, an authorized operator selects `qualify` in the **Pulumi
 foundation** manual workflow on main. The workflow serializes foundation operations,
 runs verification first, checks out the dispatch commit, and executes behind the
-`pulumi-backend-qualification` environment. It exposes only S3 HMAC credentials and
-the passphrase and fresh BACKEND_POSTURE_JSON/BACKEND_POSTURE_ENVELOPE_JSON evidence
-to the qualification step;
-there are no OCI provider/API credentials in the workflow.
+`pulumi-backend-qualification` environment. Its read-only audit step receives
+separate OCI signing credentials and collects fresh posture before qualification.
+Only the later qualification step receives S3 HMAC credentials and the passphrase.
 PRs cannot trigger that workflow. Preview/deploy dispatches intentionally fail.
 No real OCI qualification has been performed merely by merging this implementation.
 
@@ -101,15 +100,10 @@ Before enabling qualification, an administrator must:
 2. Store `OCI_S3_ACCESS_KEY`, `OCI_S3_SECRET_KEY`, and a randomly generated
    `PULUMI_CONFIG_PASSPHRASE` of at least 20 characters as environment secrets.
    These are existing S3-compatible HMAC credentials, not an OCI API signing key.
-3. Collect and review bucket posture using the read-only commands below. Store the
-   payload as environment secret `BACKEND_POSTURE_JSON` and its sidecar as
-   `BACKEND_POSTURE_ENVELOPE_JSON` immediately before qualification, preserving
-   exact UTF-8 bytes including line endings and the final newline. Independently
-   set environment variable `BACKEND_POSTURE_ACCOUNT_ID` (GitHub environment vars,
-   not a value copied from evidence) to the reviewed tenancy. Collect from the
-   same clean commit dispatched by the workflow. Both documents must be under
-   one hour old at preflight. This is a manual evidence handoff, not a signed collector attestation; protect who may update it.
-   Stale/missing/unsafe evidence fails before any remote checkpoint operation.
+3. Configure the read-only audit signing secret and independently reviewed tenancy
+   variable as described below. Qualification now collects its own fresh posture
+   pair in the same job; manual BACKEND_POSTURE_JSON/BACKEND_POSTURE_ENVELOPE_JSON
+   secrets are unused. Missing/unsafe collection fails before remote checkpoint writes.
 4. Restrict the credential's object-storage permissions to the intended bucket and
    namespace to the extent OCI IAM permits. Do not assume S3 ARN/prefix IAM syntax
    maps directly to OCI. If isolation cannot be enforced, use a separately approved
@@ -125,6 +119,58 @@ Before enabling qualification, an administrator must:
 
 Repository environment and branch settings are administrative prerequisites; this PR
 provides the workflow and runbook, not proof those settings have been applied.
+
+## Protected audit and credential contract
+
+Select audit in the manual Pulumi foundation workflow for metadata-only checks;
+select qualify to collect and validate the same evidence before isolated writes.
+The default inspect and disabled preview/deploy operations receive no signing key.
+The shared credential-free workflow must pass first, and both jobs require main
+and the repository owner. Checkout uses the exact dispatch commit. No workflow is
+run or repository/environment setting changed by merging this code.
+
+In the protected environment, independently set BACKEND_POSTURE_ACCOUNT_ID in
+GitHub environment vars to the reviewed tenancy. Store OCI_BACKEND_AUDIT_CREDENTIALS
+as an environment secret containing a JSON object with required string fields
+tenancy, user, fingerprint and key_content (the complete PEM signing key); optional
+pass_phrase supports an encrypted key. No key-file paths, extra SDK settings,
+empty values, duplicate JSON keys or multiline INI fields are accepted. The whole
+JSON is limited to 64 KiB; key_content alone may be multiline. Tenancy must equal
+the independent expected account before any SDK call. Region comes from reviewed
+foundation config. Keep the JSON out of source, commands and public examples.
+
+Administrators must assign a separate principal with only the namespace/bucket
+metadata and retention-rule/PAR list permissions required by the existing reader,
+scoped to the intended bucket/account as OCI permits. It must have no object-data
+read/write or IAM mutation permission. Review actual IAM policy and denied writes
+independently; successful metadata reads cannot establish least privilege. Never
+reuse the S3 writer key as an audit signing key. Required reviewers, protected-main
+branch restrictions and no self-review remain external administrative prerequisites.
+
+The adapter uses the existing locked inventory-oci extra, writes a temporary key
+and explicit SDK config outside the checkout (0700 directory/0600 files on the
+hosted Linux runner), and removes them before returning. SDK/CLI output is withheld;
+AUDIT001 reports failure without credentials or private payload values. Failed
+attempts remove stale pairs/reports. The always-run cleanup removes private posture
+and sidecar files after their same-job consumer. Forced runner termination cannot
+guarantee finally/cleanup execution; use the specified ephemeral hosted runner.
+
+Only .infra/backend-audit.json is uploaded for one day: closed status, original
+collection clocks, commit/configuration identity, payload/envelope SHA256 and
+explicit deployment_authorized=false. The qualification receipt is separate;
+raw posture, sidecars, credentials and state are never artifacts. A successful
+audit summary is retained even if later qualification fails. GitHub run history
+provides execution context for independent review; the JSON is unsigned and is
+neither a source attestation nor deployment/cutover authority. No freshness renewal,
+IAM proof or activation occurs. M03-PR12 must consume reviewed provenance separately.
+
+This adapts [GitHub environment protection](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)
+and [Oracle's explicit SDK config](https://docs.oracle.com/en-us/iaas/tools/python/latest/configuration.html)
+using stdlib glue and the existing OCI extra (Oracle UPL/Apache-2.0 license options);
+no new dependency or signing service. Legacy manual posture secrets can be retired
+after this workflow is adopted. Rollback needs the old workflow and a freshly
+collected exact-byte pair restored to those secrets; the sanitized artifact cannot
+reconstruct private evidence. Local CLI collection and receipt schema 3 are unchanged.
 
 ## Read-only backend posture
 
@@ -150,8 +196,8 @@ payload keys and malformed JSON fail with sanitized diagnostics. The shared
 reformatting JSON or changing line endings fails validation.
 
 **Migration:** standalone legacy posture JSON is rejected. Collect a fresh pair
-from the reviewed commit, replace both protected environment secrets and set the
-independent tenancy variable, then explicitly requalify. Do not wrap old payloads,
+from the reviewed commit and set the independent expected tenancy, then explicitly
+requalify. The protected workflow now performs collection in its own job. Do not wrap old payloads,
 restamp observations or edit a sidecar to pass. Local disposable qualification is
 unchanged; receipt schema remains 3. Backend source changes still require renewed
 qualification. Reverting this change restores the older weaker handoff and needs
@@ -169,11 +215,11 @@ both stale outputs and exposes only safe errors. Partial file publication is
 removed on handled I/O failures; an interrupted/mixed pair fails consumer binding.
 The reader cannot prove least-privilege IAM, audit-log configuration, retention durability or account eligibility.
 
-The protected workflow writes both private evidence secrets byte-for-byte to the
-ignored default paths and validates the pair before remote qualification.
-Operator-collected JSON can be forged together with a matching unsigned sidecar; producer labels and clean Git
-status do not authenticate the source. Trusted collection/signing and fresh
-posture on every future protected preview remain activation prerequisites, not guarantees of this offline validator.
+The protected workflow uses its freshly collected pair within the same job;
+local operators preserve exact bytes when using the CLI. Operator-collected JSON
+and its unsigned sidecar can be forged together. Controlled workflow execution is
+additional review context, not cryptographic source authentication. Trusted signing
+and fresh posture on every future protected preview remain activation prerequisites.
 
 An authorized local OCI qualification alternatively requires the three environment
 variables above, followed by:

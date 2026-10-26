@@ -45,7 +45,7 @@ markers = ["backend_integration: real local Pulumi backend/policy host (explicit
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["packages/infra-core/src", "packages/infra-program/src"]
+files = ["packages/infra-core/src", "packages/infra-program/src", ".github/scripts/collect-backend-posture.py"]
 
 # Generated provider SDK analysis is prohibitively large. Our interfaces remain strict;
 # constructor arguments and wire schemas are checked using the actual SDK in mocks.

@@ -260,8 +260,9 @@ def test_protected_workflow_has_no_pr_trigger_or_resource_credentials(config):
         name in text for name in ("OCI_CLI_KEY_CONTENT", "PULUMI_ACCESS_TOKEN", "state push")
     )
     secret_steps = [step for step in steps if "secrets." in str(step)]
-    assert len(secret_steps) == 1
-    assert secret_steps[0]["if"] == "inputs.operation == 'qualify'"
+    assert len(secret_steps) == 2
+    assert secret_steps[0]["if"] == "inputs.operation == 'audit' || inputs.operation == 'qualify'"
+    assert secret_steps[1]["if"] == "inputs.operation == 'qualify'"
     artifact = next(
         step for step in steps if step.get("uses", "").startswith("actions/upload-artifact")
     )
