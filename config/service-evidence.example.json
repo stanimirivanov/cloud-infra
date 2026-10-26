@@ -1,10 +1,10 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "provider": "supabase",
   "account_id": "REPLACE_WITH_USER_ID",
   "scope_id": "example-org",
   "scope_name": "example-org",
-  "profile_revision": 2,
+  "profile_revision": 3,
   "verified": false,
   "verified_at": "1970-01-01T00:00:00+00:00",
   "observed_at": "1970-01-01T00:00:00+00:00",
@@ -30,6 +30,11 @@
       "as_of": "1970-01-01T00:00:00+00:00"
     },
     "mau": {
+      "value": null,
+      "covered_from": "1970-01-01T00:00:00+00:00",
+      "covered_through": "1970-01-01T00:00:00+00:00"
+    },
+    "storage_gb_hours": {
       "value": null,
       "covered_from": "1970-01-01T00:00:00+00:00",
       "covered_through": "1970-01-01T00:00:00+00:00"

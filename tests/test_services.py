@@ -30,11 +30,12 @@ def service(request):
             "egress_mb": 100,
             "cached_egress_mb": 100,
             "storage_mb": 100,
+            "storage_gb_hours": 100,
             "mau": 100,
         }
     )
     config = {
-        "schema_version": 1,
+        "schema_version": 2,
         "provider": provider,
         "unit": ("cloudflare-edge" if provider == "cloudflare" else "supabase-database"),
         "account_id": "synthetic-account",
@@ -66,7 +67,7 @@ def service(request):
         ],
     }
     evidence = {
-        "schema_version": 3,
+        "schema_version": 4,
         "provider": provider,
         "account_id": "synthetic-account",
         "scope_id": scope,
@@ -431,7 +432,8 @@ assert not observed
 with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret lookup')), \
      patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early resource')):
     cases = ['missing', 'bytes', 'dictionary', 'mutable', 'account', 'unit', 'scope',
-             'profile', 'commit', 'region', 'stale', 'clock', 'json', 'kind', 'period', 'legacy']
+             'profile', 'commit', 'region', 'stale', 'clock', 'json', 'kind', 'period',
+             'legacy', 'proposal', 'history', 'history-window']
     for case in cases:
         c, p = deepcopy((config, profile))
         payload, envelope = base_payload, base_envelope
@@ -451,10 +453,25 @@ with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret loo
             p['revision'] += 1
         elif case == 'commit':
             commit = 'b' * 40
+        elif case == 'proposal':
+            c['schema_version'], code = 1, 'EXT001'
+            payload, envelope = pack(c, evidence, p)
+        elif case in ('history', 'history-window'):
+            bad = deepcopy(evidence)
+            if config['provider'] == 'supabase':
+                if case == 'history':
+                    bad['usage'].pop('storage_gb_hours')
+                    code = 'GOV003'
+                else:
+                    bad['usage']['storage_gb_hours']['covered_from'] = evidence['observed_at']
+                    code = 'EXT022'
+            else:
+                bad['usage']['storage_gb_hours'], code = {}, 'GOV003'
+            payload, envelope = pack(c, bad, p)
         elif case in ('period', 'legacy'):
             bad = deepcopy(evidence)
             if case == 'legacy':
-                bad['schema_version'], code = 2, 'EXT001'
+                bad['schema_version'], code = 3, 'EXT001'
             else:
                 bad['billing_period'] = {}
                 code = 'GOV003' if config['provider'] == 'supabase' else 'EXT024'

@@ -1,4 +1,4 @@
-"""Service evidence v3 distinguishes collection, cumulative windows and capacity samples."""
+"""Service evidence v4 distinguishes collection, cumulative windows and capacity samples."""
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -37,7 +37,7 @@ def clocks(service, now=NOW):
     return config, evidence, profile
 
 
-@pytest.mark.parametrize("version", [1, 2, True, 4])
+@pytest.mark.parametrize("version", [1, 2, 3, True, 5])
 def test_legacy_or_unknown_evidence_cannot_be_upgraded_by_fresh_clocks(service, version):
     config, evidence, profile = clocks(service)
     evidence["schema_version"] = version
@@ -70,7 +70,9 @@ def test_collection_clocks_bind_original_observation_and_are_ordered(service, ch
 
 
 @pytest.mark.parametrize("service", ["supabase"], indirect=True)
-@pytest.mark.parametrize("metric", ["egress_mb", "cached_egress_mb", "storage_mb", "mau"])
+@pytest.mark.parametrize(
+    "metric", ["egress_mb", "cached_egress_mb", "storage_mb", "storage_gb_hours", "mau"]
+)
 @pytest.mark.parametrize("seconds", [-901, 1])
 def test_one_lagging_or_future_metric_fails_despite_a_fresh_document(service, metric, seconds):
     config, evidence, profile = clocks(service)
@@ -132,7 +134,7 @@ def test_boundaries_offsets_and_each_coverage_cutoff_remain_visible(service):
     )
     original = deepcopy(evidence)
     result = audit(config, evidence, profile, now=NOW)
-    assert result["schema_version"] == 3 and result["deployment_authorized"] is False
+    assert result["schema_version"] == 4 and result["deployment_authorized"] is False
     assert result["forecast"]["egress_mb"] == "200"
     assert result["usage_coverage"]["egress_mb"] == {
         "covered_from": "2026-10-01T00:00:00+00:00",
@@ -170,6 +172,7 @@ def test_cloudflare_has_no_fabricated_usage_metrics(service):
             "egress_mb",
             "cached_egress_mb",
             "storage_mb",
+            "storage_gb_hours",
             "mau",
         }
 
@@ -321,7 +324,7 @@ def test_period_metadata_is_closed_current_and_anchored(service, change):
 
 
 @pytest.mark.parametrize("service", ["supabase"], indirect=True)
-@pytest.mark.parametrize("metric", ["egress_mb", "cached_egress_mb", "mau"])
+@pytest.mark.parametrize("metric", ["egress_mb", "cached_egress_mb", "storage_gb_hours", "mau"])
 def test_cycle_reset_rejects_fresh_totals_from_previous_or_partial_window(service, metric):
     now = datetime(2026, 10, 6, 12, 5, tzinfo=UTC)
     config, evidence, profile = clocks(service, now)
@@ -363,8 +366,8 @@ def test_period_offsets_normalize_and_old_profile_evidence_does_not_inherit_revi
     result = audit(config, evidence, profile, now=NOW)
     assert result["billing_period"]["starts_at"] == "2026-10-01T00:00:00+00:00"
     assert result["billing_period"]["ends_at"] == "2026-11-01T00:00:00+00:00"
-    assert profile["revision"] == 2
-    evidence["profile_revision"] = 1
+    assert profile["revision"] == 3
+    evidence["profile_revision"] = 2
     with pytest.raises(GovernanceError, match="EXT001"):
         audit(config, evidence, profile, now=NOW)
 
@@ -375,4 +378,12 @@ def test_original_legacy_month_payload_has_no_silent_conversion(service):
     evidence["usage_month"] = "2026-10"
     evidence.pop("billing_period")
     with pytest.raises(GovernanceError, match="GOV003"):
+        audit(config, evidence, profile, now=NOW)
+
+
+@pytest.mark.parametrize("version", [1, True, 3])
+def test_legacy_or_unknown_proposals_require_explicit_migration(service, version):
+    config, evidence, profile = clocks(service)
+    config["schema_version"] = version
+    with pytest.raises(GovernanceError, match="EXT001"):
         audit(config, evidence, profile, now=NOW)

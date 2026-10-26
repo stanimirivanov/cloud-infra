@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "provider": "supabase",
   "unit": "supabase-database",
   "account_id": "REPLACE_WITH_USER_ID",
@@ -15,5 +15,5 @@
       "legacyApiKeysEnabled": false
     }
   }],
-  "growth": {"egress_mb": 500, "cached_egress_mb": 500, "storage_mb": 100, "mau": 1000}
+  "growth": {"egress_mb": 500, "cached_egress_mb": 500, "storage_mb": 100, "storage_gb_hours": null, "mau": 1000}
 }

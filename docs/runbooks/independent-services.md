@@ -34,7 +34,8 @@ selected account, unit, stack, complete real preview and approved backend receip
 | Supabase Free projects | All Free organizations owned/administered by the user | At most two existing plus proposed projects; Nano only, existing Free organization, no paid add-ons or legacy API keys |
 | Supabase database | Each existing project | Database size at most 500 MB; new projects start empty; this adapter creates no tables/data |
 | Supabase egress | Target organization/current billing cycle | Consumed plus remaining-cycle budget at most 5000 MB uncached and 5000 MB cached |
-| Supabase file storage | Target organization | Current plus growth at most 1000 MB |
+| Supabase file storage capacity | Target organization | Current plus growth at most 1000 MB |
+| Supabase storage billing | Target organization/current billing cycle | Consumed plus remaining-cycle budget at most 744 GB-hours |
 | Supabase monthly active users | Target organization/current billing cycle | Consumed plus budget at most 50,000 |
 
 Cloudflare documents 200 records for newer Free zones and 1000 for older ones;
@@ -70,7 +71,7 @@ SDK, discovers credentials, queries a provider nor writes state. No token/passwo
 field is accepted in a proposal. Do not store sensitive record content in it;
 proposal output is intended for review and contains record names/addresses.
 
-Evidence must bind schema 3, provider, account/user identity, zone/organization and
+Evidence must bind schema 4, provider, account/user identity, zone/organization and
 profile revision. `verified`, `complete`, `other_services_reviewed` must be true,
 and `plan` must be `free`. Record a private review reference in `source`.
 Entitlement evidence expires in 30 days, inventory/usage in 15 minutes, published
@@ -88,7 +89,7 @@ Keep both private files under ignored .infra and preserve exact payload bytes.
 A trusted offline producer can call infra_core.service_evidence.capture_service_evidence
 with independently reviewed config/profile dictionaries, the original payload bytes,
 and commit=the clean reviewed Git HEAD. It returns sidecar bytes only, after checking
-the schema-3 payload. Supply the selected provider-free profile from
+the schema-4 payload. Supply the selected provider-free profile from
 config/quotas/profiles.toml. Persist the returned bytes beside the unchanged payload.
 The helper performs no collection or Git lookup and does not authenticate a producer;
 validate the observation sources and reviewed inputs independently. Do not wrap old
@@ -111,14 +112,15 @@ This adapter reuses the Apache-2.0
 [in-toto Statement pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
 through the existing shared API, without dependencies. It is unsigned consistency,
 not source authenticity, billing eligibility or authorization. The pure audit keeps
-its schema-3 dictionary interface; both library factories now require the same
+its schema-4 dictionary interface; both library factories now require the same
 payload/sidecar contract (see below). No service deployment entry point is enabled.
 Rollback requires matching
 code/contracts and weakens CLI transport checks; it never grants deployment authority.
 
 ### Organization billing periods (M03-PR11 period slice)
 
-**BREAKING:** evidence/report schema 3 replaces usage_month with billing_period.
+Evidence/report schema 4 retains the billing_period contract introduced in schema 3;
+usage_month has no fallback.
 For Supabase this is exactly {anchor_at, starts_at, ends_at}, each an offset-aware
 ISO timestamp. Record the independently reviewed original organization-creation
 anniversary in anchor_at, not the start of the latest clamped cycle. Validate the
@@ -145,18 +147,18 @@ anchor. Collect new period-specific readings, review the anchor/source and profi
 revision, then create a matching sidecar for the clean reviewed commit. Never convert
 old evidence by updating clocks, renaming fields or incrementing schema_version.
 Rollback needs compatible code, profile and freshly reviewed evidence together.
-Storage history remains unmodeled and deployment remains disabled.
+Storage history is additionally required below. Deployment remains disabled.
 
 ### Collection and usage coverage (M03-PR11 service slice)
 
-Evidence and audit-result schemas are now 3; proposal schema and component output
-contracts remain 1. Evidence requires collection_started_at and
+Evidence and audit-result schemas are now 4; proposal schema is 2, while component
+output contracts remain 1. Evidence requires collection_started_at and
 collection_completed_at. Ordered clocks must satisfy original observed_at equals
 collection start, start no more than 15 minutes old, and completion no later than
 now. Downloading or rewriting a file cannot refresh the original readings.
 
-Each Supabase usage metric is a closed object. Egress, cached egress and MAU use
-value, covered_from and covered_through. The window starts at billing_period.starts_at,
+Each Supabase usage metric is a closed object. Egress, cached egress, storage GB-hours
+and MAU use value, covered_from and covered_through. The window starts at billing_period.starts_at,
 ends no later than collection completion, and its cutoff
 must independently be at most 15 minutes old. A fresh collection with one stale
 metric fails EXT022. Partial-cycle/reset/delta totals are rejected. Values must
@@ -170,22 +172,62 @@ through billing_period.ends_at, including the gap before collection and unmanage
 usage. The engine does not infer a rate or prove that the operator's budget is sufficient.
 Cloudflare usage/growth stay empty objects; its collection clocks still apply.
 
+### Cumulative storage billing (M03-PR11 history slice)
+
+**BREAKING:** proposal schema 2 and evidence/report schema 4 require a fifth Supabase
+metric, storage_gb_hours, in both usage and growth. The closed reading has value,
+covered_from and covered_through, with the same original cycle start, fresh cutoff,
+and collection-completion bound as the other cumulative metrics. Require all projects
+in the target organization, including unmanaged consumption. Missing, scalar,
+nonfinite, negative, boolean or unknown readings/budgets fail; there is no zero or
+capacity-derived fallback. For storage history and its budget, JSON accepts integers
+or quoted exact decimal strings (for example "743.875"), not binary float readings;
+unquoted fractions fail GOV001 rather than risk losing digits before comparison.
+The pure Python boundary also accepts exact Decimal values; bound JSON proposals
+must use JSON-compatible integers/strings. Cloudflare usage/growth remain empty objects.
+
 Supabase [storage billing](https://supabase.com/docs/guides/platform/manage-your-usage/storage-size)
-uses GB-hours/period averages. A fresh storage capacity sample cannot establish
-historical billed usage. That accounting/collector gap remains before activation;
-do not convert an average into a live-size reading or assume a small current size
-erases earlier consumption. [MAU](https://supabase.com/docs/guides/platform/manage-your-usage/monthly-active-users)
-counts distinct users across the billing cycle; daily counts cannot be summed.
-Published limits and review dates are unchanged; Supabase profile revision is now 2
-because period eligibility changed. Cloudflare revision remains 1.
+uses GB-hours and lists 744 GB-hours for Free. The engine checks cumulative
+storage_gb_hours plus its explicit remaining-cycle budget against that allowance.
+It uses the published GB-hour bound directly, including short/leap cycles, rather
+than multiplying 1 GB by an assumed 744-hour cycle or prorating the quota. The
+independent conservative 1000 MB live capacity ceiling stays in place. A fresh
+small capacity sample or deletion cannot erase earlier billed usage. No conversion
+between that MB sample and historical GB-hours is attempted; obtain source totals
+in the explicit GB-hour unit, not an ambiguous dashboard average or daily sum.
+
+Growth is an operator-reviewed upper bound on additional GB-hours from that
+metric's original cutoff through billing_period.ends_at, covering reporting lag,
+all retained/new objects and unmanaged activity. Zero is acceptable only with a
+source-backed no-further-consumption justification; it is never a default. Neither
+a live sample nor the engine establishes this future budget's sufficiency. Forecast
+arithmetic uses a fixed 28-significant-digit Decimal context and rounds upward, so
+tiny excess cannot round down to the quota. EXT021 rejects consumed or projected
+overuse; GOV003/GOV001 and EXT022 retain structural/numeric/coverage diagnostics.
+A quota breach does not calculate a dollar charge or imply Free overages are paid.
+
+This adapts Supabase's documented cumulative metering using existing Decimal and
+coverage contracts. No external code is copied and no new dependency, wrapper or
+license obligation is added. The payload remains an unsigned attestation: a matching
+hash cannot authenticate the source, completeness, totals or growth assumptions.
+[MAU](https://supabase.com/docs/guides/platform/manage-your-usage/monthly-active-users)
+continues to require distinct whole-cycle users, not summed daily counts.
+Supabase profile revision is now 3 because billing history is mandatory. Existing
+limits/review dates and Cloudflare revision 1 are unchanged; the newly reviewed
+GB-hour ceiling is 744. Private evidence must bind the new revision and proposal.
+Collect new actual history and budgets, then create a matching sidecar against the
+clean reviewed commit; schema-1/2/3 evidence and schema-1 proposals have no automatic
+conversion. The public history value and budget deliberately remain null/invalid.
+Rollback requires compatible code, profiles, proposals and newly reviewed evidence.
+No collector, runtime cost monitor or deployment entry point is introduced.
 
 The explicit window versus sample distinction adapts the Apache-2.0
 [OpenTelemetry metric data model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/)
 using existing stdlib/governance helpers. No telemetry dependency, OTLP interface,
-SDK collector or architecture exception is added. Source authenticity and complete
-billing-history models remain separate work.
+SDK collector or architecture exception is added. Source authenticity, automated
+collection and operational quota reactions remain separate prerequisites.
 
-**Migration:** schema-1/2 evidence is rejected at the CLI and both
+**Migration:** schema-1/2/3 evidence is rejected at the CLI and both
 factories before secret lookup or registration. Collect new evidence with actual
 source windows/samples; never add current clocks to old scalar values. The public
 example remains unverified, stale and unknown. Keep real documents under .infra.
@@ -229,7 +271,7 @@ guarantee or production readiness is implied by a passing offline audit.
 ## SDK and secret boundary
 
 **BREAKING library migration:** both service factories now require original
-schema-3 evidence bytes, immutable sidecar bytes and a mandatory expected commit.
+schema-4 evidence bytes, immutable sidecar bytes and a mandatory expected commit.
 There is no dictionary fallback, optional binding, or automatic conversion. Only
 the pure accounting function infra_core.services.governance.audit keeps its
 existing dictionary interface. Use the same producer helper/contract as the CLI

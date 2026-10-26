@@ -49,5 +49,11 @@ def usage_coverage(
                 "cumulative metrics must cover the current billing cycle from its start",
             )
             coverage[metric]["covered_from"] = beginning.isoformat()
+        if metric == "storage_gb_hours":
+            require(
+                type(reading["value"]) in (int, str, Decimal),
+                "GOV001",
+                "storage GB-hours require an integer or exact decimal string",
+            )
         values[metric] = number(reading["value"], "service metric value")
     return values, coverage

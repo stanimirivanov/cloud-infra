@@ -4,6 +4,7 @@ import ipaddress
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_CEILING, Context, Decimal, localcontext
 from typing import Any
 
 from infra_core.governance.contracts import (
@@ -21,8 +22,14 @@ from infra_core.services.coverage import usage_coverage
 DNS = "cloudflare:index/dnsRecord:DnsRecord"
 PROJECT = "supabase:index/project:Project"
 UNITS = {"cloudflare": "cloudflare-edge", "supabase": "supabase-database"}
-METRICS = {"egress_mb", "cached_egress_mb", "storage_mb", "mau"}
-MAXIMUM = {"egress_mb": 5000, "cached_egress_mb": 5000, "storage_mb": 1000, "mau": 50000}
+METRICS = {"egress_mb", "cached_egress_mb", "storage_mb", "storage_gb_hours", "mau"}
+MAXIMUM = {
+    "egress_mb": 5000,
+    "cached_egress_mb": 5000,
+    "storage_mb": 1000,
+    "storage_gb_hours": 744,
+    "mau": 50000,
+}
 
 
 def _dns_name(value: object) -> str:
@@ -156,8 +163,8 @@ def audit(
     require(
         type(config["schema_version"]) is int
         and type(evidence["schema_version"]) is int
-        and config["schema_version"] == 1
-        and evidence["schema_version"] == 3,
+        and config["schema_version"] == 2
+        and evidence["schema_version"] == 4,
         "EXT001",
         "unsupported schema",
     )
@@ -287,13 +294,27 @@ def audit(
     forecasts = {}
     for metric in sorted(metrics):
         require(limits[metric] == MAXIMUM[metric], "EXT001", "unreviewed usage limit")
-        projected = usage[metric] + number(growth[metric], "growth budget")
+        if metric == "storage_gb_hours":
+            require(
+                type(growth[metric]) in (int, str, Decimal),
+                "GOV001",
+                "storage GB-hour budgets require an integer or exact decimal string",
+            )
+        budget = number(growth[metric], "growth budget")
+        require(
+            usage[metric] <= MAXIMUM[metric] and budget <= MAXIMUM[metric],
+            "EXT021",
+            "consumed usage or growth exceeds Free quota",
+        )
+        # Never round tiny excess down to the quota or inherit caller Decimal settings.
+        with localcontext(Context(prec=28, rounding=ROUND_CEILING)):
+            projected = usage[metric] + budget
         require(
             projected <= MAXIMUM[metric], "EXT021", "consumed usage plus growth exceeds Free quota"
         )
         forecasts[metric] = str(projected)
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "provider": provider,
         "unit": config["unit"],
         "account_id": config["account_id"],
