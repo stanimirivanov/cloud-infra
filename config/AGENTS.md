@@ -25,6 +25,8 @@ kubernetes.example.toml and cutover.example.json are deliberately incomplete.
 Keep real cluster usage, ownership maps, review reports and hashed evidence under
 ignored .infra. Never advance dates, assert network-policy enforcement, or grant
 cutover authority simply to satisfy static checks. See the Kubernetes cutover runbook.
+Schema-3 cutover indexes require all four role-bound review sidecars over the actual
+reviewed input snapshot.
 
 Service examples contain no tokens/passwords. service-evidence.example.json must
 remain unverified, incomplete and stale. Service profile enablement permits offline

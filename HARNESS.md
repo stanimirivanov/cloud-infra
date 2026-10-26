@@ -171,7 +171,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #61 (M03-PR11 storage billing-history slice):
+stay disabled. Status through issue #63 (M03-PR12 review-input binding slice):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -184,7 +184,7 @@ stay disabled. Status through issue #61 (M03-PR11 storage billing-history slice)
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
 | PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; #51: factory envelopes before secret lookup/registration; #53: OCI collector/audit envelopes; #55: OCI preflight/composer envelopes; #57: cutover inventory consumer; #59: Supabase anniversary billing periods; #61: mandatory cumulative storage GB-hours and remaining-cycle budgets; source collection/authenticity and runtime cost controls remain prerequisites |
-| PR12: cutover evidence | Full provenance/administrative binding pending; #57 migrates the inventory consumer only |
+| PR12: cutover evidence | #57: inventory consumer; #63: exact review-input envelopes; reviewer authentication and administrative binding remain pending |
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
@@ -192,5 +192,5 @@ cannot establish live backend/IAM posture, billing eligibility or deployment aut
 The [shared evidence contract](docs/runbooks/security-evidence.md) now gates backend
 posture collection/checks, remote qualification, service CLI audits and both service
 factory entry points, OCI inventory collection/audit and OCI pre-registration.
-The cutover inventory consumer now validates the same pair in schema-2 bundles.
+Schema-3 cutover bundles validate that inventory pair and four review-input sidecars.
 Other report/evidence consumers retain their contracts until explicit migrations.

@@ -166,18 +166,18 @@ fail until real reviewed evidence is supplied. The checker requires an exact cle
 Git commit (tracked and untracked changes fail), current backend configuration
 digest, identity scope and a capture timestamp within 15 minutes. Each distinct
 artifact must be JSON/TOML inside this checkout's .infra, at most 10 MiB (the
-inventory sidecar is capped at 64 KiB), with the SHA-256 of its exact bytes.
+inventory and review sidecars are capped at 64 KiB), with the SHA-256 of its exact bytes.
 Escapes, changed/missing/duplicated artifacts fail.
 Each artifact is read once with a bounded read and parsed from the same hashed
 bytes. The checkout is checked again at completion. If a private file changes
 after capture, the result describes the captured snapshot; a subsequent check
 against the old index fails. Revalidate evidence before any future operation.
 
-**Breaking schema migration:** the bundle is now schema 2 with thirteen mandatory
+**Breaking schema migration:** the bundle is now schema 3 with seventeen mandatory
 roles. inventory_envelope references the original OCI collector sidecar, normally
 .infra/inventory.json.envelope.json; inventory references the corresponding original
 payload. Both paths/digests are pinned explicitly and must use distinct files.
-Schema-1 bundles and missing sidecars fail closed; recollect current observations
+Schema-1/2 bundles and missing sidecars fail closed; recollect current observations
 and review a new index rather than restamping old data or merely changing a version.
 The public example deliberately retains empty identities, clocks and digests.
 
@@ -195,9 +195,10 @@ CUT001/CUT002 cover bundle schema/path/size/digest failures; EVID001-EVID004 and
 GOV diagnostics cover inner binding and inventory/account validation.
 
 This slice reuses the existing unsigned in-toto-style contract, without dependencies.
-Backend receipt, Kubernetes and operator report schemas below are unchanged. Complete
-billing/history modeling and full M03-PR12 provenance/administrative binding remain
-pending. Rollback requires compatible code/contracts and weakens inventory transport
+Backend receipt, Kubernetes and operator report payload schemas below are unchanged.
+Service billing history is modeled separately; reviewer authentication and full
+M03-PR12 administrative binding remain pending. Rollback requires compatible
+code/contracts and weakens inventory/review transport
 checks; it never grants authority or upgrades historical evidence.
 
 The existing OCI backend receipt must pass its configuration/version/freshness
@@ -211,6 +212,51 @@ instances. Memory comparison conservatively interprets OCI GB as decimal bytes;
 units/allocatable interpretation must be reviewed, not loosened to pass a check.
 Disk attachment/allocatable relationships still require live operator verification.
 OCI config, Kubernetes config and both inventories must agree on identity/version.
+
+### Exact review-input bindings (M03-PR12 consistency slice)
+
+Schema 3 additionally requires ownership_envelope, preview_envelope, health_envelope
+and rollback_envelope, each a distinct private JSON file with an explicit index hash.
+The public example supplies names only; identities, clocks and hashes stay empty.
+Each cutover-review envelope binds fourteen named subjects: all original thirteen
+artifact roles (including the OCI inventory envelope and all four report payloads),
+plus quota_profiles, the exact bytes of the current tracked
+config/quotas/profiles.toml. The four new review envelopes are excluded from subjects
+to avoid cycles. Finalize the reports and their actual reviewed inputs before
+creating these sidecars. Changing any subject, even formatting or an unrelated quota
+profile, invalidates all four reviews; merely rehashing the outer index is insufficient.
+
+Use infra_core.cutover_evidence.capture_review(role, subjects, scope=..., now=...)
+to return sidecar bytes over the closed SUBJECTS mapping of immutable bytes. Build
+scope with review_scope from independently reviewed account_id, region, cluster_id,
+clean commit and configuration_sha256=the current FoundationConfig.digest. Unit is
+cutover-ROLE, preventing cross-role replay. The scope configuration digest is SHA256
+of UTF-8 JSON {backend_sha256: foundation_digest, cluster_id: cluster_id}, sorted keys,
+compact separators, ASCII escaping and nonfinite values forbidden. Expected values
+at consumption come from clean Git, validated account/Kubernetes inputs and current
+foundation configuration, never from a sidecar. Library helpers perform no Git lookup,
+file access, source collection or domain audit; consumption retains all semantic checks.
+
+Both envelope clocks must exactly equal that report's original observed_at string.
+This is a normalized review instant, not a claim about source collection duration.
+The 15-minute report limit and 24-hour rollback limit still apply. Downloading,
+rewriting or wrapping a report cannot refresh its observation. A longer rollback TTL
+does not permit substituting newer input bytes; review the actual new set again.
+Reports must be strict JSON objects without duplicate keys or nonfinite constants.
+CUT008 covers report parsing/clock equality; EVID001-EVID004 cover envelope bindings.
+All fourteen subjects share the existing 16 MiB aggregate limit, including the tracked
+profile snapshot; individual subjects remain bounded at 10 MiB and sidecars at 64 KiB.
+Profiles, payloads and sidecars are captured before validation and never reopened.
+
+This adapts the existing Apache-2.0
+[in-toto Statement subject-set pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
+through a small top-level adapter, with no new dependency or external code copying.
+Names and roles are significant here. Bindings are unsigned consistency, not verified
+reviewer identity, source authenticity, causal provenance or administrative approval.
+An attacker can recompute sidecars. No result grants operational authority.
+**Migration:** obtain actual current reviews and matching sidecars, then build a fresh
+schema-3 index. Do not restamp old reports or just update version numbers. Rollback
+requires compatible checker/contracts and reviewed evidence together, never activation.
 
 The ownership/preview/health/rollback reports share these exact header fields:
 commit, account_id, cluster_id, region, observed_at, source and reviewed_by.
