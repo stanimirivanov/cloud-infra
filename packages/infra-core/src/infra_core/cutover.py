@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from infra_core.backend import validate_receipt
-from infra_core.cutover_evidence import SIDECARS, SUBJECTS, review_scope, validate_review
+from infra_core.cutover_evidence import (
+    SIDECARS,
+    SIGNATURES,
+    SUBJECTS,
+    TRUSTED_INPUTS,
+    review_scope,
+    validate_review,
+)
 from infra_core.evidence import MAX_ARTIFACT_BYTES, MAX_ENVELOPE_BYTES, MAX_TOTAL_BYTES
 from infra_core.foundation import load_foundation
 from infra_core.governance.audit import audit as audit_account
@@ -20,8 +27,14 @@ from infra_core.kubernetes.audit import audit as audit_kubernetes
 from infra_core.kubernetes.config import parse_config as parse_kubernetes
 from infra_core.oci.config import parse_config as parse_oci
 from infra_core.oci.graph import foundation_graph, proposal
+from infra_core.review_signatures import (
+    MAX_POLICY_BYTES,
+    MAX_SIGNATURE_BYTES,
+    parse_policy,
+    verify_review,
+)
 
-ARTIFACTS = set((SUBJECTS - {"quota_profiles"}) | SIDECARS)
+ARTIFACTS = set((SUBJECTS - TRUSTED_INPUTS) | SIDECARS | SIGNATURES)
 HEADER = {"commit", "account_id", "cluster_id", "region", "observed_at", "source", "reviewed_by"}
 HEALTH = {
     "nodes-ready",
@@ -88,7 +101,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "evidence must bind to the exact clean committed checkout",
     )
     require(
-        type(data["schema_version"]) is int and data["schema_version"] == 3,
+        type(data["schema_version"]) is int and data["schema_version"] == 4,
         "CUT001",
         "unsupported cutover evidence schema",
     )
@@ -117,9 +130,11 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT002",
             "artifacts must be private JSON/TOML files inside this checkout's .infra",
         )
-        limit = (
-            MAX_ENVELOPE_BYTES if role in SIDECARS | {"inventory_envelope"} else MAX_ARTIFACT_BYTES
-        )
+        limit = MAX_ARTIFACT_BYTES
+        if role in SIGNATURES:
+            limit = MAX_SIGNATURE_BYTES
+        elif role in SIDECARS | {"inventory_envelope"}:
+            limit = MAX_ENVELOPE_BYTES
         with path.open("rb") as stream:
             content = stream.read(limit + 1)
         require(
@@ -127,7 +142,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT002",
             "artifact size/digest mismatch; regenerate the reviewed bundle",
         )
-        if role not in SIDECARS:
+        if role not in SIDECARS | SIGNATURES:
             total += len(content)
             require(total <= MAX_TOTAL_BYTES, "CUT002", "aggregate review subject size exceeded")
         paths[role] = path
@@ -144,8 +159,23 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "quota profiles exceed the review capture budget",
     )
     profiles = tomllib.loads(quota_bytes.decode("utf-8"))["profiles"]
-    subjects = {role: content for role, content in captured.items() if role not in SIDECARS}
+    subjects = {
+        role: content for role, content in captured.items() if role not in SIDECARS | SIGNATURES
+    }
     subjects["quota_profiles"] = quota_bytes
+    try:
+        with (root / "config/cutover-reviewers.toml").open("rb") as stream:
+            policy_bytes = stream.read(MAX_POLICY_BYTES + 1)
+    except OSError:
+        raise ValueError("CUT009: reviewer trust policy unavailable") from None
+    require(
+        len(policy_bytes) <= MAX_POLICY_BYTES
+        and total + len(quota_bytes) + len(policy_bytes) <= MAX_TOTAL_BYTES,
+        "CUT002",
+        "reviewer policy exceeds the review capture budget",
+    )
+    subjects["reviewer_policy"] = policy_bytes
+    reviewers = parse_policy(policy_bytes)
 
     def read(role: str) -> Any:
         return json.loads(captured[role].decode("utf-8"))
@@ -224,6 +254,12 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
     )
 
     def report(role: str, extra: set[str], *, hours: int = 0) -> dict[str, Any]:
+        principal = verify_review(
+            role,
+            captured[role + "_envelope"],
+            captured[role + "_signature"],
+            reviewers,
+        )
         scope = review_scope(
             role,
             account_id=account["account_id"],
@@ -251,7 +287,11 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "review report is stale or in the future",
         )
         text(value["source"], "report source")
-        text(value["reviewed_by"], "reviewer reference")
+        require(
+            value["reviewed_by"] == principal,
+            "CUT010",
+            "reviewer principal differs from verified key",
+        )
         return value
 
     ownership = report("ownership", {"complete", "writers_frozen", "active_operations", "entries"})
@@ -370,6 +410,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "cutover_authorized": False,
         "remaining_gates": [
             "reviewed separate-stack orchestration",
+            "independent reviewer-key enrollment/custody and administrative protections",
             "protected operational approval",
             "explicit human cutover instruction",
         ],

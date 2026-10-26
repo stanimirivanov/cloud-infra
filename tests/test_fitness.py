@@ -19,6 +19,13 @@ def write(root, name, content):
     "module, source",
     [
         ("cli.py", "import pulumi as sdk"),
+        ("cli.py", "import cryptography"),
+        ("governance/audit.py", "import cryptography"),
+        ("review_signatures/nested.py", "import cryptography"),
+        (
+            "review_signatures.py",
+            "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey",
+        ),
         ("config.py", "from infra_program import governance"),
         ("governance/audit.py", "from ..inventory import oci"),
         ("governance/audit.py", "from infra_core import cli"),
@@ -46,6 +53,9 @@ def test_reviewed_adapters_and_pure_relative_imports_are_allowed(tmp_path):
         "oci/graph.py": "from ..governance.contracts import require",
         "inventory/oci.py": "import importlib\nimportlib.import_module('oci')",
         "backend.py": "import subprocess",
+        "review_signatures.py": (
+            "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey"
+        ),
     }.items():
         write(tmp_path, "packages/infra-core/src/infra_core/" + module, source)
     write(

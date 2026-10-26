@@ -1,5 +1,6 @@
 """Private synthetic evidence: full positive chain and tamper/staleness/ownership failures."""
 
+import base64
 import hashlib
 import json
 import tomllib
@@ -10,7 +11,13 @@ from pathlib import Path
 import pytest
 from evidence_helpers import recovery_metrics, upgrade_inventory
 from infra_core import cli, cutover
-from infra_core.cutover_evidence import REPORTS, SUBJECTS, capture_review, review_scope
+from infra_core.cutover_evidence import (
+    REPORTS,
+    SUBJECTS,
+    TRUSTED_INPUTS,
+    capture_review,
+    review_scope,
+)
 from infra_core.foundation import load_foundation
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import CLUSTER, INSTANCE, INVENTORY_TYPES
@@ -18,6 +25,7 @@ from infra_core.inventory_evidence import capture_inventory
 from infra_core.kubernetes.resources import render
 from infra_core.oci.config import FoundationConfig, ImageEvidence
 from infra_core.oci.graph import foundation_graph, proposal
+from infra_core.review_signatures import PAYLOAD_TYPE, preauth
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
@@ -31,11 +39,33 @@ def table(name, values):
     )
 
 
+def sign_review(key, payload, *, keyid="untrusted-hint"):
+    return json.dumps(
+        {
+            "payloadType": PAYLOAD_TYPE,
+            "payload": base64.b64encode(payload).decode(),
+            "signatures": [
+                {"keyid": keyid, "sig": base64.b64encode(key.sign(preauth(payload))).decode()}
+            ],
+        }
+    ).encode()
+
+
 @pytest.fixture
-def review(tmp_path, monkeypatch, kube_config, kube_inventory):
+def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
     root = tmp_path
     (root / "config/quotas").mkdir(parents=True)
     (root / ".infra").mkdir()
+    public_key = base64.b64encode(review_signer.public_key().public_bytes_raw()).decode()
+    (root / "config/cutover-reviewers.toml").write_text(
+        "schema_version = 1\nenabled = true\n[[reviewers]]\n"
+        'principal = "synthetic-reviewer"\npublic_key = "'
+        + public_key
+        + '"\nroles = '
+        + json.dumps(sorted(REPORTS))
+        + "\n",
+        encoding="utf-8",
+    )
     (root / "pyproject.toml").write_text('[project]\nname="oci-oke-infrastructure"\n')
     (root / "config/pulumi.toml").write_bytes((ROOT / "config/pulumi.toml").read_bytes())
     monkeypatch.setattr(cutover, "repository_state", lambda root: (COMMIT, True))
@@ -152,7 +182,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "region": kube_config.region,
         "observed_at": now,
         "source": "synthetic offline review",
-        "reviewed_by": "synthetic reviewer",
+        "reviewed_by": "synthetic-reviewer",
     }
     config = load_foundation(root)
     values = asdict(kube_config)
@@ -213,7 +243,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "rollback": {**header, "checks": sorted(cutover.ROLLBACK)},
     }
     document = {
-        "schema_version": 3,
+        "schema_version": 4,
         "commit": COMMIT,
         "account_id": kube_config.account_id,
         "cluster_id": kube_config.cluster_id,
@@ -240,11 +270,12 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
             "sha256": hashlib.sha256(content).hexdigest(),
         }
 
-        if rebind and SUBJECTS - {"quota_profiles"} <= set(document["artifacts"]):
-            # Synthetic negative-domain fixtures deliberately rebuild unsigned bindings.
+        if rebind and SUBJECTS - TRUSTED_INPUTS <= set(document["artifacts"]):
+            # Negative-domain fixtures deliberately rebuild bindings and ephemeral signatures.
             # Replay/tamper regressions pass rebind=False to preserve the original review.
             subjects = dict(subject_bytes)
             subjects["quota_profiles"] = (root / "config/quotas/profiles.toml").read_bytes()
+            subjects["reviewer_policy"] = (root / "config/cutover-reviewers.toml").read_bytes()
             for report in sorted(REPORTS):
                 scope = review_scope(
                     report,
@@ -263,6 +294,9 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
                 )
                 artifacts[report + "_envelope"] = encoded
                 write(report + "_envelope", encoded, rebind=False)
+                signed = sign_review(review_signer, encoded)
+                artifacts[report + "_signature"] = signed
+                write(report + "_signature", signed, rebind=False)
 
     payload, envelope = capture_inventory(
         tomllib.loads(artifacts["account"]),
@@ -293,6 +327,7 @@ def test_complete_bundle_is_consistent_but_never_authorizes_cutover(review):
         ("schema_version", True),
         ("schema_version", 1),
         ("schema_version", 2),
+        ("schema_version", 3),
         ("captured_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()),
     ],
 )

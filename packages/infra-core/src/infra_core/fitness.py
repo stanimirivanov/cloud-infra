@@ -52,6 +52,15 @@ def _allowed(owner: str, target: str) -> bool:
             top in sys.stdlib_module_names
             or top == "infra_core"
             or (owner == "infra_core.inventory.oci" and top == "oci")
+            or (
+                owner == "infra_core.review_signatures"
+                and target
+                in {
+                    "cryptography.exceptions.InvalidSignature",
+                    "cryptography.exceptions.UnsupportedAlgorithm",
+                    "cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey",
+                }
+            )
         )
     return top in sys.stdlib_module_names or top in PROGRAM | {"infra_core", "infra_program"}
 

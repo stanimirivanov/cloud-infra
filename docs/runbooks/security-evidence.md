@@ -64,9 +64,11 @@ The [OCI handoff](free-tier-governance.md#oci-inventory-sidecars-m03-pr11-cli-sl
 now binds collection/audit to original inventory bytes and account/profile/clean
 HEAD. Both OCI library gates require that same payload/sidecar with an independently
 supplied expected commit before callbacks or resource registration; library calls
-do not discover Git. Pure accounting retains dictionaries. The schema-3
+do not discover Git. Pure accounting retains dictionaries. The schema-4
 [cutover bundle](kubernetes-cutover.md#commit-bound-cutover-evidence) now requires
 and validates an explicit inventory_envelope role from the same hashed snapshot;
 four role-specific cutover-review sidecars now bind the entire captured review set
-and tracked quota-profile bytes. Reviewer authentication, administrative provenance
-and other evidence consumers remain separate work.
+and tracked quota/reviewer-policy bytes. Four mandatory DSSE/Ed25519 signature
+artifacts authenticate role-authorized keys against the disabled-by-default repository
+policy. Enrollment/custody, administrative provenance and other evidence consumers
+remain separate work; no signature grants operational authority.

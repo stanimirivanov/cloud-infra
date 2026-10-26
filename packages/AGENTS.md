@@ -28,6 +28,8 @@ Policy changes need negative tests and stable actionable rule IDs. governance/
 owns pure account capacity, replacement peak and monthly usage rules; inventory/
 owns optional read-only provider adapters. Never import an SDK in the pure engine
 or infer ownership from tags. Missing inventory/usage is a failure, not zero.
+Only infra_core.review_signatures may import the three reviewed cryptography
+verification symbols; signing APIs and crypto imports in pure domains remain forbidden.
 infra-program may wrap the pure rules as mandatory policies, but resource-local
 policy checks never replace account-wide pre-registration checks. See
 docs/runbooks/free-tier-governance.md before changing accounting contracts.

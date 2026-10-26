@@ -7,7 +7,15 @@ from datetime import datetime, timedelta
 import pytest
 import test_cutover as fixtures
 from infra_core import cutover
-from infra_core.cutover_evidence import REPORTS, SIDECARS, SUBJECTS, capture_review, review_scope
+from infra_core.cutover_evidence import (
+    REPORTS,
+    SIDECARS,
+    SIGNATURES,
+    SUBJECTS,
+    TRUSTED_INPUTS,
+    capture_review,
+    review_scope,
+)
 
 review = fixtures.review
 
@@ -15,9 +23,10 @@ review = fixtures.review
 def snapshot(root, document):
     subjects = {
         role: (root / document["artifacts"][role]["path"]).read_bytes()
-        for role in SUBJECTS - {"quota_profiles"}
+        for role in SUBJECTS - TRUSTED_INPUTS
     }
     subjects["quota_profiles"] = (root / "config/quotas/profiles.toml").read_bytes()
+    subjects["reviewer_policy"] = (root / "config/cutover-reviewers.toml").read_bytes()
     return subjects
 
 
@@ -87,7 +96,9 @@ def test_semantically_equivalent_input_changes_still_require_new_reviews(review,
         "future",
     ],
 )
-def test_rehashed_review_envelopes_reject_scope_subject_and_clock_replay(review, fault):
+def test_rehashed_review_envelopes_reject_scope_subject_and_clock_replay(
+    review, fault, review_signer
+):
     root, document, artifacts, write = review
     name = "health_envelope"
     value = json.loads(artifacts[name])
@@ -131,13 +142,17 @@ def test_rehashed_review_envelopes_reject_scope_subject_and_clock_replay(review,
         if fault != "stale":
             predicate["collection_completed_at"] = (observed + delta).isoformat()
         code = "CUT008" if fault == "clock" else "EVID004"
-    write(name, json.dumps(value).encode(), rebind=False)
+    encoded = json.dumps(value).encode()
+    write(name, encoded, rebind=False)
+    write("health_signature", fixtures.sign_review(review_signer, encoded), rebind=False)
     with pytest.raises(ValueError, match=code):
         cutover.check(root, document)
 
 
 @pytest.mark.parametrize("payload", [b'{"PRIVATE":', b"[]", b'{"x":NaN}', b'{"x":1,"x":2}'])
-def test_forged_subject_hashes_cannot_upgrade_malformed_report_json(review, payload, capsys):
+def test_forged_subject_hashes_cannot_upgrade_malformed_report_json(
+    review, payload, capsys, review_signer
+):
     root, document, artifacts, write = review
     write("health", payload, rebind=False)
     for name in SIDECARS:
@@ -145,7 +160,13 @@ def test_forged_subject_hashes_cannot_upgrade_malformed_report_json(review, payl
         next(item for item in value["subject"] if item["name"] == "health")["digest"]["sha256"] = (
             hashlib.sha256(payload).hexdigest()
         )
-        write(name, json.dumps(value).encode(), rebind=False)
+        encoded = json.dumps(value).encode()
+        write(name, encoded, rebind=False)
+        write(
+            name.removesuffix("_envelope") + "_signature",
+            fixtures.sign_review(review_signer, encoded),
+            rebind=False,
+        )
     with pytest.raises(ValueError, match="CUT008") as error:
         cutover.check(root, document)
     assert "PRIVATE" not in str(error.value)
@@ -184,9 +205,10 @@ def test_review_set_and_profiles_use_the_hashed_capture_without_reopening(review
 
     def change_after_capture(*args):
         original(*args)
-        for role in REPORTS | SIDECARS:
+        for role in REPORTS | SIDECARS | SIGNATURES:
             (root / document["artifacts"][role]["path"]).write_bytes(b"changed after capture")
         (root / "config/quotas/profiles.toml").write_bytes(b"changed after capture")
+        (root / "config/cutover-reviewers.toml").write_bytes(b"changed after capture")
 
     monkeypatch.setattr(cutover, "validate_receipt", change_after_capture)
     assert cutover.check(root, document)["status"] == "evidence-consistent"
