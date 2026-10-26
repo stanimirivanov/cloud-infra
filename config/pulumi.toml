@@ -1,6 +1,7 @@
-schema_version = 1
+schema_version = 2
 pulumi_version = "3.272.0"
 qualification_ttl_hours = 24
+secrets_provider = "passphrase"
 
 [backend]
 bucket = "kishu-tf-state"

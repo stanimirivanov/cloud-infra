@@ -1,7 +1,9 @@
 # External-service SDK boundary
 
-register_services is the sole composition entry point. Audit a frozen pure
-proposal before registering any provider/component/resource; use only that graph.
+register_services is the sole resource composition path. The configuration-backed
+register_services_from_config wrapper audits frozen inputs before Config lookup,
+requires every token/password via require_secret(), then delegates to that path.
+Audit before registering any provider/component/resource; use only that graph.
 Every child has an explicit provider, parent and protect=True. Endpoints are
 fixed, tokens/passwords are Pulumi secret Outputs, outputs contain identities only.
 Do not expose default providers, invokes, API clients, dynamic providers or new

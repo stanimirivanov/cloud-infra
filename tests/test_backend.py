@@ -1,9 +1,10 @@
 """Backend trust boundaries, state isolation and qualification failure regressions."""
 
+import hashlib
 import json
 import os
 import subprocess
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from importlib.metadata import version
 from pathlib import Path
@@ -198,6 +199,7 @@ def test_failed_qualification_never_returns_success_and_cleans_own_stack(
             if phase == "version":
                 return "v" + config.pulumi_version
             if phase == "initialize":
+                assert args[-2:] == ["--secrets-provider", config.secrets_provider]
                 (self.cwd / f"Pulumi.{args[2]}.yaml").write_text("encrypted")
             if phase == "configure":
                 FakeSession.sentinel = args[3]
@@ -321,3 +323,34 @@ def test_inspection_needs_no_credentials_or_cli(monkeypatch, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["deployment_enabled"] is False
     assert output["backend"].startswith("s3://kishu-tf-state/pulumi?")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        ("schema_version = 2", "schema_version = 1"),
+        ('secrets_provider = "passphrase"', ""),
+        ('secrets_provider = "passphrase"', 'secrets_provider = "default"'),
+        ('secrets_provider = "passphrase"', 'secrets_provider = "awskms://key"'),
+        ('secrets_provider = "passphrase"', "secrets_provider = true"),
+        ('secrets_provider = "passphrase"', 'secrets_provider = "passphrase"\nextra = "field"'),
+    ],
+)
+def test_foundation_requires_closed_explicit_encryption_policy(tmp_path, change):
+    (tmp_path / "config").mkdir()
+    source = (ROOT / "config/pulumi.toml").read_text(encoding="utf-8")
+    (tmp_path / "config/pulumi.toml").write_text(source.replace(*change), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_foundation(tmp_path)
+
+
+def test_encryption_policy_is_bound_to_receipts_and_cannot_be_replaced(config):
+    assert config.secrets_provider == "passphrase"
+    old_configuration = asdict(config)
+    del old_configuration["secrets_provider"]
+    old_digest = hashlib.sha256(json.dumps(old_configuration, sort_keys=True).encode()).hexdigest()
+    assert config.digest != old_digest
+    with pytest.raises(backend.QualificationError):
+        backend.validate_receipt(config, receipt(config) | {"configuration_sha256": old_digest})
+    with pytest.raises(ValueError, match="SECRET001"):
+        replace(config, secrets_provider="default")
