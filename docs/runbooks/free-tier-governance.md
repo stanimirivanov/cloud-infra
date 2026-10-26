@@ -160,7 +160,8 @@ usage=null remains investigatory and cannot pass billing audit. Sidecars prove
 unsigned consistency, not authenticity, complete IAM visibility or deployment
 authority. The [OCI library preflight](oci-components.md#bound-inventory-at-registration-m03-pr11)
 now requires the same bytes/sidecar with independent expected commit. Pure accounting
-and cutover still accept dictionaries pending migration. Operations stay disabled. Rollback
+still accepts dictionaries; the [cutover consumer](kubernetes-cutover.md#commit-bound-cutover-evidence)
+now validates the same captured pair. Operations stay disabled. Rollback
 needs compatible code/contracts and weakens transport checks without granting authority.
 
 ## Proposal and accounting contracts

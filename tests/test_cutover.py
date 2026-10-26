@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import tomllib
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,7 @@ from infra_core import cli, cutover
 from infra_core.foundation import load_foundation
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import CLUSTER, INSTANCE, INVENTORY_TYPES
+from infra_core.inventory_evidence import capture_inventory
 from infra_core.kubernetes.resources import render
 from infra_core.oci.config import FoundationConfig, ImageEvidence
 from infra_core.oci.graph import foundation_graph, proposal
@@ -210,7 +212,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "rollback": {**header, "checks": sorted(cutover.ROLLBACK)},
     }
     document = {
-        "schema_version": 1,
+        "schema_version": 2,
         "commit": COMMIT,
         "account_id": kube_config.account_id,
         "cluster_id": kube_config.cluster_id,
@@ -222,14 +224,27 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
 
     def write(role, value):
         path = root / ".infra" / (role + (".toml" if isinstance(value, str) else ".json"))
-        path.write_text(value if isinstance(value, str) else json.dumps(value), encoding="utf-8")
+        if isinstance(value, bytes):
+            path.write_bytes(value)
+        else:
+            path.write_text(
+                value if isinstance(value, str) else json.dumps(value), encoding="utf-8"
+            )
         document["artifacts"][role] = {
             "path": str(path.relative_to(root)),
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         }
 
+    payload, envelope = capture_inventory(
+        tomllib.loads(artifacts["account"]),
+        tomllib.loads(profile_text)["profiles"]["oci-free"],
+        inventory,
+        commit=COMMIT,
+    )
     for role, value in artifacts.items():
-        write(role, value)
+        write(role, payload if role == "inventory" else value)
+    artifacts["inventory_envelope"] = envelope
+    write("inventory_envelope", envelope)
     return root, document, artifacts, write
 
 
@@ -247,6 +262,7 @@ def test_complete_bundle_is_consistent_but_never_authorizes_cutover(review):
         ("commit", "b" * 40),
         ("configuration_sha256", "wrong"),
         ("schema_version", True),
+        ("schema_version", 1),
         ("captured_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()),
     ],
 )
@@ -348,11 +364,17 @@ def test_backend_local_receipt_and_billing_plan_changes_fail(review):
 
 
 def test_cli_returns_only_sanitized_consistency_result(review, capsys):
-    root, document, _, _ = review
+    root, document, _, write = review
     evidence = root / ".infra/review.json"
     evidence.write_text(json.dumps(document))
     assert cli.main(["--root", str(root), "cutover", "check", "--evidence", str(evidence)]) == 0
     assert json.loads(capsys.readouterr().out)["cutover_authorized"] is False
+    inventory = root / document["artifacts"]["inventory"]["path"]
+    write("inventory", inventory.read_bytes() + b" ")
+    evidence.write_text(json.dumps(document))
+    assert cli.main(["--root", str(root), "cutover", "check", "--evidence", str(evidence)]) == 1
+    output = capsys.readouterr()
+    assert "EVID002" in output.err and not output.out
 
 
 def test_artifacts_are_parsed_from_their_hashed_snapshot(review, monkeypatch):
@@ -374,4 +396,88 @@ def test_checkout_change_during_review_fails(review, monkeypatch):
     states = iter([(COMMIT, True), ("b" * 40, True)])
     monkeypatch.setattr(cutover, "repository_state", lambda root: next(states))
     with pytest.raises(GovernanceError, match="CUT001"):
+        cutover.check(root, document)
+
+
+@pytest.mark.parametrize("fault", ["role", "file", "oversize", "digest", "alias"])
+def test_inventory_sidecar_is_mandatory_bounded_and_hashed(review, fault):
+    root, document, _, write = review
+    ref = document["artifacts"]["inventory_envelope"]
+    path = root / ref["path"]
+    if fault == "role":
+        del document["artifacts"]["inventory_envelope"]
+    elif fault == "file":
+        path.unlink()
+    elif fault == "oversize":
+        write("inventory_envelope", b" " * (cutover.MAX_ENVELOPE_BYTES + 1))
+    elif fault == "digest":
+        path.write_bytes(b"changed without updating the index")
+    else:
+        document["artifacts"]["inventory_envelope"] = document["artifacts"]["inventory"]
+    with pytest.raises(GovernanceError, match="GOV003|CUT002"):
+        cutover.check(root, document)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["bytes", "account", "region", "unit", "commit", "clock", "stale", "kind", "profile", "config"],
+)
+def test_rehashed_index_cannot_bypass_inventory_binding(review, fault):
+    root, document, artifacts, write = review
+    envelope = json.loads(artifacts["inventory_envelope"])
+    if fault == "bytes":
+        path = root / document["artifacts"]["inventory"]["path"]
+        write("inventory", path.read_bytes() + b" ")
+    elif fault == "profile":
+        path = root / "config/quotas/profiles.toml"
+        path.write_text(path.read_text().replace("enabled = true", "enabled = false"))
+    elif fault == "config":
+        write("account", artifacts["account"] + "ocpus = 1\n")
+    elif fault in ("account", "region", "unit", "commit"):
+        key = "account_id" if fault == "account" else fault
+        envelope["predicate"]["scope"][key] = "b" * 40 if fault == "commit" else "other"
+    elif fault == "kind":
+        envelope["predicateType"] = "other"
+    else:
+        age = timedelta(minutes=16) if fault == "stale" else timedelta(seconds=1)
+        start = datetime.fromisoformat(artifacts["inventory"]["collection_started_at"])
+        envelope["predicate"]["collection_started_at"] = (start - age).isoformat()
+    write("inventory_envelope", json.dumps(envelope).encode())
+    with pytest.raises(ValueError, match="EVID|GOV043"):
+        cutover.check(root, document)
+
+
+@pytest.mark.parametrize("fault", ["json", "coverage", "usage"])
+def test_recomputed_inner_hash_cannot_bypass_inventory_or_billing_checks(review, fault):
+    root, document, artifacts, write = review
+    inventory = artifacts["inventory"]
+    if fault == "json":
+        payload = b'{"PRIVATE":'
+    else:
+        if fault == "coverage":
+            inventory["coverage"]["queries"].pop()
+        else:
+            inventory["usage"] = None
+        payload = json.dumps(inventory).encode()
+    envelope = json.loads(artifacts["inventory_envelope"])
+    envelope["subject"][0]["digest"]["sha256"] = hashlib.sha256(payload).hexdigest()
+    write("inventory", payload)
+    write("inventory_envelope", json.dumps(envelope).encode())
+    with pytest.raises(ValueError, match="GOV") as error:
+        cutover.check(root, document)
+    assert "PRIVATE" not in str(error.value)
+
+
+def test_inventory_pair_uses_hashed_snapshot_without_reopening_files(review, monkeypatch):
+    root, document, _, _ = review
+    original = cutover.validate_receipt
+
+    def change_pair_after_capture(*args):
+        original(*args)
+        for role in ("inventory", "inventory_envelope"):
+            (root / document["artifacts"][role]["path"]).write_bytes(b"changed after capture")
+
+    monkeypatch.setattr(cutover, "validate_receipt", change_pair_after_capture)
+    assert cutover.check(root, document)["cutover_authorized"] is False
+    with pytest.raises(GovernanceError, match="CUT002"):
         cutover.check(root, document)

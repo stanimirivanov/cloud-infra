@@ -171,7 +171,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #55 (M03-PR11 OCI registration envelope slice):
+stay disabled. Status through issue #57 (M03-PR11 cutover inventory consumer slice):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -183,8 +183,8 @@ stay disabled. Status through issue #55 (M03-PR11 OCI registration envelope slic
 | PR8: independent recovery | #33/#39/#41: isolated restore, explicit encryption/custody guidance and required wrong-key rejection; same-host synthetic scope only |
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
-| PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; #51: factory envelopes before secret lookup/registration; #53: OCI collector/audit envelopes; #55: OCI preflight/composer envelopes; cutover migration and complete billing/history modeling remain pending |
-| PR12: cutover evidence | Pending; consumes remaining evidence contracts and administrative review |
+| PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; #51: factory envelopes before secret lookup/registration; #53: OCI collector/audit envelopes; #55: OCI preflight/composer envelopes; #57: cutover inventory consumer; complete billing/history modeling remains pending |
+| PR12: cutover evidence | Full provenance/administrative binding pending; #57 migrates the inventory consumer only |
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
@@ -192,4 +192,5 @@ cannot establish live backend/IAM posture, billing eligibility or deployment aut
 The [shared evidence contract](docs/runbooks/security-evidence.md) now gates backend
 posture collection/checks, remote qualification, service CLI audits and both service
 factory entry points, OCI inventory collection/audit and OCI pre-registration.
-Cutover and other evidence consumers retain their contracts until explicit migrations.
+The cutover inventory consumer now validates the same pair in schema-2 bundles.
+Other report/evidence consumers retain their contracts until explicit migrations.

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from infra_core.backend import validate_receipt
+from infra_core.evidence import MAX_ENVELOPE_BYTES
 from infra_core.foundation import load_foundation
 from infra_core.governance.audit import audit as audit_account
 from infra_core.governance.contracts import fields, number, records, require, text, timestamp
@@ -23,6 +24,7 @@ ARTIFACTS = {
     "backend_receipt",
     "account",
     "inventory",
+    "inventory_envelope",
     "oci_proposal",
     "oci_config",
     "kubernetes_config",
@@ -70,6 +72,9 @@ def repository_state(root: Path) -> tuple[str, bool]:
 
 
 def check(root: Path, document: object, *, now: datetime | None = None) -> dict[str, Any]:
+    # The transport adapter imports repository_state; defer this import to avoid a cycle.
+    from infra_core.inventory_evidence import validate_inventory_evidence
+
     now = now or datetime.now(UTC)
     require(now.tzinfo is not None, "CUT001", "review clock requires an explicit timezone")
     now = now.astimezone(UTC)
@@ -96,7 +101,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "evidence must bind to the exact clean committed checkout",
     )
     require(
-        type(data["schema_version"]) is int and data["schema_version"] == 1,
+        type(data["schema_version"]) is int and data["schema_version"] == 2,
         "CUT001",
         "unsupported cutover evidence schema",
     )
@@ -124,11 +129,11 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT002",
             "artifacts must be private JSON/TOML files inside this checkout's .infra",
         )
+        limit = MAX_ENVELOPE_BYTES if role == "inventory_envelope" else 10 * 1024 * 1024
         with path.open("rb") as stream:
-            content = stream.read(10 * 1024 * 1024 + 1)
+            content = stream.read(limit + 1)
         require(
-            len(content) <= 10 * 1024 * 1024
-            and hashlib.sha256(content).hexdigest() == item["sha256"],
+            len(content) <= limit and hashlib.sha256(content).hexdigest() == item["sha256"],
             "CUT002",
             "artifact size/digest mismatch; regenerate the reviewed bundle",
         )
@@ -152,7 +157,15 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "CUT003",
         "account identity does not match the bundle",
     )
-    inventory = read("inventory")
+    profile = profiles.get(account.get("profile"), {})
+    inventory = validate_inventory_evidence(
+        account,
+        profile,
+        captured["inventory"],
+        captured["inventory_envelope"],
+        commit=commit,
+        now=now,
+    )
     plan = read("oci_proposal")
     # Preparation covers unchanged/adopted resources. Changes need a separate reviewed operation.
     require(
@@ -169,7 +182,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "CUT003",
         "cutover preparation cannot authorize creates, updates, replacements or deletions",
     )
-    audit_account(account, profiles.get(account.get("profile"), {}), inventory, plan, now=now)
+    audit_account(account, profile, inventory, plan, now=now)
     require(
         any(
             item.get("id") == data["cluster_id"] and item.get("type") == CLUSTER

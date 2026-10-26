@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "commit": "",
   "account_id": "",
   "cluster_id": "",
@@ -10,6 +10,7 @@
     "backend_receipt": {"path": ".infra/qualification.json", "sha256": ""},
     "account": {"path": ".infra/account.toml", "sha256": ""},
     "inventory": {"path": ".infra/inventory.json", "sha256": ""},
+    "inventory_envelope": {"path": ".infra/inventory.json.envelope.json", "sha256": ""},
     "oci_proposal": {"path": ".infra/adoption-account-proposal.json", "sha256": ""},
     "oci_config": {"path": ".infra/oci.toml", "sha256": ""},
     "kubernetes_config": {"path": ".infra/kubernetes.toml", "sha256": ""},
