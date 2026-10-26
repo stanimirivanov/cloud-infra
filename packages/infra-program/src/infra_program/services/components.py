@@ -1,13 +1,13 @@
 """Explicit-provider components emitted only after complete service preflight."""
 
-from copy import deepcopy
 from typing import Any
 
 import pulumi
 import pulumi_cloudflare as cloudflare
 import pulumi_supabase as supabase
 from infra_core.governance.contracts import require
-from infra_core.services.governance import DNS, audit
+from infra_core.service_evidence import validate_service_evidence
+from infra_core.services.governance import DNS
 
 _PERMIT = object()
 
@@ -85,13 +85,16 @@ class Services(pulumi.ComponentResource):
 
 def register_services(
     config: dict[str, Any],
-    evidence: dict[str, Any],
+    evidence: bytes,
     profile: dict[str, Any],
     token: pulumi.Output[str],
     passwords: dict[str, pulumi.Output[str]] | None = None,
+    *,
+    envelope: bytes,
+    commit: str,
 ) -> Services:
     """Library only: no stack selection, credential lookup, backend or apply path."""
-    proposal = audit(deepcopy(config), deepcopy(evidence), deepcopy(profile))
+    proposal = validate_service_evidence(config, profile, evidence, envelope, commit=commit)
     passwords = dict(passwords or {})
     expected = (
         {item["key"] for item in proposal["resources"]}
