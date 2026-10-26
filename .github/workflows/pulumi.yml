@@ -50,11 +50,14 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+          BACKEND_POSTURE_ENVELOPE_JSON: ${{ secrets.BACKEND_POSTURE_ENVELOPE_JSON }}
+          BACKEND_POSTURE_ACCOUNT_ID: ${{ vars.BACKEND_POSTURE_ACCOUNT_ID }}
           BACKEND_POSTURE_JSON: ${{ secrets.BACKEND_POSTURE_JSON }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
         run: |
-          uv run --locked python -c "import os; from pathlib import Path; p=Path('.infra/backend-posture.json'); p.parent.mkdir(exist_ok=True); p.write_text(os.environ['BACKEND_POSTURE_JSON'], encoding='utf-8')"
-          uv run --locked infra backend qualify --allow-backend-writes
+          uv run --locked python -c "import os; from pathlib import Path; p=Path('.infra/backend-posture.json'); p.parent.mkdir(exist_ok=True); p.write_bytes(os.environ['BACKEND_POSTURE_JSON'].encode('utf-8'))"
+          uv run --locked python -c "import os; from pathlib import Path; Path('.infra/backend-posture.json.envelope.json').write_bytes(os.environ['BACKEND_POSTURE_ENVELOPE_JSON'].encode('utf-8'))"
+          uv run --locked infra backend qualify --account-id "$BACKEND_POSTURE_ACCOUNT_ID" --allow-backend-writes
       - name: Check resource operation readiness
         if: inputs.operation == 'preview' || inputs.operation == 'deploy'
         env:

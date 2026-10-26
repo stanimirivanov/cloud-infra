@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from infra_core.backend_posture import validate_posture
+from infra_core.backend_posture import validate_posture_evidence
 from infra_core.foundation import FoundationConfig
 
 
@@ -183,16 +183,21 @@ def qualify(
     *,
     local: bool,
     allow_writes: bool,
-    posture: dict[str, Any] | None = None,
+    posture: bytes | None = None,
+    posture_envelope: bytes | None = None,
+    account_id: str | None = None,
+    commit: str | None = None,
 ) -> dict[str, Any]:
     if not allow_writes:
         raise QualificationError(
             "qualification writes isolated test state; pass --allow-backend-writes"
         )
     if not local:
-        if posture is None:
+        if posture is None or posture_envelope is None or account_id is None or commit is None:
             raise QualificationError("BACKEND001: fresh backend posture evidence is required")
-        validate_posture(config, posture)
+        validate_posture_evidence(
+            config, posture, posture_envelope, account_id=account_id, commit=commit
+        )
     if version("pulumi") != config.pulumi_version:
         raise QualificationError("Pulumi CLI pin must match the locked Python SDK")
     run_id = uuid4().hex

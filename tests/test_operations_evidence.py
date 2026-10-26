@@ -194,6 +194,9 @@ def test_cli_posture_failures_invalidate_old_evidence_without_raw_errors(
     (tmp_path / ".infra").mkdir()
     output = tmp_path / ".infra/backend-posture.json"
     output.write_text("stale success")
+    sidecar = output.with_name(output.name + ".envelope.json")
+    sidecar.write_text("stale sidecar")
+    monkeypatch.setattr(cli, "_posture_commit", lambda root: "a" * 40)
 
     def fail(*args):
         raise RuntimeError("SECRET_CONFIG_MUST_NOT_ESCAPE")
@@ -214,5 +217,5 @@ def test_cli_posture_failures_invalidate_old_evidence_without_raw_errors(
         )
         == 1
     )
-    assert not output.exists()
+    assert not output.exists() and not sidecar.exists()
     assert "SECRET_CONFIG" not in capsys.readouterr().err

@@ -170,7 +170,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #41 (M03-PR8 recovery acceptance):
+stay disabled. Status through issue #43 (M03-PR9 backend envelope migration):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -180,7 +180,7 @@ stay disabled. Status through issue #41 (M03-PR8 recovery acceptance):
 | PR6: shared evidence envelopes | #37: unsigned exact-byte/scope/clock sidecars; consumer migrations remain pending |
 | PR7: secret ingestion/encryption contracts | #39: explicit passphrase policy, config-backed secret factory and custody/migration guidance |
 | PR8: independent recovery | #33/#39/#41: isolated restore, explicit encryption/custody guidance and required wrong-key rejection; same-host synthetic scope only |
-| PR9: backend posture | #33 implements read-only collection/checks; shared envelope migration pending PR6 |
+| PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | Pending; #33's manual posture-secret handoff does not implement it |
 | PR11: usage coverage | #33 covers OCI; service usage and envelope migration remain pending |
 | PR12: cutover evidence | Pending; consumes remaining evidence contracts and administrative review |
@@ -188,5 +188,6 @@ stay disabled. Status through issue #41 (M03-PR8 recovery acceptance):
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
 
-The [shared evidence contract](docs/runbooks/security-evidence.md) is additive.
-Existing evidence validators remain unchanged until their explicit migration PRs.
+The [shared evidence contract](docs/runbooks/security-evidence.md) now gates backend
+posture collection/checks and remote qualification. Other evidence consumers remain
+unchanged until their explicit migration PRs.
