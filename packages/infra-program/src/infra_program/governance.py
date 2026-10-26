@@ -2,11 +2,13 @@
 
 import math
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from typing import Any
 
 from infra_core.governance.audit import audit
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import CAPACITY, footprint
+from infra_core.inventory_evidence import validate_inventory_evidence
 from infra_core.kubernetes.resources import validate_resource as validate_kubernetes
 from infra_core.oci.security import COMPONENTS, PROVIDER
 from infra_core.oci.security import validate_resource as validate_oci
@@ -39,11 +41,16 @@ def _properties(value: Any) -> Any:
 def preflight[T](
     account: dict[str, Any],
     profile: dict[str, Any],
-    inventory: dict[str, Any],
+    inventory: bytes,
     plan: dict[str, Any],
     register: Callable[[], T],
+    *,
+    envelope: bytes,
+    commit: str,
 ) -> T:
-    audit(account, profile, inventory, plan)
+    account, profile, plan = deepcopy((account, profile, plan))
+    observed = validate_inventory_evidence(account, profile, inventory, envelope, commit=commit)
+    audit(account, profile, observed, plan)
     return register()
 
 

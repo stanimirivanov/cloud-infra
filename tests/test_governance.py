@@ -314,11 +314,25 @@ def test_unknown_shape_values_and_cycling_fail(evidence):
         evaluate(evidence)
 
 
-def test_preflight_failure_prevents_resource_registration(evidence):
+def test_preflight_failure_prevents_resource_registration(evidence, monkeypatch):
+    from infra_core.inventory_evidence import capture_inventory, validate_inventory_evidence
+
     evidence[0]["verified"] = False
+    payload, envelope = capture_inventory(*evidence[:3], commit="a" * 40, now=NOW)
+    monkeypatch.setattr(
+        "infra_program.governance.validate_inventory_evidence",
+        lambda *args, **kw: validate_inventory_evidence(*args, **kw, now=NOW),
+    )
     registered = []
     with pytest.raises(GovernanceError, match="GOV005"):
-        preflight(*evidence, lambda: registered.append(True))
+        preflight(
+            *evidence[:2],
+            payload,
+            evidence[3],
+            lambda: registered.append(True),
+            envelope=envelope,
+            commit="a" * 40,
+        )
     assert registered == []
 
 
@@ -362,7 +376,24 @@ def test_cross_region_and_monthly_account_mismatch_fail(evidence):
 def test_preflight_success_calls_registration_only_after_audit(evidence, monkeypatch):
     # Production clock remains real; inject a deterministic clock at the pure boundary.
     monkeypatch.setattr("infra_program.governance.audit", lambda *args: audit(*args, now=NOW))
-    assert preflight(*evidence, lambda: "registered") == "registered"
+    from infra_core.inventory_evidence import capture_inventory, validate_inventory_evidence
+
+    payload, envelope = capture_inventory(*evidence[:3], commit="a" * 40, now=NOW)
+    monkeypatch.setattr(
+        "infra_program.governance.validate_inventory_evidence",
+        lambda *args, **kw: validate_inventory_evidence(*args, **kw, now=NOW),
+    )
+    assert (
+        preflight(
+            *evidence[:2],
+            payload,
+            evidence[3],
+            lambda: "registered",
+            envelope=envelope,
+            commit="a" * 40,
+        )
+        == "registered"
+    )
 
 
 def test_cli_reports_failed_audit_without_traceback(tmp_path, evidence, monkeypatch, capsys):

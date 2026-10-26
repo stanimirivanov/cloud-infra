@@ -158,8 +158,9 @@ transport/checkout failures, EVID001-EVID004 shared checks, GOV040 sanitized col
 infra_core.inventory_evidence.capture_inventory preserves schema-2 observations;
 usage=null remains investigatory and cannot pass billing audit. Sidecars prove
 unsigned consistency, not authenticity, complete IAM visibility or deployment
-authority. Pure accounting, OCI component preflight and cutover still accept
-dictionaries until explicit consumer migrations. Operations stay disabled. Rollback
+authority. The [OCI library preflight](oci-components.md#bound-inventory-at-registration-m03-pr11)
+now requires the same bytes/sidecar with independent expected commit. Pure accounting
+and cutover still accept dictionaries pending migration. Operations stay disabled. Rollback
 needs compatible code/contracts and weakens transport checks without granting authority.
 
 ## Proposal and accounting contracts
