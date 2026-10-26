@@ -11,6 +11,7 @@ def usage_coverage(
     evidence: dict[str, Any],
     metrics: set[str],
     now: datetime,
+    period: dict[str, str] | None,
 ) -> tuple[dict[str, Decimal], dict[str, dict[str, str]]]:
     start = timestamp(evidence["collection_started_at"], "service collection start")
     end = timestamp(evidence["collection_completed_at"], "service collection completion")
@@ -21,7 +22,6 @@ def usage_coverage(
         "service collection must be fresh, ordered and bound to observation",
     )
     usage = fields(evidence["usage"], metrics, "current target-scope usage")
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     values: dict[str, Decimal] = {}
     coverage: dict[str, dict[str, str]] = {}
     for metric in sorted(metrics):
@@ -42,9 +42,11 @@ def usage_coverage(
         if not gauge:
             beginning = timestamp(reading["covered_from"], "service metric window start")
             require(
-                beginning == month_start and beginning <= cutoff,
+                period is not None
+                and beginning == timestamp(period["starts_at"], "billing period start")
+                and beginning <= cutoff,
                 "EXT022",
-                "monthly metrics must cover the current UTC month from its start",
+                "cumulative metrics must cover the current billing cycle from its start",
             )
             coverage[metric]["covered_from"] = beginning.isoformat()
         values[metric] = number(reading["value"], "service metric value")

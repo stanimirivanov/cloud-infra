@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "provider": "supabase",
   "account_id": "REPLACE_WITH_USER_ID",
   "scope_id": "example-org",
   "scope_name": "example-org",
-  "profile_revision": 1,
+  "profile_revision": 2,
   "verified": false,
   "verified_at": "1970-01-01T00:00:00+00:00",
   "observed_at": "1970-01-01T00:00:00+00:00",
@@ -13,7 +13,6 @@
   "plan": "UNVERIFIED",
   "other_services_reviewed": false,
   "coverage": "UNVERIFIED",
-  "usage_month": "1970-01",
   "resources": [],
   "usage": {
     "egress_mb": {
@@ -37,5 +36,10 @@
     }
   },
   "collection_started_at": "1970-01-01T00:00:00+00:00",
-  "collection_completed_at": "1970-01-01T00:00:00+00:00"
+  "collection_completed_at": "1970-01-01T00:00:00+00:00",
+  "billing_period": {
+    "anchor_at": "1970-01-01T00:00:00+00:00",
+    "starts_at": "1970-01-01T00:00:00+00:00",
+    "ends_at": "1970-01-01T00:00:00+00:00"
+  }
 }
