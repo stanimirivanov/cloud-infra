@@ -106,7 +106,7 @@ def test_recomputed_hash_cannot_upgrade_invalid_json(service, payload):
 
 def test_recomputed_hash_cannot_upgrade_domain_or_legacy_evidence(service):
     _, envelope = pair(service)
-    for change in ({"complete": False}, {"schema_version": 1}):
+    for change in ({"complete": False}, *({"schema_version": v} for v in (1, 2, 3))):
         payload = json.dumps(service[1] | change).encode()
         with pytest.raises(GovernanceError):
             check(service, payload, rehash(envelope, payload))
@@ -173,3 +173,50 @@ def test_cli_requires_pair_and_stable_commit(service, tmp_path, monkeypatch, cap
     monkeypatch.setattr(se, "reviewed_commit", lambda root: COMMIT)
     assert cli.main(args) == 1
     assert "EXT023" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("service", ["supabase"], indirect=True)
+@pytest.mark.parametrize("change", ["missing", "stale", "overage", "unquoted-fraction"])
+def test_cli_rejects_invalid_history_even_with_a_matching_payload_hash(
+    service, tmp_path, monkeypatch, capsys, change
+):
+    _, envelope = pair(service)
+    config, evidence, _ = service
+    if change == "missing":
+        evidence["usage"].pop("storage_gb_hours")
+        code = "GOV003"
+    elif change == "stale":
+        evidence["usage"]["storage_gb_hours"]["covered_through"] = (
+            datetime.now(UTC) - timedelta(hours=1)
+        ).isoformat()
+        code = "EXT022"
+    elif change == "unquoted-fraction":
+        evidence["usage"]["storage_gb_hours"]["value"] = "UNQUOTED"
+        code = "GOV001"
+    else:
+        evidence["usage"]["storage_gb_hours"]["value"] = 745
+        code = "EXT021"
+    proposal, path = tmp_path / "proposal.json", tmp_path / "usage.json"
+    proposal.write_text(json.dumps(config))
+    payload = json.dumps(evidence).encode()
+    if change == "unquoted-fraction":
+        payload = payload.replace(b'"UNQUOTED"', b"744.00000000000000000000000000001")
+    path.write_bytes(payload)
+    path.with_name(path.name + ".envelope.json").write_bytes(rehash(envelope, payload))
+    monkeypatch.setattr(se, "reviewed_commit", lambda root: COMMIT)
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(fixtures.ROOT),
+                "services",
+                "audit",
+                "--config",
+                str(proposal),
+                "--evidence",
+                str(path),
+            ]
+        )
+        == 1
+    )
+    assert code in capsys.readouterr().err

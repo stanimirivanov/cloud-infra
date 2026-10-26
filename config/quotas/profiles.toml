@@ -32,13 +32,13 @@ max_resources = 200
 usage_limits = {}
 [profiles.supabase-free]
 id = "supabase-free"
-revision = 2
+revision = 3
 provider = "supabase"
 enabled = true
 reviewed_at = "2026-10-25T00:00:00+00:00"
 source = "https://supabase.com/docs/guides/platform/billing-on-supabase"
 max_resources = 2
-usage_limits = { egress_mb = 5000, cached_egress_mb = 5000, storage_mb = 1000, mau = 50000 }
+usage_limits = { egress_mb = 5000, cached_egress_mb = 5000, storage_mb = 1000, storage_gb_hours = 744, mau = 50000 }
 [profiles.aws-free]
 id = "aws-free"
 provider = "aws"

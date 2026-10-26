@@ -54,7 +54,7 @@ account/commit expectations, exact-byte transport and strict migration. Other
 consumers remain on their existing contracts until their own migration PRs.
 
 The [service CLI handoff](independent-services.md#cli-evidence-sidecars-m03-pr11-transport-slice)
-uses service-usage sidecars over original schema-3 service payloads, with independently
+uses service-usage sidecars over original schema-4 service payloads, with independently
 reviewed proposal/profile and commit binding. Both Pulumi factories now require
 that same immutable payload/sidecar contract before effects, with a caller-supplied
 independent expected commit. Pure service accounting still accepts dictionaries;
