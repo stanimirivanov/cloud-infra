@@ -73,6 +73,8 @@ def repository_state(root: Path) -> tuple[str, bool]:
 
 def check(root: Path, document: object, *, now: datetime | None = None) -> dict[str, Any]:
     # The transport adapter imports repository_state; defer this import to avoid a cycle.
+    from infra_core.administration import MAX_BYTES as MAX_ADMIN_BYTES
+    from infra_core.administration import validate_snapshot
     from infra_core.inventory_evidence import validate_inventory_evidence
 
     now = now or datetime.now(UTC)
@@ -101,7 +103,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "evidence must bind to the exact clean committed checkout",
     )
     require(
-        type(data["schema_version"]) is int and data["schema_version"] == 4,
+        type(data["schema_version"]) is int and data["schema_version"] == 5,
         "CUT001",
         "unsupported cutover evidence schema",
     )
@@ -133,6 +135,8 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         limit = MAX_ARTIFACT_BYTES
         if role in SIGNATURES:
             limit = MAX_SIGNATURE_BYTES
+        elif role == "administration":
+            limit = MAX_ADMIN_BYTES
         elif role in SIDECARS | {"inventory_envelope"}:
             limit = MAX_ENVELOPE_BYTES
         with path.open("rb") as stream:
@@ -176,6 +180,19 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
     )
     subjects["reviewer_policy"] = policy_bytes
     reviewers = parse_policy(policy_bytes)
+    try:
+        with (root / "config/administration.json").open("rb") as stream:
+            administrative_policy = stream.read(MAX_ADMIN_BYTES + 1)
+    except OSError:
+        raise ValueError("CUT011: administrative policy unavailable") from None
+    require(
+        len(administrative_policy) <= MAX_ADMIN_BYTES
+        and total + len(quota_bytes) + len(policy_bytes) + len(administrative_policy)
+        <= MAX_TOTAL_BYTES,
+        "CUT002",
+        "administrative policy exceeds the review capture budget",
+    )
+    subjects["administrative_policy"] = administrative_policy
 
     def read(role: str) -> Any:
         return json.loads(captured[role].decode("utf-8"))
@@ -397,6 +414,13 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT007",
             "all required health/admission/recovery review checks must be evidenced",
         )
+    validate_snapshot(
+        captured["administration"],
+        policy=administrative_policy,
+        reviewer_policy=policy_bytes,
+        commit=commit,
+        now=now,
+    )
     require(
         repository_state(root) == (commit, True),
         "CUT001",
@@ -410,7 +434,8 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "cutover_authorized": False,
         "remaining_gates": [
             "reviewed separate-stack orchestration",
-            "independent reviewer-key enrollment/custody and administrative protections",
+            "independent reviewer-key enrollment/custody and protected commit provenance",
+            "environment administrator bypass independently verified",
             "protected operational approval",
             "explicit human cutover instruction",
         ],

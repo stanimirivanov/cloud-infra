@@ -173,11 +173,11 @@ bytes. The checkout is checked again at completion. If a private file changes
 after capture, the result describes the captured snapshot; a subsequent check
 against the old index fails. Revalidate evidence before any future operation.
 
-**Breaking schema migration:** the bundle is now schema 4 with twenty-one mandatory
+**Breaking schema migration:** the bundle is now schema 5 with twenty-two mandatory
 roles. inventory_envelope references the original OCI collector sidecar, normally
 .infra/inventory.json.envelope.json; inventory references the corresponding original
 payload. Both paths/digests are pinned explicitly and must use distinct files.
-Schema-1/2/3 bundles and missing sidecars fail closed; recollect current observations
+Schema-1/2/3/4 bundles and missing sidecars fail closed; recollect current observations
 and review a new index rather than restamping old data or merely changing a version.
 The public example deliberately retains empty identities, clocks and digests.
 
@@ -198,8 +198,8 @@ The shared unsigned transport reuses the existing in-toto-style contract without
 an additional transport dependency; the signature layer below uses PyCA cryptography.
 Backend receipt, Kubernetes and operator report payload schemas below are unchanged.
 Service billing history is modeled separately. Configured-key authentication is
-required below; independent enrollment/custody and M03-PR12 administrative binding
-remain pending. Rollback requires compatible
+required below; independent enrollment/custody and protected-commit provenance
+remain pending. Administrative snapshot/policy binding is mandatory below. Rollback requires compatible
 code/contracts and weakens inventory/review transport
 checks; it never grants authority or upgrades historical evidence.
 
@@ -217,13 +217,15 @@ OCI config, Kubernetes config and both inventories must agree on identity/versio
 
 ### Exact review-input bindings (M03-PR12 consistency slice)
 
-Schema 4 retains ownership_envelope, preview_envelope, health_envelope
+Schema 5 retains ownership_envelope, preview_envelope, health_envelope
 and rollback_envelope, each a distinct private JSON file with an explicit index hash.
 The public example supplies names only; identities, clocks and hashes stay empty.
-Each cutover-review envelope binds fifteen named subjects: all original thirteen
+Each cutover-review envelope binds seventeen named subjects: all fourteen
 artifact roles (including the OCI inventory envelope and all four report payloads),
-plus quota_profiles and reviewer_policy, the exact bytes of tracked
-config/quotas/profiles.toml and config/cutover-reviewers.toml. The four review
+plus quota_profiles, reviewer_policy and administrative_policy, the exact bytes of
+tracked config/quotas/profiles.toml, config/cutover-reviewers.toml and
+config/administration.json. The administration role contains the original private
+schema-2 main/environment observation snapshot. The four review
 envelopes and four DSSE signature artifacts are excluded from subjects
 to avoid cycles. Finalize the reports and their actual reviewed inputs before
 creating these sidecars. Changing any subject, even formatting or an unrelated quota
@@ -247,26 +249,28 @@ rewriting or wrapping a report cannot refresh its observation. A longer rollback
 does not permit substituting newer input bytes; review the actual new set again.
 Reports must be strict JSON objects without duplicate keys or nonfinite constants.
 CUT008 covers report parsing/clock equality; EVID001-EVID004 cover envelope bindings.
-All fifteen subjects share the existing 16 MiB aggregate limit, including the tracked
+All seventeen subjects share the existing 16 MiB aggregate limit, including the tracked
 profile/policy snapshots; subjects remain bounded at 10 MiB, reviewer policy and
-review envelopes at 64 KiB, and DSSE signature files at 96 KiB.
+review envelopes at 64 KiB, administrative snapshot/policy at 1 MiB each, and
+DSSE signature files at 96 KiB. The shared envelope count bound is exactly 17;
+18 subjects fail, and consumer role sets remain closed.
 Profiles, payloads and sidecars are captured before validation and never reopened.
 
 This adapts the existing Apache-2.0
 [in-toto Statement subject-set pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
 through a small top-level adapter, with no new dependency or external code copying.
 Names and roles are significant here. Bare sidecars remain unsigned consistency;
-schema 4 additionally authenticates them against configured reviewer keys below.
+schema 5 additionally authenticates them against configured reviewer keys below.
 Neither mechanism proves source truth, causal provenance or administrative approval.
 No result grants operational authority.
 **Migration:** obtain actual current reviews and matching sidecars, then build a fresh
-schema-4 index with all four signature artifacts. Do not restamp old reports or just
+schema-5 index with all four signature artifacts. Do not restamp old reports or just
 update version numbers. Rollback
 requires compatible checker/contracts and reviewed evidence together, never activation.
 
 ### Configured reviewer-key authentication (M03-PR12 signature slice)
 
-**BREAKING:** schema 4 also requires ownership_signature, preview_signature,
+**BREAKING:** schema 5 also requires ownership_signature, preview_signature,
 health_signature and rollback_signature. Each private JSON file is a DSSE envelope
 with payloadType=application/vnd.in-toto+json, payload=Base64 of the exact corresponding
 review-envelope bytes, and exactly one signatures entry containing sig (Base64 of a
@@ -292,7 +296,7 @@ unauthenticated and never selects identity or authority. Unknown keys, forged or
 replayed bytes, wrong type, disabled/ambiguous policies and mismatched principals fail
 CUT009/CUT010 without printing key material or untrusted values.
 
-Any policy/key/role change invalidates prior review bindings. Finalize the fifteen
+Any policy/key/role change invalidates prior review bindings. Finalize the seventeen
 actual subjects, capture all role envelopes, obtain external DSSE signatures, and
 build a new index with hashes for every distinct file. Removing a key revokes it for
 checks against the current policy. The current clean Git checkout is the trust root:
@@ -301,7 +305,8 @@ key custody or that the checkout came from protected main. Independent enrollmen
 protected-branch provenance and administrative evidence remain required. Both
 operational authorization flags stay false, including after successful verification.
 The [administrative sensor](github-administration.md) checks classic main
-settings separately; its unsigned snapshot is not yet a cutover subject or approval.
+settings separately; schema 5 now requires that snapshot as a signed subject,
+without treating it as GitHub attestation or approval.
 
 The verifier adapts the Apache-2.0 [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md)
 and JSON shape, with the single-signature/Ed25519 profile explicitly restricted here.
@@ -312,6 +317,28 @@ CFFI dependencies to a minimal environment. No unrelated packages are upgraded a
 no external DSSE implementation, signing framework or network trust client is added.
 The fitness sensor permits only the public-key verification primitive and its two
 exceptions in infra_core.review_signatures; pure domains retain their import rules.
+
+### Administrative observation consumption (M03-PR12)
+
+The mandatory administration artifact pins a distinct private JSON file, normally
+.infra/administration.json. Its original schema-2 bytes and the tracked
+config/administration.json bytes join every role's signed subject set. Recollect
+with the [administrative sensor](github-administration.md) at the actual clean main
+commit; finalize subjects, review envelopes, external signatures and a schema-5
+index together. Missing, stale, unsafe, wrong-commit or wrong-policy observations
+fail even with fresh valid review signatures. Rehashing only the index cannot
+rebind any review to different administrative bytes.
+
+After authenticating all four reviews, cutover passes the already captured snapshot,
+administrative policy and reviewer policy bytes to
+infra_core.administration.validate_snapshot with the independent clean commit and
+review clock. The validator performs no Git, file access, source collection or gh
+calls. Both policy hashes and existing main/environment rules are required. CUT011
+covers unavailable administrative policy; ADMIN diagnostics retain their meanings.
+Signing these bytes authenticates the configured key holders' review, not the
+GitHub server, source truth, human independence or protected-commit history.
+Independent reviewer-key enrollment/custody, environment administrator bypass and
+protected-commit provenance remain mandatory; both authorization flags stay false.
 
 The ownership/preview/health/rollback reports share these exact header fields:
 commit, account_id, cluster_id, region, observed_at, source and reviewed_by.

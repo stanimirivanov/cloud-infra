@@ -12,7 +12,7 @@ from infra_core.governance.contracts import require
 REPORTS = frozenset({"ownership", "preview", "health", "rollback"})
 SIDECARS = frozenset(role + "_envelope" for role in REPORTS)
 SIGNATURES = frozenset(role + "_signature" for role in REPORTS)
-TRUSTED_INPUTS = frozenset({"quota_profiles", "reviewer_policy"})
+TRUSTED_INPUTS = frozenset({"quota_profiles", "reviewer_policy", "administrative_policy"})
 SUBJECTS = frozenset(
     {
         "backend_receipt",
@@ -30,6 +30,8 @@ SUBJECTS = frozenset(
         "rollback",
         "quota_profiles",
         "reviewer_policy",
+        "administrative_policy",
+        "administration",
     }
 )
 

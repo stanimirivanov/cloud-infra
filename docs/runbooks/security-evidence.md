@@ -27,7 +27,7 @@ collection_started_at/collection_completed_at ISO timestamps; it never restamps.
 - Scope requires exact account_id, region, unit, commit and configuration_sha256.
   Commit is 40/64 lowercase hex; configuration digest is 64 lowercase hex. Other
   scope and producer labels are bounded identifiers; no empty/wildcard scope.
-- Limits: 64 KiB envelope, 1-16 subjects, 10 MiB per artifact, 16 MiB aggregate.
+- Limits: 64 KiB envelope, 1-17 subjects, 10 MiB per artifact, 16 MiB aggregate.
   Duplicate JSON fields, nonfinite constants, invalid UTF-8 and excessive nesting fail.
 - The consumer supplies expected kind, full subject set, scope, clock and TTL from
   its own policy. Freshness measures collection start; start <= end <= now. Usage
@@ -54,7 +54,7 @@ account/commit expectations, exact-byte transport and strict migration. Other
 consumers remain on their existing contracts until their own migration PRs.
 
 The [service CLI handoff](independent-services.md#cli-evidence-sidecars-m03-pr11-transport-slice)
-uses service-usage sidecars over original schema-4 service payloads, with independently
+uses service-usage sidecars over original schema-5 service payloads, with independently
 reviewed proposal/profile and commit binding. Both Pulumi factories now require
 that same immutable payload/sidecar contract before effects, with a caller-supplied
 independent expected commit. Pure service accounting still accepts dictionaries;
@@ -64,11 +64,13 @@ The [OCI handoff](free-tier-governance.md#oci-inventory-sidecars-m03-pr11-cli-sl
 now binds collection/audit to original inventory bytes and account/profile/clean
 HEAD. Both OCI library gates require that same payload/sidecar with an independently
 supplied expected commit before callbacks or resource registration; library calls
-do not discover Git. Pure accounting retains dictionaries. The schema-4
+do not discover Git. Pure accounting retains dictionaries. The schema-5
 [cutover bundle](kubernetes-cutover.md#commit-bound-cutover-evidence) now requires
 and validates an explicit inventory_envelope role from the same hashed snapshot;
 four role-specific cutover-review sidecars now bind the entire captured review set
-and tracked quota/reviewer-policy bytes. Four mandatory DSSE/Ed25519 signature
+and tracked quota/reviewer/administrative-policy bytes, including the original
+private schema-2 administrative snapshot. Administrative semantics are recomputed
+from that same immutable snapshot; no GitHub collection or file reopen occurs. Four mandatory DSSE/Ed25519 signature
 artifacts authenticate role-authorized keys against the disabled-by-default repository
 policy. Enrollment/custody, administrative provenance and other evidence consumers
 remain separate work; no signature grants operational authority.
