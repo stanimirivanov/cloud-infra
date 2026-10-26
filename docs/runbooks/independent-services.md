@@ -4,7 +4,8 @@ This library adds offline service preflight and protected Pulumi components. It
 does not activate deployments. `config/pulumi.toml` identities remain disabled;
 the normal program, `infra preview --unit NAME` and `infra deploy --unit NAME` still reject provisioning.
 There is no Terraform adoption, OCI output dependency, Kubernetes integration,
-DNS zone creation, SQL migration, token lookup or cloud API collector here.
+DNS zone creation, SQL migration or cloud API collector here. Configuration lookup
+is explicit through the library factory described below.
 
 ## Ownership and map
 
@@ -111,13 +112,47 @@ guarantee or production readiness is implied by a passing offline audit.
 
 ## SDK and secret boundary
 
-`register_services(config, evidence, profile, token, passwords)` is the sole
-composition function. It deep-copies inputs, completes preflight and checks secret
-input structure **before** registering any provider or component. Pass explicit
-Pulumi `Output[str]` values; use `Config.require_secret` in a future reviewed entry
-point. One password Output is required per project, keyed by proposal `key`;
-Cloudflare accepts none. The adapter marks tokens/passwords secret regardless of
+`register_services(config, evidence, profile, token, passwords)` remains the
+resource composition function with its existing call signature. It deep-copies
+inputs, completes preflight and checks secret input structure **before** registering any provider or component. Pass explicit
+Pulumi `Output[str]` values, or use the configuration-backed wrapper below. One
+password Output is required per project, keyed by proposal `key`; Cloudflare accepts
+none. The adapter marks tokens/passwords secret regardless of
 the caller's existing secret flag. It never exports passwords or service-role keys.
+
+`register_services_from_config(config, evidence, profile)` freezes and audits the
+three input documents before creating `pulumi.Config(unit)` and reading secrets.
+It reads all required keys synchronously with `require_secret()` before delegating
+to the existing composition path, which rechecks frozen evidence immediately
+before registration. A missing token or any project password registers nothing.
+This is a library factory; it does not activate the normal program or select/init a
+stack, verify credentials-to-account ownership, or enable preview/deploy.
+
+| Unit namespace | Required Pulumi config keys |
+| --- | --- |
+| cloudflare-edge | `token` |
+| supabase-database | `token`; `databasePassword-<key>` for every proposed project key |
+
+For example, project key app uses supabase-database:databasePassword-app. No
+provider-specific ambient token fallback is added. The Pulumi runtime supplies
+Config values (including its supported environment mechanisms); the factory does
+not read provider environment variables or accept secrets in proposal JSON.
+
+For a **separately approved future stack**, enter credentials interactively with
+`pulumi config set --secret cloudflare-edge:token --stack cloudflare-edge`, or the
+corresponding Supabase token/password keys. Omitting the value prompts for input;
+do not put secret literals in shell history, command arguments, proposals or logs.
+No such stack is initialized by this release. Keep even encrypted stack config
+outside tracked source under the repository's existing private-artifact policy.
+
+`require_secret()` marks the Output secret; it does not establish that its input
+was encrypted on disk. An operator must use encrypted config entry and verify the
+selected stack's passphrase provider. Output injection also preserves its prior
+behavior: the adapter explicitly marks injected Outputs secret. Tests exercise
+both paths through actual SDK serialization; they do not prove real provider log
+redaction, credential validity, state encryption for a deployed service, or IAM.
+See [encryption custody and migration](pulumi-backend.md#explicit-encryption-policy-and-custody)
+for the schema-v2 policy, recovery and rotation prerequisites.
 
 Providers use fixed HTTPS endpoints; every native child has an explicit provider,
 parent and `protect=True`. Protection blocks deletion/replacement until an explicit

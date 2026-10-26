@@ -71,6 +71,11 @@ class FoundationConfig:
     pulumi_version: str
     qualification_ttl_hours: int
     units: tuple[DeploymentUnit, ...]
+    secrets_provider: str
+
+    def __post_init__(self) -> None:
+        if self.secrets_provider != "passphrase":
+            raise ValueError("SECRET001: only explicit passphrase encryption is supported")
 
     @property
     def digest(self) -> str:
@@ -84,12 +89,14 @@ def load_foundation(root: Path) -> FoundationConfig:
         "schema_version",
         "pulumi_version",
         "qualification_ttl_hours",
+        "secrets_provider",
         "backend",
         "units",
     }:
         raise ValueError("unexpected/missing foundation configuration fields")
     if (
-        data["schema_version"] != 1
+        type(data["schema_version"]) is not int
+        or data["schema_version"] != 2
         or not isinstance(data["pulumi_version"], str)
         or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", data["pulumi_version"])
     ):
@@ -113,7 +120,11 @@ def load_foundation(root: Path) -> FoundationConfig:
     if not units or len({unit.stack for unit in units}) != len(units):
         raise ValueError("deployment stack identities must be nonempty and distinct")
     return FoundationConfig(
-        BackendConfig(**backend_data), data["pulumi_version"], ttl, tuple(units)
+        BackendConfig(**backend_data),
+        data["pulumi_version"],
+        ttl,
+        tuple(units),
+        data["secrets_provider"],
     )
 
 

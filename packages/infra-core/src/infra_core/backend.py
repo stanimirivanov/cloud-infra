@@ -181,7 +181,9 @@ def qualify(
         if actual_version != config.pulumi_version:
             raise QualificationError("install the exact configured Pulumi CLI version")
         session.run("login", ["login", backend])
-        session.run("initialize", ["stack", "init", stack, "--secrets-provider", "passphrase"])
+        session.run(
+            "initialize", ["stack", "init", stack, "--secrets-provider", config.secrets_provider]
+        )
         complete = False
         try:
             sentinel = "qualification-only-" + secrets.token_hex(24)
@@ -209,7 +211,7 @@ def qualify(
             backup = work / "encrypted-checkpoint.json"
             backup.write_text(checkpoint, encoding="utf-8")
             recovery = _rehearse_recovery(
-                session, work, env, backend, stack, backup, sentinel, exported_at
+                session, work, env, backend, stack, backup, sentinel, exported_at, config=config
             )
             complete = True
         finally:
@@ -246,6 +248,8 @@ def _rehearse_recovery(
     backup: Path,
     sentinel: str,
     exported_at: float,
+    *,
+    config: FoundationConfig,
 ) -> dict[str, Any]:
     if not re.fullmatch(r"qualification-[a-f0-9]{32}", stack):
         raise QualificationError("recovery is limited to a generated qualification stack")
@@ -260,7 +264,8 @@ def _rehearse_recovery(
     independent = PulumiSession(recovered, env | {"PULUMI_HOME": str(work / "recovery-home")})
     independent.run("recovery-login", ["login", backend])
     independent.run(
-        "recovery-initialize", ["stack", "init", stack, "--secrets-provider", "passphrase"]
+        "recovery-initialize",
+        ["stack", "init", stack, "--secrets-provider", config.secrets_provider],
     )
     (recovered / f"Pulumi.{stack}.yaml").write_bytes(encrypted_config)
     independent.run("restore", ["stack", "import", "--file", str(backup), "--stack", stack])

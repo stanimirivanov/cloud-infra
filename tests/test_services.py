@@ -308,7 +308,8 @@ def test_cli_audits_same_proposal_and_fails_closed(service, tmp_path, capsys):
     assert "GOV003" in capsys.readouterr().err
 
 
-def test_actual_sdks_emit_only_audited_protected_secret_resources(service, tmp_path):
+@pytest.mark.parametrize("ingestion", ["outputs", "configuration"])
+def test_actual_sdks_emit_only_audited_protected_secret_resources(service, tmp_path, ingestion):
     data = tmp_path / "data.json"
     data.write_text(json.dumps(service))
     script = tmp_path / "mock_services.py"
@@ -322,9 +323,12 @@ import pulumi
 from pulumi.runtime import rpc
 from pulumi.runtime.settings import get_monitor
 from infra_program.services.components import register_services, Services
+from infra_program.services.configuration import register_services_from_config
+from pulumi.runtime.config import set_all_config
 from infra_program.governance import validate_resource
 
 config, evidence, profile = json.load(open(sys.argv[1]))
+ingestion = sys.argv[2]
 observed = {}
 class Offline(pulumi.runtime.Mocks):
     def new_resource(self, args):
@@ -365,6 +369,37 @@ with patch.object(pulumi.ComponentResource, '__init__', side_effect=AssertionErr
             raise AssertionError('invalid secret inputs passed')
         except ValueError as error:
             assert 'EXT031' in str(error)
+values = {config['unit'] + ':token': 'synthetic-token'}
+if config['provider'] == 'supabase':
+    values[config['unit'] + ':databasePassword-app'] = 'synthetic-password'
+with patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early')):
+    with patch.object(pulumi.Config, 'require_secret', side_effect=AssertionError('early lookup')):
+        try:
+            register_services_from_config(config, dict(evidence, complete=False), profile)
+            raise AssertionError('invalid evidence passed')
+        except ValueError as error:
+            assert 'EXT003' in str(error)
+    for missing in values:
+        remaining = {key: value for key, value in values.items() if key != missing}
+        set_all_config(remaining, secret_keys=list(remaining))
+        try:
+            register_services_from_config(config, evidence, profile)
+            raise AssertionError('missing config passed')
+        except pulumi.ConfigMissingError as error:
+            assert missing in str(error)
+            assert 'synthetic-token' not in str(error)
+            assert 'synthetic-password' not in str(error)
+    if config['provider'] == 'supabase':
+        set_all_config(values, secret_keys=list(values))
+        second = json.loads(json.dumps(config['resources'][0]))
+        second['key'], second['props']['name'] = 'other', 'other-db'
+        try:
+            register_services_from_config(
+                dict(config, resources=config['resources'] + [second]), evidence, profile)
+            raise AssertionError('last missing project password passed')
+        except pulumi.ConfigMissingError as error:
+            assert config['unit'] + ':databasePassword-other' in str(error)
+set_all_config(values, secret_keys=list(values))
 real_init = pulumi.Resource.__init__
 options = []
 def record(self, typ, name, custom, props=None, opts=None, *args, **kwargs):
@@ -372,7 +407,9 @@ def record(self, typ, name, custom, props=None, opts=None, *args, **kwargs):
     options.append((typ, opts))
     return real_init(self, typ, name, custom, props, opts, *args, **kwargs)
 with patch.object(pulumi.Resource, '__init__', record):
-    component = register_services(config, evidence, profile, token, passwords)
+    component = (register_services_from_config(config, evidence, profile)
+                 if ingestion == 'configuration'
+                 else register_services(config, evidence, profile, token, passwords))
 
 @pulumi.runtime.test
 def verify():
@@ -382,6 +419,10 @@ def verify():
         item = config['resources'][0]
         args = observed[config['unit'] + '-app']
         actual = dict(args.inputs)
+        provider_inputs = observed[config['unit'] + '-provider'].inputs
+        field = 'accessToken' if config['provider'] == 'supabase' else 'apiToken'
+        assert rpc.is_rpc_secret(provider_inputs[field])
+        assert rpc.unwrap_rpc_secret(provider_inputs[field]) == 'synthetic-token'
         if config['provider'] == 'supabase':
             password = actual.pop('databasePassword')
             assert rpc.is_rpc_secret(password)
@@ -423,7 +464,7 @@ verify()
         if not key.upper().startswith(("PULUMI_", "OCI_", "AWS_", "SUPABASE_", "CLOUDFLARE_"))
     }
     result = subprocess.run(
-        [sys.executable, str(script), str(data)],
+        [sys.executable, str(script), str(data), ingestion],
         cwd=tmp_path,
         env=env,
         capture_output=True,
@@ -433,3 +474,5 @@ verify()
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["resources"] == 3
+    assert "synthetic-token" not in result.stdout + result.stderr
+    assert "synthetic-password" not in result.stdout + result.stderr

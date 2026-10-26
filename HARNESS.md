@@ -168,7 +168,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #37 (the M03-PR6 foundation):
+stay disabled. Status through issue #39 (M03-PR7 secret contracts):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -176,8 +176,8 @@ stay disabled. Status through issue #37 (the M03-PR6 foundation):
 | PR2: secret scanning | #31: current, staged and reachable history; no exceptions/baseline supported |
 | PR3-PR5: legacy ingress/capacity/image changes | Superseded by retirement in #27; live adoption checks still required |
 | PR6: shared evidence envelopes | #37: unsigned exact-byte/scope/clock sidecars; consumer migrations remain pending |
-| PR7: secret ingestion/encryption contracts | Pending |
-| PR8: independent recovery | #33 implements rehearsal/measurements; review remaining PR7 custody and wrong-passphrase acceptance |
+| PR7: secret ingestion/encryption contracts | #39: explicit passphrase policy, config-backed secret factory and custody/migration guidance |
+| PR8: independent recovery | #33 implements rehearsal/measurements; custody guidance in #39; wrong-passphrase acceptance remains pending |
 | PR9: backend posture | #33 implements read-only collection/checks; shared envelope migration pending PR6 |
 | PR10: protected backend audit workflow | Pending; #33's manual posture-secret handoff does not implement it |
 | PR11: usage coverage | #33 covers OCI; service usage and envelope migration remain pending |

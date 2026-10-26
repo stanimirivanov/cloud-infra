@@ -18,6 +18,51 @@ The tool performs real checkpoint operations only in that generated namespace. I
 creates no bucket, IAM policy, provider resource, compute instance or database.
 Never use qualification tooling against an adopted resource stack.
 
+## Explicit encryption policy and custody
+
+Foundation schema 2 requires `secrets_provider = "passphrase"`. Other providers,
+implicit defaults and schema 1 fail closed; no KMS/Vault service is provisioned.
+Both synthetic initial and recovery stack initialization use this reviewed policy.
+Backend bucket/prefix/region, disabled units and receipt schema 2 stay unchanged.
+
+**Migration:** the new policy is included in the configuration digest. Old
+qualification receipts and backend-posture documents therefore fail binding even
+if their timestamps/check lists remain current. Collect new posture and explicitly
+requalify; never edit digests or restamp old evidence. No stack re-encryption or
+production migration is performed by updating this file. Existing future stacks
+must separately prove their actual encryption provider; declaring policy is not
+proof of external stack settings. Reverting schema/policy also requires compatible
+code and fresh evidence; never reuse a receipt merely because a digest reappears.
+
+A designated operator owns passphrase custody and a second reviewer owns recovery
+acceptance before activation. Use a cryptographically random passphrase stored in
+a controlled password manager; the qualification workflow retains its minimum
+20-character check. Keep an access-controlled recovery copy separate from encrypted
+checkpoint and stack-config backups, with named recovery holders and tested access.
+No actual holders or production custody arrangements are attested by this PR.
+
+Expose the passphrase only to the protected operation that needs decryption;
+never save it in public config, command arguments, source or CI artifacts. Protected
+workflow environment injection is the current handoff, not an encryption service.
+Local qualification generates a disposable random passphrase. Encrypted checkpoints
+still expose nonsecret metadata, and a leaked passphrase plus ciphertext can reveal
+secrets. `require_secret()`/secret Outputs cannot repair plaintext source files.
+
+Passphrase rotation is a separate operational change: freeze writers, preserve
+reviewed encrypted backups and old-key recovery access, re-encrypt config and state
+with the approved provider, rehearse restore and verify previews before retiring
+old custody. Never silently replace an environment passphrase for an existing stack.
+Provider-token revocation and database-password rotation are distinct operations:
+review their consumers/impact, update encrypted config, verify approved operations,
+then revoke old credentials. This factory performs none of these live changes.
+Independent recovery qualification uses synthetic data and is not production DR.
+
+The [Pulumi secrets model](https://www.pulumi.com/docs/iac/concepts/secrets/)
+and [interactive encrypted config entry](https://www.pulumi.com/docs/iac/cli/commands/pulumi_config_set/)
+are adapted using the already locked Apache-2.0 Pulumi SDK; no new dependency or
+managed service is added. Managed encryption and authenticated production key
+lifecycle remain separate architecture/operations decisions.
+
 ## Local and protected checks
 
 From the checkout, with the configured Pulumi CLI on PATH:

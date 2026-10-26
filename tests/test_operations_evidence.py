@@ -105,7 +105,7 @@ def test_receipt_measurements_are_bounded_known_numbers(config, key, value):
         backend.validate_receipt(config, evidence)
 
 
-def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypatch):
+def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypatch, config):
     stack = "qualification-" + "a" * 32
     for name in ("Pulumi.yaml", "__main__.py", f"Pulumi.{stack}.yaml"):
         (tmp_path / name).write_text("encrypted fixture")
@@ -134,6 +134,7 @@ def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypa
         backup,
         "synthetic-secret",
         time.perf_counter(),
+        config=config,
     )
     assert (
         sessions[1].cwd != original.cwd
@@ -146,11 +147,20 @@ def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypa
         "restore",
         "readback",
     ]
+    assert events[2][1][-2:] == ["--secrets-provider", config.secrets_provider]
     assert metrics["checkpoint_bytes"] == backup.stat().st_size
     assert metrics["restore_seconds"] > 0
     with pytest.raises(backend.QualificationError, match="generated"):
         backend._rehearse_recovery(
-            original, tmp_path, env, "file://synthetic", "production", backup, "secret", 0
+            original,
+            tmp_path,
+            env,
+            "file://synthetic",
+            "production",
+            backup,
+            "secret",
+            0,
+            config=config,
         )
 
 
