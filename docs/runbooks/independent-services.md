@@ -110,10 +110,10 @@ and 64 KiB sidecar. EVID001-EVID004 and EXT023 omit private source values.
 This adapter reuses the Apache-2.0
 [in-toto Statement pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
 through the existing shared API, without dependencies. It is unsigned consistency,
-not source authenticity, billing eligibility or authorization. The pure audit and
-both Pulumi library factories retain their schema-2 dictionary interfaces in this
-slice; they do not yet require sidecars. Their explicit consumer migration remains
-M03 work. No service deployment entry point is enabled. Rollback requires matching
+not source authenticity, billing eligibility or authorization. The pure audit keeps
+its schema-2 dictionary interface; both library factories now require the same
+payload/sidecar contract (see below). No service deployment entry point is enabled.
+Rollback requires matching
 code/contracts and weakens CLI transport checks; it never grants deployment authority.
 
 ### Collection and usage coverage (M03-PR11 service slice)
@@ -153,7 +153,7 @@ The explicit window versus sample distinction adapts the Apache-2.0
 [OpenTelemetry metric data model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/)
 using existing stdlib/governance helpers. No telemetry dependency, OTLP interface,
 SDK collector or architecture exception is added. Source authenticity, shared
-OCI envelopes, service factory migration and complete billing-history models remain separate work.
+OCI envelopes and complete billing-history models remain separate work.
 
 **Migration:** standalone schema-1 evidence is rejected at the CLI and both
 factories before secret lookup or registration. Collect new evidence with actual
@@ -198,21 +198,41 @@ guarantee or production readiness is implied by a passing offline audit.
 
 ## SDK and secret boundary
 
-`register_services(config, evidence, profile, token, passwords)` remains the
-resource composition function with its existing call signature. It deep-copies
-inputs, completes preflight and checks secret input structure **before** registering any provider or component. Pass explicit
-Pulumi `Output[str]` values, or use the configuration-backed wrapper below. One
-password Output is required per project, keyed by proposal `key`; Cloudflare accepts
-none. The adapter marks tokens/passwords secret regardless of
-the caller's existing secret flag. It never exports passwords or service-role keys.
+**BREAKING library migration:** both service factories now require original
+schema-2 evidence bytes, immutable sidecar bytes and a mandatory expected commit.
+There is no dictionary fallback, optional binding, or automatic conversion. Only
+the pure accounting function infra_core.services.governance.audit keeps its
+existing dictionary interface. Use the same producer helper/contract as the CLI
+above, preserving exact payload bytes and original clocks.
 
-`register_services_from_config(config, evidence, profile)` freezes and audits the
-three input documents before creating `pulumi.Config(unit)` and reading secrets.
-It reads all required keys synchronously with `require_secret()` before delegating
-to the existing composition path, which rechecks frozen evidence immediately
-before registration. A missing token or any project password registers nothing.
-This is a library factory; it does not activate the normal program or select/init a
-stack, verify credentials-to-account ownership, or enable preview/deploy.
+`register_services(config, evidence, profile, token, passwords, *, envelope, commit)`
+is the sole resource composition function. config/profile remain reviewed
+configuration dictionaries; evidence/envelope must be bytes. It validates the
+complete bound observation and checks secret input structure **before** registering
+any provider or component. Pass explicit Pulumi Output[str] values, or use the
+configuration-backed wrapper below. One password Output is required per project,
+keyed by proposal key; Cloudflare accepts none. The adapter marks tokens/passwords
+secret regardless of the caller's existing secret flag and exports identities only.
+
+`register_services_from_config(config, evidence, profile, *, envelope, commit)`
+freezes the proposal/profile and validates immutable evidence/envelope bytes before
+creating pulumi.Config(unit). It resolves every required key through require_secret()
+then delegates the same frozen inputs/bytes/expected commit to composition, which
+rechecks freshness and binding immediately before registration. Missing any secret,
+failed binding or evidence expiring during lookup registers nothing. Mutating the
+caller's proposal/profile during lookup cannot change the frozen resource graph.
+
+For both factories, commit is an independently established clean reviewed checkout
+identity supplied by the caller; never copy it from the envelope. The factories
+perform no Git lookup and cannot prove that a caller supplied the running code's
+actual identity. A future approved program must establish that identity independently
+(as the CLI does), review the proposal/profile and bind its stack/backend before
+calling. Output injection necessarily happens outside the factory; the Config-backed
+path provides the guarantee that lookup follows preflight. Neither path activates
+the normal program, selects/initializes a stack, verifies credential ownership, nor
+enables preview/deploy. Sidecars remain unsigned, not deployment authority.
+Rollback needs compatible code/contracts and weakens pre-registration transport
+checks; it never grants authority or upgrades old observations.
 
 | Unit namespace | Required Pulumi config keys |
 | --- | --- |

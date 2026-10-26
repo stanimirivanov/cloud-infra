@@ -337,6 +337,7 @@ def test_actual_sdks_emit_only_audited_protected_secret_resources(service, tmp_p
     script = tmp_path / "mock_services.py"
     script.write_text(
         r"""
+import hashlib
 import json
 import sys
 from copy import deepcopy
@@ -346,13 +347,35 @@ from unittest.mock import patch
 import pulumi
 from pulumi.runtime import rpc
 from pulumi.runtime.settings import get_monitor
-from infra_program.services.components import register_services, Services
-from infra_program.services.configuration import register_services_from_config
+from infra_program.services.components import register_services as bound_services, Services
+from infra_core.service_evidence import capture_service_evidence, validate_service_evidence
+from infra_program.services.configuration import register_services_from_config as bound_config
 from pulumi.runtime.config import set_all_config
 from infra_program.governance import validate_resource
 
 config, evidence, profile = json.load(open(sys.argv[1]))
 ingestion = sys.argv[2]
+COMMIT = 'a' * 40
+base_payload = json.dumps(evidence).encode()
+base_envelope = capture_service_evidence(config, profile, base_payload, commit=COMMIT)
+
+def pack(c, e, p):
+    # Construct unsigned test fixtures without pre-validating negative payloads.
+    payload = json.dumps(e).encode()
+    sidecar = json.loads(base_envelope)
+    sidecar['subject'][0]['digest']['sha256'] = hashlib.sha256(payload).hexdigest()
+    canonical = json.dumps({'proposal': c, 'profile': p}, sort_keys=True,
+                           separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()
+    sidecar['predicate']['scope']['configuration_sha256'] = hashlib.sha256(canonical).hexdigest()
+    return payload, json.dumps(sidecar).encode()
+
+def register_services(c, e, p, token, passwords=None):
+    payload, envelope = pack(c, e, p)
+    return bound_services(c, payload, p, token, passwords, envelope=envelope, commit=COMMIT)
+
+def register_services_from_config(c, e, p):
+    payload, envelope = pack(c, e, p)
+    return bound_config(c, payload, p, envelope=envelope, commit=COMMIT)
 observed = {}
 class Offline(pulumi.runtime.Mocks):
     def new_resource(self, args):
@@ -391,6 +414,64 @@ with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret loo
                 raise AssertionError('stale coverage passed')
             except ValueError as error:
                 assert 'EXT022' in str(error)
+assert not observed
+
+with patch.object(pulumi, 'Config', side_effect=AssertionError('early secret lookup')), \
+     patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early resource')):
+    cases = ['missing', 'bytes', 'dictionary', 'mutable', 'account', 'unit', 'scope',
+             'profile', 'commit', 'region', 'stale', 'clock', 'json', 'kind']
+    for case in cases:
+        c, p = deepcopy((config, profile))
+        payload, envelope = base_payload, base_envelope
+        commit = COMMIT
+        code = 'EVID003'
+        if case == 'missing':
+            envelope, code = b'', 'EVID001'
+        elif case == 'bytes':
+            payload, code = payload + b' ', 'EVID002'
+        elif case == 'dictionary':
+            payload, code = evidence, 'EVID002'
+        elif case == 'mutable':
+            payload, code = bytearray(payload), 'EVID002'
+        elif case in ('account', 'unit', 'scope'):
+            c[case + '_id' if case != 'unit' else 'unit'] = 'other'
+        elif case == 'profile':
+            p['revision'] += 1
+        elif case == 'commit':
+            commit = 'b' * 40
+        elif case == 'json':
+            payload, code = b'{"PRIVATE":', 'EXT023'
+            sidecar = json.loads(envelope)
+            sidecar['subject'][0]['digest']['sha256'] = hashlib.sha256(payload).hexdigest()
+            envelope = json.dumps(sidecar).encode()
+        else:
+            sidecar = json.loads(envelope)
+            if case == 'region':
+                sidecar['predicate']['scope']['region'] = 'eu-central-1'
+            elif case == 'kind':
+                sidecar['predicateType'], code = 'other', 'EVID001'
+            else:
+                age = timedelta(hours=1) if case == 'stale' else timedelta(seconds=1)
+                sidecar['predicate']['collection_started_at'] = (
+                    datetime.fromisoformat(evidence['observed_at']) - age).isoformat()
+                code = 'EVID004' if case == 'stale' else 'EXT023'
+            envelope = json.dumps(sidecar).encode()
+        for factory in (
+            bound_config, lambda c, e, p, **kw: bound_services(c, e, p, None, {}, **kw)
+        ):
+            try:
+                factory(c, payload, p, envelope=envelope, commit=commit)
+                raise AssertionError('invalid envelope passed: ' + case)
+            except ValueError as error:
+                assert code in str(error), (case, str(error))
+                assert 'PRIVATE' not in str(error)
+    for factory in (bound_config, lambda c, e, p, **kw: bound_services(c, e, p, None, {}, **kw)):
+        for kwargs in ({'commit': COMMIT}, {'envelope': base_envelope}):
+            try:
+                factory(config, base_payload, profile, **kwargs)
+                raise AssertionError('required binding argument omitted')
+            except TypeError:
+                pass
 assert not observed
 
 token = pulumi.Output.secret('synthetic-token')
@@ -445,16 +526,48 @@ with patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early
         except pulumi.ConfigMissingError as error:
             assert config['unit'] + ':databasePassword-other' in str(error)
 set_all_config(values, secret_keys=list(values))
+real_require = pulumi.Config.require_secret
+lookups = []
+def tracked_lookup(self, key):
+    lookups.append(key)
+    return real_require(self, key)
+
+def expired(c, p, payload, envelope, *, commit):
+    return validate_service_evidence(c, p, payload, envelope, commit=commit,
+        now=datetime.fromisoformat(evidence['observed_at']) + timedelta(minutes=16))
+
+with patch.object(pulumi.Config, 'require_secret', tracked_lookup), \
+     patch('infra_program.services.components.validate_service_evidence', expired), \
+     patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('expired registration')):
+    try:
+        bound_config(config, base_payload, profile, envelope=base_envelope, commit=COMMIT)
+        raise AssertionError('expired handoff passed')
+    except ValueError as error:
+        assert 'EVID004' in str(error)
+assert lookups == (['token', 'databasePassword-app'] if config['provider'] == 'supabase'
+                   else ['token'])
+assert not observed
 real_init = pulumi.Resource.__init__
 options = []
 def record(self, typ, name, custom, props=None, opts=None, *args, **kwargs):
     assert opts.protect is True
     options.append((typ, opts))
     return real_init(self, typ, name, custom, props, opts, *args, **kwargs)
-with patch.object(pulumi.Resource, '__init__', record):
+original_config, original_profile = deepcopy((config, profile))
+def mutating_lookup(self, key):
+    config['resources'][0]['props']['name'] = 'unexpected.example.net'
+    profile['enabled'] = False
+    return real_require(self, key)
+
+with patch.object(pulumi.Config, 'require_secret', mutating_lookup), \
+     patch.object(pulumi.Resource, '__init__', record):
     component = (register_services_from_config(config, evidence, profile)
                  if ingestion == 'configuration'
                  else register_services(config, evidence, profile, token, passwords))
+config.clear()
+config.update(original_config)
+profile.clear()
+profile.update(original_profile)
 
 @pulumi.runtime.test
 def verify():

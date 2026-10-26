@@ -1,7 +1,7 @@
 # Shared security evidence sidecars
 
 M03-PR6 adds infra_core.evidence as a pure consistency API. M03-PR9 migrates
-backend posture; M03-PR11 also migrates the offline service audit CLI. Other
+backend posture; M03-PR11 also migrates the service CLI and library factories. Other
 formats and validators retain their existing contracts
 until their consuming PRs explicitly migrate them.
 
@@ -55,5 +55,7 @@ consumers remain on their existing contracts until their own migration PRs.
 
 The [service CLI handoff](independent-services.md#cli-evidence-sidecars-m03-pr11-transport-slice)
 uses service-usage sidecars over original schema-2 payloads, with independently
-reviewed proposal/profile and clean commit binding. Pure service audits and Pulumi
-factories still accept dictionaries until their separate consumer migration.
+reviewed proposal/profile and commit binding. Both Pulumi factories now require
+that same immutable payload/sidecar contract before effects, with a caller-supplied
+independent expected commit. Pure service accounting still accepts dictionaries;
+the factories do not discover Git. The CLI independently enforces clean HEAD.

@@ -4,17 +4,24 @@ from copy import deepcopy
 from typing import Any
 
 import pulumi
-from infra_core.services.governance import audit
+from infra_core.service_evidence import validate_service_evidence
 
 from infra_program.services.components import Services, register_services
 
 
 def register_services_from_config(
-    config: dict[str, Any], evidence: dict[str, Any], profile: dict[str, Any]
+    config: dict[str, Any],
+    evidence: bytes,
+    profile: dict[str, Any],
+    *,
+    envelope: bytes,
+    commit: str,
 ) -> Services:
     """Audit before lookup; require every secret before delegating to composition."""
-    frozen_config, frozen_evidence, frozen_profile = deepcopy((config, evidence, profile))
-    proposal = audit(frozen_config, frozen_evidence, frozen_profile)
+    frozen_config, frozen_profile = deepcopy((config, profile))
+    proposal = validate_service_evidence(
+        frozen_config, frozen_profile, evidence, envelope, commit=commit
+    )
     secrets = pulumi.Config(proposal["unit"])
     token = secrets.require_secret("token")
     passwords = (
@@ -26,4 +33,6 @@ def register_services_from_config(
         else {}
     )
     # Recheck frozen evidence immediately before registration; secret lookup grants no authority.
-    return register_services(frozen_config, frozen_evidence, frozen_profile, token, passwords)
+    return register_services(
+        frozen_config, evidence, frozen_profile, token, passwords, envelope=envelope, commit=commit
+    )
