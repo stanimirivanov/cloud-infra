@@ -8,7 +8,6 @@ from types import SimpleNamespace
 
 import pytest
 import test_operations_evidence as fixtures
-import yaml
 from infra_core import backend, cli, cutover
 from infra_core import backend_posture as bp
 from infra_core.evidence import EvidenceError
@@ -182,25 +181,6 @@ def test_cli_roundtrip_and_changed_checkout_invalidate_outputs(
     monkeypatch.setattr(cli, "_posture_commit", lambda root: next(commits))
     assert cli.main(collect) == 1
     assert not path.exists() and not bp.envelope_path(path).exists()
-
-
-def test_workflow_handoff_supplies_independent_account_and_exact_byte_pair():
-    root = Path(__file__).resolve().parents[1]
-    document = yaml.load(
-        (root / ".github/workflows/pulumi.yml").read_text(), Loader=yaml.BaseLoader
-    )
-    step = next(
-        step
-        for step in document["jobs"]["foundation"]["steps"]
-        if "BACKEND_POSTURE_JSON" in step.get("env", {})
-    )
-    assert step["env"]["BACKEND_POSTURE_ACCOUNT_ID"] == "${{ vars.BACKEND_POSTURE_ACCOUNT_ID }}"
-    assert "secrets.BACKEND_POSTURE_ENVELOPE_JSON" in step["env"]["BACKEND_POSTURE_ENVELOPE_JSON"]
-    assert (
-        'qualify --account-id "$BACKEND_POSTURE_ACCOUNT_ID" --allow-backend-writes' in step["run"]
-    )
-    assert step["run"].count("write_bytes") == 2
-    assert "backend-posture.json.envelope.json" in step["run"]
 
 
 @pytest.mark.parametrize("missing", ["posture_envelope", "account_id", "commit"])

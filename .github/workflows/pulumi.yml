@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Backend qualification writes synthetic state; resource operations remain disabled
+        description: Audit is read-only; qualification writes synthetic state; deployment is disabled
         type: choice
         required: true
-        options: [inspect, qualify, preview, deploy]
+        options: [inspect, audit, qualify, preview, deploy]
         default: inspect
       unit:
         description: Reviewed deployment unit (preview/deploy remain readiness failures)
@@ -41,7 +41,14 @@ jobs:
       - name: Install checksum-verified tools
         shell: pwsh
         run: ./.github/scripts/install-tools.ps1
-      - run: uv sync --locked --all-groups
+      - run: uv sync --locked --all-groups --extra inventory-oci
+      - name: Collect and validate read-only backend posture
+        id: audit
+        if: inputs.operation == 'audit' || inputs.operation == 'qualify'
+        env:
+          OCI_BACKEND_AUDIT_CREDENTIALS: ${{ secrets.OCI_BACKEND_AUDIT_CREDENTIALS }}
+          BACKEND_POSTURE_ACCOUNT_ID: ${{ vars.BACKEND_POSTURE_ACCOUNT_ID }}
+        run: uv run --locked --extra inventory-oci python .github/scripts/collect-backend-posture.py
       - name: Inspect backend foundation
         if: inputs.operation == 'inspect'
         run: uv run --locked infra backend inspect
@@ -50,13 +57,9 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
-          BACKEND_POSTURE_ENVELOPE_JSON: ${{ secrets.BACKEND_POSTURE_ENVELOPE_JSON }}
           BACKEND_POSTURE_ACCOUNT_ID: ${{ vars.BACKEND_POSTURE_ACCOUNT_ID }}
-          BACKEND_POSTURE_JSON: ${{ secrets.BACKEND_POSTURE_JSON }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
         run: |
-          uv run --locked python -c "import os; from pathlib import Path; p=Path('.infra/backend-posture.json'); p.parent.mkdir(exist_ok=True); p.write_bytes(os.environ['BACKEND_POSTURE_JSON'].encode('utf-8'))"
-          uv run --locked python -c "import os; from pathlib import Path; Path('.infra/backend-posture.json.envelope.json').write_bytes(os.environ['BACKEND_POSTURE_ENVELOPE_JSON'].encode('utf-8'))"
           uv run --locked infra backend qualify --account-id "$BACKEND_POSTURE_ACCOUNT_ID" --allow-backend-writes
       - name: Check resource operation readiness
         if: inputs.operation == 'preview' || inputs.operation == 'deploy'
@@ -70,6 +73,19 @@ jobs:
         with:
           name: backend-qualification
           path: .infra/qualification.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove private backend posture
+        if: always()
+        run: |
+          uv run --locked python -c "from pathlib import Path; [Path(p).unlink(missing_ok=True) for p in ('.infra/backend-posture.json', '.infra/backend-posture.json.envelope.json')]"
+      - name: Save sanitized backend audit
+        if: always() && steps.audit.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-audit
+          path: .infra/backend-audit.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1

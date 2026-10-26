@@ -160,7 +160,8 @@ read-only cutover evidence contract.
 
 Issue #33 adds schema-v2 independent recovery receipts, read-only backend posture
 collection/checks and inventory scope/query/clock validation. Remote qualification
-now requires fresh private posture evidence; its protected secret handoff is manual.
+requires fresh private posture evidence; #45 replaces the manual protected
+handoff with read-only same-job collection.
 Regenerate old receipts/inventories and supply usage covered_through; never restamp
 old data. See the backend and governance runbooks above for exact contracts.
 These are bounded synthetic/read-only sensors. Trusted source attestations, live
@@ -170,7 +171,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #43 (M03-PR9 backend envelope migration):
+stay disabled. Status through issue #45 (M03-PR10 protected backend audit):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -181,7 +182,7 @@ stay disabled. Status through issue #43 (M03-PR9 backend envelope migration):
 | PR7: secret ingestion/encryption contracts | #39: explicit passphrase policy, config-backed secret factory and custody/migration guidance |
 | PR8: independent recovery | #33/#39/#41: isolated restore, explicit encryption/custody guidance and required wrong-key rejection; same-host synthetic scope only |
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
-| PR10: protected backend audit workflow | Pending; #33's manual posture-secret handoff does not implement it |
+| PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
 | PR11: usage coverage | #33 covers OCI; service usage and envelope migration remain pending |
 | PR12: cutover evidence | Pending; consumes remaining evidence contracts and administrative review |
 
