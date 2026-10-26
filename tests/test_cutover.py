@@ -163,7 +163,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "oci_config": table("foundation", oci_values) + table("image", image),
         "kubernetes_config": kube_text,
         "backend_receipt": {
-            "schema_version": 2,
+            "schema_version": 3,
             "run_id": "a" * 32,
             "recovery": recovery_metrics(),
             "kind": "oci-s3",
@@ -177,6 +177,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
                 "lock-contention",
                 "restore-readback",
                 "independent-recovery",
+                "wrong-passphrase-rejected",
             ],
         },
         "inventory": inventory,

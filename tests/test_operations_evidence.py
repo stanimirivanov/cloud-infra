@@ -105,7 +105,10 @@ def test_receipt_measurements_are_bounded_known_numbers(config, key, value):
         backend.validate_receipt(config, evidence)
 
 
-def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypatch, config):
+@pytest.mark.parametrize("collision", [False, True])
+def test_recovery_uses_fresh_session_and_only_generated_stack(
+    tmp_path, monkeypatch, config, collision
+):
     stack = "qualification-" + "a" * 32
     for name in ("Pulumi.yaml", "__main__.py", f"Pulumi.{stack}.yaml"):
         (tmp_path / name).write_text("encrypted fixture")
@@ -118,12 +121,18 @@ def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypa
             self.cwd, self.env = cwd, env
             sessions.append(self)
 
+        def check_decryption_rejected(self, stack, sentinel):
+            events.append(("wrong-passphrase-check", [stack]))
+
         def run(self, phase, args):
             events.append((phase, args))
             return json.dumps("synthetic-secret") if phase == "readback" else ""
 
     monkeypatch.setattr(backend, "PulumiSession", Session)
-    env = {"PULUMI_HOME": str(tmp_path / "old-home")}
+    env = {"PULUMI_HOME": str(tmp_path / "old-home"), "PULUMI_CONFIG_PASSPHRASE": "matching-key"}
+    monkeypatch.setattr(
+        backend.secrets, "token_urlsafe", lambda size: "matching-key" if collision else "wrong-key"
+    )
     original = Session(tmp_path, env)
     metrics = backend._rehearse_recovery(
         original,
@@ -145,8 +154,17 @@ def test_recovery_uses_fresh_session_and_only_generated_stack(tmp_path, monkeypa
         "recovery-login",
         "recovery-initialize",
         "restore",
+        "wrong-passphrase-login",
+        "wrong-passphrase-check",
         "readback",
     ]
+    assert len({session.cwd for session in sessions}) == 3
+    assert len({session.env["PULUMI_HOME"] for session in sessions}) == 3
+    assert (
+        sessions[0].env["PULUMI_CONFIG_PASSPHRASE"] == sessions[1].env["PULUMI_CONFIG_PASSPHRASE"]
+    )
+    assert sessions[2].env["PULUMI_CONFIG_PASSPHRASE"] != env["PULUMI_CONFIG_PASSPHRASE"]
+    assert (sessions[2].cwd / f"Pulumi.{stack}.yaml").read_bytes() == b"encrypted fixture"
     assert events[2][1][-2:] == ["--secrets-provider", config.secrets_provider]
     assert metrics["checkpoint_bytes"] == backup.stat().st_size
     assert metrics["restore_seconds"] > 0
