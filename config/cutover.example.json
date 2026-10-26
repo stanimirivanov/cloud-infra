@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "commit": "",
   "account_id": "",
   "cluster_id": "",
@@ -17,8 +17,12 @@
     "kubernetes_inventory": {"path": ".infra/cluster-inventory.json", "sha256": ""},
     "kubernetes_resources": {"path": ".infra/kubernetes-resources.json", "sha256": ""},
     "ownership": {"path": ".infra/ownership-review.json", "sha256": ""},
+    "ownership_envelope": {"path": ".infra/ownership-review.json.envelope.json", "sha256": ""},
     "preview": {"path": ".infra/preview-review.json", "sha256": ""},
+    "preview_envelope": {"path": ".infra/preview-review.json.envelope.json", "sha256": ""},
     "health": {"path": ".infra/health-review.json", "sha256": ""},
-    "rollback": {"path": ".infra/rollback-review.json", "sha256": ""}
+    "health_envelope": {"path": ".infra/health-review.json.envelope.json", "sha256": ""},
+    "rollback": {"path": ".infra/rollback-review.json", "sha256": ""},
+    "rollback_envelope": {"path": ".infra/rollback-review.json.envelope.json", "sha256": ""}
   }
 }

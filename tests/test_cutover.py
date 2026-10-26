@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from evidence_helpers import recovery_metrics, upgrade_inventory
 from infra_core import cli, cutover
+from infra_core.cutover_evidence import REPORTS, SUBJECTS, capture_review, review_scope
 from infra_core.foundation import load_foundation
 from infra_core.governance.contracts import GovernanceError
 from infra_core.governance.resources import CLUSTER, INSTANCE, INVENTORY_TYPES
@@ -212,7 +213,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "rollback": {**header, "checks": sorted(cutover.ROLLBACK)},
     }
     document = {
-        "schema_version": 2,
+        "schema_version": 3,
         "commit": COMMIT,
         "account_id": kube_config.account_id,
         "cluster_id": kube_config.cluster_id,
@@ -222,18 +223,46 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory):
         "artifacts": {},
     }
 
-    def write(role, value):
+    subject_bytes = {}
+
+    def write(role, value, *, rebind=True):
         path = root / ".infra" / (role + (".toml" if isinstance(value, str) else ".json"))
-        if isinstance(value, bytes):
-            path.write_bytes(value)
-        else:
-            path.write_text(
-                value if isinstance(value, str) else json.dumps(value), encoding="utf-8"
-            )
+        content = (
+            value
+            if isinstance(value, bytes)
+            else (value if isinstance(value, str) else json.dumps(value)).encode("utf-8")
+        )
+        path.write_bytes(content)
+        if role in SUBJECTS:
+            subject_bytes[role] = content
         document["artifacts"][role] = {
             "path": str(path.relative_to(root)),
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "sha256": hashlib.sha256(content).hexdigest(),
         }
+
+        if rebind and SUBJECTS - {"quota_profiles"} <= set(document["artifacts"]):
+            # Synthetic negative-domain fixtures deliberately rebuild unsigned bindings.
+            # Replay/tamper regressions pass rebind=False to preserve the original review.
+            subjects = dict(subject_bytes)
+            subjects["quota_profiles"] = (root / "config/quotas/profiles.toml").read_bytes()
+            for report in sorted(REPORTS):
+                scope = review_scope(
+                    report,
+                    account_id=kube_config.account_id,
+                    region=kube_config.region,
+                    cluster_id=kube_config.cluster_id,
+                    commit=COMMIT,
+                    configuration_sha256=config.digest,
+                )
+                observed = json.loads(subjects[report])["observed_at"]
+                encoded = capture_review(
+                    report,
+                    subjects,
+                    scope=scope,
+                    now=datetime.fromisoformat(observed),
+                )
+                artifacts[report + "_envelope"] = encoded
+                write(report + "_envelope", encoded, rebind=False)
 
     payload, envelope = capture_inventory(
         tomllib.loads(artifacts["account"]),
@@ -263,6 +292,7 @@ def test_complete_bundle_is_consistent_but_never_authorizes_cutover(review):
         ("configuration_sha256", "wrong"),
         ("schema_version", True),
         ("schema_version", 1),
+        ("schema_version", 2),
         ("captured_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()),
     ],
 )
@@ -314,7 +344,7 @@ def test_missing_tampered_escaped_and_duplicated_artifacts_fail(review):
             "health",
             "observed_at",
             (datetime.now(UTC) - timedelta(minutes=16)).isoformat(),
-            "CUT004",
+            "EVID004",
         ),
     ],
 )
@@ -322,7 +352,7 @@ def test_incomplete_or_mismatched_reviews_fail(review, role, field, value, code)
     root, document, artifacts, write = review
     artifacts[role][field] = value
     write(role, artifacts[role])
-    with pytest.raises(GovernanceError, match=code):
+    with pytest.raises(ValueError, match=code):
         cutover.check(root, document)
 
 

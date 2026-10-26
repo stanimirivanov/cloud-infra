@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from infra_core.backend import validate_receipt
-from infra_core.evidence import MAX_ENVELOPE_BYTES
+from infra_core.cutover_evidence import SIDECARS, SUBJECTS, review_scope, validate_review
+from infra_core.evidence import MAX_ARTIFACT_BYTES, MAX_ENVELOPE_BYTES, MAX_TOTAL_BYTES
 from infra_core.foundation import load_foundation
 from infra_core.governance.audit import audit as audit_account
 from infra_core.governance.contracts import fields, number, records, require, text, timestamp
@@ -20,21 +21,7 @@ from infra_core.kubernetes.config import parse_config as parse_kubernetes
 from infra_core.oci.config import parse_config as parse_oci
 from infra_core.oci.graph import foundation_graph, proposal
 
-ARTIFACTS = {
-    "backend_receipt",
-    "account",
-    "inventory",
-    "inventory_envelope",
-    "oci_proposal",
-    "oci_config",
-    "kubernetes_config",
-    "kubernetes_inventory",
-    "kubernetes_resources",
-    "ownership",
-    "preview",
-    "health",
-    "rollback",
-}
+ARTIFACTS = set((SUBJECTS - {"quota_profiles"}) | SIDECARS)
 HEADER = {"commit", "account_id", "cluster_id", "region", "observed_at", "source", "reviewed_by"}
 HEALTH = {
     "nodes-ready",
@@ -101,7 +88,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
         "evidence must bind to the exact clean committed checkout",
     )
     require(
-        type(data["schema_version"]) is int and data["schema_version"] == 2,
+        type(data["schema_version"]) is int and data["schema_version"] == 3,
         "CUT001",
         "unsupported cutover evidence schema",
     )
@@ -118,6 +105,7 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
     )
     paths: dict[str, Path] = {}
     captured: dict[str, bytes] = {}
+    total = 0
     for role, item in fields(data["artifacts"], ARTIFACTS, "cutover artifact roles").items():
         item = fields(item, {"path", "sha256"}, "artifact reference")
         path = (root / text(item["path"], "artifact path")).resolve()
@@ -129,7 +117,9 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT002",
             "artifacts must be private JSON/TOML files inside this checkout's .infra",
         )
-        limit = MAX_ENVELOPE_BYTES if role == "inventory_envelope" else 10 * 1024 * 1024
+        limit = (
+            MAX_ENVELOPE_BYTES if role in SIDECARS | {"inventory_envelope"} else MAX_ARTIFACT_BYTES
+        )
         with path.open("rb") as stream:
             content = stream.read(limit + 1)
         require(
@@ -137,20 +127,31 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "CUT002",
             "artifact size/digest mismatch; regenerate the reviewed bundle",
         )
+        if role not in SIDECARS:
+            total += len(content)
+            require(total <= MAX_TOTAL_BYTES, "CUT002", "aggregate review subject size exceeded")
         paths[role] = path
         captured[role] = content
     require(
         len(set(paths.values())) == len(paths), "CUT002", "artifact roles must use distinct files"
     )
 
+    with (root / "config/quotas/profiles.toml").open("rb") as stream:
+        quota_bytes = stream.read(MAX_ARTIFACT_BYTES + 1)
+    require(
+        len(quota_bytes) <= MAX_ARTIFACT_BYTES and total + len(quota_bytes) <= MAX_TOTAL_BYTES,
+        "CUT002",
+        "quota profiles exceed the review capture budget",
+    )
+    profiles = tomllib.loads(quota_bytes.decode("utf-8"))["profiles"]
+    subjects = {role: content for role, content in captured.items() if role not in SIDECARS}
+    subjects["quota_profiles"] = quota_bytes
+
     def read(role: str) -> Any:
         return json.loads(captured[role].decode("utf-8"))
 
     validate_receipt(config, read("backend_receipt"))
     account = tomllib.loads(captured["account"].decode("utf-8"))
-    profiles = tomllib.loads((root / "config/quotas/profiles.toml").read_text(encoding="utf-8"))[
-        "profiles"
-    ]
     require(
         account.get("account_id") == data["account_id"]
         and account.get("home_region") == data["region"],
@@ -223,7 +224,19 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
     )
 
     def report(role: str, extra: set[str], *, hours: int = 0) -> dict[str, Any]:
-        value = fields(read(role), HEADER | extra, role)
+        scope = review_scope(
+            role,
+            account_id=account["account_id"],
+            region=account["home_region"],
+            cluster_id=kube.cluster_id,
+            commit=commit,
+            configuration_sha256=config.digest,
+        )
+        value = fields(
+            validate_review(role, subjects, captured[role + "_envelope"], scope=scope, now=now),
+            HEADER | extra,
+            role,
+        )
         require(
             all(
                 value[key] == data[key] for key in ("commit", "account_id", "cluster_id", "region")
