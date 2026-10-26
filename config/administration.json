@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "repository": "stanimirivanov/oci-oke-terraform",
+  "repository_id": 1323328453,
+  "required_checks": [
+    {
+      "context": "Credential-free verification (ubuntu-24.04)",
+      "app_id": 15368
+    },
+    {
+      "context": "Credential-free verification (windows-2025)",
+      "app_id": 15368
+    }
+  ]
+}

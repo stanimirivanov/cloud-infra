@@ -300,6 +300,8 @@ this proves possession of a repository-enrolled key, not human/legal identity, M
 key custody or that the checkout came from protected main. Independent enrollment,
 protected-branch provenance and administrative evidence remain required. Both
 operational authorization flags stay false, including after successful verification.
+The [administrative sensor](github-administration.md) checks classic main
+settings separately; its unsigned snapshot is not yet a cutover subject or approval.
 
 The verifier adapts the Apache-2.0 [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md)
 and JSON shape, with the single-signature/Ed25519 profile explicitly restricted here.
@@ -338,8 +340,8 @@ preview.operations is the ordered projection of each entry to logical_key, id,
 unit and operation. graph_sha256 is SHA-256 of the current pure OCI proposal JSON
 serialized with sorted keys and compact separators, bound to the account ID.
 These reports are normalized operator reviews of actual read-only observations;
-the checker does not parse raw provider preview/state output or authenticate the
-reviewer. A real preview containing create/update/delete/replace cannot be
+the checker does not parse raw provider preview/state output. DSSE authenticates
+the enrolled key holder only. A real preview containing create/update/delete/replace cannot be
 relabelled import/same to pass. Current redesigned networking may require new
 resources or disruptive changes and therefore cannot satisfy this unchanged/import
 subset until separate reviewed operations address those differences.

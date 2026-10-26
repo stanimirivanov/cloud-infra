@@ -30,6 +30,9 @@ signatures over the actual reviewed input snapshot. cutover-reviewers.toml ships
 disabled with no enrolled keys. Public keys/principal/role enrollment needs independent
 review; never add private keys or treat valid signatures as operational approval.
 
+administration.json pins public GitHub repository/check-app identities. Administrative observations stay private under .infra;
+passing the read-only sensor cannot enable deployment or enroll reviewer keys.
+
 Service examples contain no tokens/passwords. service-evidence.example.json must
 remain unverified, incomplete and stale. Service profile enablement permits offline
 classification only; all pulumi.toml deployment identities remain disabled. Keep

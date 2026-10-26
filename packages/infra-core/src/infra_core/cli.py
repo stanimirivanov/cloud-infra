@@ -29,9 +29,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("verify", help="run the credential-free Python and artifact checks")
-    security = commands.add_parser("security", help="offline security sensors; no operations")
+    security = commands.add_parser("security", help="security sensors and read-only collection")
     security_commands = security.add_subparsers(dest="security_command", required=True)
     security_commands.add_parser("workflows", help="check workflow syntax with verified actionlint")
+    administration_collect = security_commands.add_parser(
+        "collect-administration", help="read-only GitHub settings checks; no setting changes"
+    )
+    administration_collect.add_argument(
+        "--output", type=Path, default=Path(".infra/administration.json")
+    )
+    administration_check = security_commands.add_parser(
+        "check-administration", help="offline GitHub settings snapshot consistency"
+    )
+    administration_check.add_argument("--evidence", type=Path, required=True)
     backend = commands.add_parser("backend", help="inspect or explicitly qualify backend behavior")
     backend_commands = backend.add_subparsers(dest="backend_command", required=True)
     backend_commands.add_parser("inspect", help="show configuration and disabled deployment state")
@@ -133,8 +143,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = find_repository(args.root)
         if args.command == "security":
-            check_workflows(root)
-            print("PASS: workflow syntax/expressions; no workflow steps executed")
+            if args.security_command == "workflows":
+                check_workflows(root)
+                print("PASS: workflow syntax/expressions; no workflow steps executed")
+            else:
+                from infra_core.administration import MAX_BYTES, private_path
+                from infra_core.administration import check as check_administration
+                from infra_core.administration import collect as collect_administration
+
+                if args.security_command == "collect-administration":
+                    destination = private_path(root, args.output)
+                    if destination.exists():
+                        raise ValueError("ADMIN001: use a new private output path; no overwrite")
+                    payload = collect_administration(root)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    with destination.open("xb") as stream:
+                        stream.write(payload)
+                    print("PASS: administrative observations saved; operations remain disabled")
+                else:
+                    with private_path(root, args.evidence).open("rb") as stream:
+                        payload = stream.read(MAX_BYTES + 1)
+                    print(json.dumps(check_administration(root, payload), indent=2))
         elif args.command == "services":
             from infra_core.governance.contracts import mapping
             from infra_core.service_evidence import (
