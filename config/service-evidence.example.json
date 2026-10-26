@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "provider": "supabase",
   "account_id": "REPLACE_WITH_USER_ID",
   "scope_id": "example-org",
@@ -15,5 +15,27 @@
   "coverage": "UNVERIFIED",
   "usage_month": "1970-01",
   "resources": [],
-  "usage": {"egress_mb": 0, "cached_egress_mb": 0, "storage_mb": 0, "mau": 0}
+  "usage": {
+    "egress_mb": {
+      "value": null,
+      "covered_from": "1970-01-01T00:00:00+00:00",
+      "covered_through": "1970-01-01T00:00:00+00:00"
+    },
+    "cached_egress_mb": {
+      "value": null,
+      "covered_from": "1970-01-01T00:00:00+00:00",
+      "covered_through": "1970-01-01T00:00:00+00:00"
+    },
+    "storage_mb": {
+      "value": null,
+      "as_of": "1970-01-01T00:00:00+00:00"
+    },
+    "mau": {
+      "value": null,
+      "covered_from": "1970-01-01T00:00:00+00:00",
+      "covered_through": "1970-01-01T00:00:00+00:00"
+    }
+  },
+  "collection_started_at": "1970-01-01T00:00:00+00:00",
+  "collection_completed_at": "1970-01-01T00:00:00+00:00"
 }

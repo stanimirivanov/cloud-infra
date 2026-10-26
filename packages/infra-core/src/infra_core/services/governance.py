@@ -15,6 +15,7 @@ from infra_core.governance.contracts import (
     text,
     timestamp,
 )
+from infra_core.services.coverage import usage_coverage
 
 DNS = "cloudflare:index/dnsRecord:DnsRecord"
 PROJECT = "supabase:index/project:Project"
@@ -132,6 +133,8 @@ def audit(
             "verified",
             "verified_at",
             "observed_at",
+            "collection_started_at",
+            "collection_completed_at",
             "complete",
             "source",
             "plan",
@@ -152,7 +155,8 @@ def audit(
     require(
         type(config["schema_version"]) is int
         and type(evidence["schema_version"]) is int
-        and config["schema_version"] == evidence["schema_version"] == 1,
+        and config["schema_version"] == 1
+        and evidence["schema_version"] == 2,
         "EXT001",
         "unsupported schema",
     )
@@ -181,6 +185,8 @@ def audit(
         "EXT002",
         "usage evidence must refer to the current billing month",
     )
+    metrics = set() if provider == "cloudflare" else METRICS
+    usage, coverage = usage_coverage(evidence, metrics, now)
     text(evidence["source"], "evidence source")
     for key in ("provider", "account_id", "scope_id"):
         require(text(config[key], key) == evidence[key], "EXT004", "evidence billing scope differs")
@@ -279,22 +285,18 @@ def audit(
         "EXT020",
         "additive peak exceeds the conservative service capacity",
     )
-    metrics = set() if provider == "cloudflare" else METRICS
-    usage = fields(evidence["usage"], metrics, "current target-scope usage")
     growth = fields(config["growth"], metrics, "remaining-month growth budget")
     limits = fields(profile.get("usage_limits"), metrics, "published usage limits")
     forecasts = {}
     for metric in sorted(metrics):
         require(limits[metric] == MAXIMUM[metric], "EXT001", "unreviewed usage limit")
-        projected = number(usage[metric], "consumed usage") + number(
-            growth[metric], "growth budget"
-        )
+        projected = usage[metric] + number(growth[metric], "growth budget")
         require(
             projected <= MAXIMUM[metric], "EXT021", "consumed usage plus growth exceeds Free quota"
         )
         forecasts[metric] = str(projected)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "provider": provider,
         "unit": config["unit"],
         "account_id": config["account_id"],
@@ -302,5 +304,6 @@ def audit(
         "resources": deepcopy(desired),
         "peak_resources": peak,
         "forecast": forecasts,
+        "usage_coverage": coverage,
         "deployment_authorized": False,
     }

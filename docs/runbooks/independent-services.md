@@ -70,12 +70,59 @@ SDK, discovers credentials, queries a provider nor writes state. No token/passwo
 field is accepted in a proposal. Do not store sensitive record content in it;
 proposal output is intended for review and contains record names/addresses.
 
-Evidence must bind schema 1, provider, account/user identity, zone/organization and
+Evidence must bind schema 2, provider, account/user identity, zone/organization and
 profile revision. `verified`, `complete`, `other_services_reviewed` must be true,
 and `plan` must be `free`. Record a private review reference in `source`.
 Entitlement evidence expires in 30 days, inventory/usage in 15 minutes, published
 terms in 90 days. Future timestamps fail. `usage_month` must be current UTC month;
 confirm the provider's actual billing period and reconcile it conservatively.
+
+### Collection and usage coverage (M03-PR11 service slice)
+
+Evidence and audit-result schemas are now 2; proposal schema and component output
+contracts remain 1. Evidence requires collection_started_at and
+collection_completed_at. Ordered clocks must satisfy original observed_at equals
+collection start, start no more than 15 minutes old, and completion no later than
+now. Downloading or rewriting a file cannot refresh the original readings.
+
+Each Supabase usage metric is a closed object. Egress, cached egress and MAU use
+value, covered_from and covered_through. The window starts at current UTC month
+start (day 1, 00:00 UTC), ends no later than collection completion, and its cutoff
+must independently be at most 15 minutes old. A fresh collection with one stale
+metric fails EXT022. Partial-month/reset/delta totals are rejected. Values must
+be known, finite and nonnegative; missing data is never zero. Source billing
+cycles must be independently reconciled to the existing UTC-month policy; if
+that cannot be established, this model is insufficient for activation.
+
+storage_mb uses value and as_of instead: it is the existing point-in-time capacity
+ceiling, with the same 15-minute freshness limit and no monthly reset. The audit
+result exposes normalized per-metric clocks in usage_coverage beside forecast.
+Growth remains an explicit conservative budget from EACH metric's original cutoff
+through month end, including the gap before collection and unmanaged usage. The
+engine does not infer a rate or prove that the operator's budget is sufficient.
+Cloudflare usage/growth stay empty objects; its collection clocks still apply.
+
+Supabase [storage billing](https://supabase.com/docs/guides/platform/manage-your-usage/storage-size)
+uses GB-hours/period averages. A fresh storage capacity sample cannot establish
+historical billed usage. That accounting/collector gap remains before activation;
+do not convert an average into a live-size reading or assume a small current size
+erases earlier consumption. [MAU](https://supabase.com/docs/guides/platform/manage-your-usage/monthly-active-users)
+counts distinct users across the billing cycle; daily counts cannot be summed.
+This slice changes neither published limits nor profile revisions/review dates.
+
+The explicit window versus sample distinction adapts the Apache-2.0
+[OpenTelemetry metric data model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/)
+using existing stdlib/governance helpers. No telemetry dependency, OTLP interface,
+SDK collector or architecture exception is added. Source authenticity, shared
+service/OCI envelopes and complete billing-history models remain separate work.
+
+**Migration:** standalone schema-1 evidence is rejected at the CLI and both
+factories before secret lookup or registration. Collect new evidence with actual
+source windows/samples; never add current clocks to old scalar values. The public
+example remains unverified, stale and unknown. Keep real documents under .infra.
+Rollback requires compatible code and evidence; it restores weaker coverage checks
+and never establishes eligibility or deployment authority. Schemas cannot be
+converted by renaming fields or changing a version number.
 
 For Cloudflare:
 
@@ -95,8 +142,8 @@ For Supabase:
 - Set `coverage` to `all-owned-admin-free-projects-and-target-org-usage`.
   `resources` contains every Free project across those organizations, with `id`,
   `scope_id`, `database_mb`. Include paused/unmanaged projects conservatively.
-- `usage` includes every target organization's project in each metric from the
-  table. `growth` is a conservative budget for all remaining-month traffic/storage
+- `usage` readings include every target organization's project in each metric
+  from the table, with the windows/samples defined above. `growth` is a conservative budget for all remaining-month traffic/storage
   growth, including unmanaged services. Never replace missing readings with zero.
 - Independently review organization subscription, project sizes, absent add-ons,
   branching, replicas, IPv4, custom domains, Auth/Realtime/Functions and other
