@@ -165,16 +165,43 @@ Copy config/cutover.example.json to .infra/cutover.json. Its fields intentionall
 fail until real reviewed evidence is supplied. The checker requires an exact clean
 Git commit (tracked and untracked changes fail), current backend configuration
 digest, identity scope and a capture timestamp within 15 minutes. Each distinct
-artifact must be JSON/TOML inside this checkout's .infra, under 10 MiB, with the
-SHA-256 of its exact bytes. Escapes, changed/missing/duplicated artifacts fail.
+artifact must be JSON/TOML inside this checkout's .infra, at most 10 MiB (the
+inventory sidecar is capped at 64 KiB), with the SHA-256 of its exact bytes.
+Escapes, changed/missing/duplicated artifacts fail.
 Each artifact is read once with a bounded read and parsed from the same hashed
 bytes. The checkout is checked again at completion. If a private file changes
 after capture, the result describes the captured snapshot; a subsequent check
 against the old index fails. Revalidate evidence before any future operation.
 
-The twelve roles in the example are mandatory. The existing OCI backend receipt
-must pass its configuration/version/freshness checks; local receipts cannot do
-so. OCI account audit is recomputed with current reviewed profiles and full
+**Breaking schema migration:** the bundle is now schema 2 with thirteen mandatory
+roles. inventory_envelope references the original OCI collector sidecar, normally
+.infra/inventory.json.envelope.json; inventory references the corresponding original
+payload. Both paths/digests are pinned explicitly and must use distinct files.
+Schema-1 bundles and missing sidecars fail closed; recollect current observations
+and review a new index rather than restamping old data or merely changing a version.
+The public example deliberately retains empty identities, clocks and digests.
+
+The checker passes both bounded hashed snapshots to the existing
+[OCI evidence adapter](free-tier-governance.md#oci-inventory-sidecars-m03-pr11-cli-slice).
+Expected commit comes from clean Git HEAD, account/home region from the reviewed
+account configuration, unit is oci-account, and the digest covers the full account
+and selected current quota profile. Never take expected scope from the sidecar.
+Original collection clocks must match exactly and remain fresh within 15 minutes;
+strict JSON and measured coverage checks precede the full accounting audit.
+Recomputing the index hash cannot bypass inner byte/scope/clock binding, and a
+bound inventory with missing usage still fails billing checks. Neither file is
+reopened: changes after capture affect the next check, not the snapshot under review.
+CUT001/CUT002 cover bundle schema/path/size/digest failures; EVID001-EVID004 and
+GOV diagnostics cover inner binding and inventory/account validation.
+
+This slice reuses the existing unsigned in-toto-style contract, without dependencies.
+Backend receipt, Kubernetes and operator report schemas below are unchanged. Complete
+billing/history modeling and full M03-PR12 provenance/administrative binding remain
+pending. Rollback requires compatible code/contracts and weakens inventory transport
+checks; it never grants authority or upgrades historical evidence.
+
+The existing OCI backend receipt must pass its configuration/version/freshness
+checks; local receipts cannot do so. OCI account audit is recomputed with current reviewed profiles and full
 inventory/usage. adoption-account-proposal.json must contain exactly the OCI
 network and OKE units with empty changes: this check has no permission to create,
 resize, replace or delete anything. It is not the create-only OCI render output.

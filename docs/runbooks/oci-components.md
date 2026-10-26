@@ -80,7 +80,8 @@ Both APIs require an independently established expected clean commit. They do no
 discover Git or authenticate sources; never copy expected commit from the sidecar.
 A future approved executor must bind its running checkout, reviewed configuration,
 stack/backend and real proposal. Sidecars remain unsigned consistency evidence.
-Pure accounting and cutover still accept dictionaries pending explicit migration.
+Pure accounting retains dictionaries; cutover now requires a pinned inventory
+sidecar through its schema-2 review bundle.
 Rollback requires compatible code/contracts and weakens transport checks; no version
 of this library grants deployment, import or state-transfer authority.
 
