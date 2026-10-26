@@ -1,12 +1,12 @@
 """Protected OCI components compiled from the preflighted pure resource graph."""
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
 import pulumi
 import pulumi_oci as oci
-from infra_core.governance.audit import audit
 from infra_core.governance.contracts import require, text
 from infra_core.oci.config import FoundationConfig
 from infra_core.oci.graph import (
@@ -19,6 +19,8 @@ from infra_core.oci.graph import (
     wire,
 )
 from infra_core.oci.security import validate_resource
+
+from infra_program.governance import preflight
 
 # Closed constructor table: no arbitrary resource types, SDK lookups or dynamic imports.
 CONSTRUCTORS: dict[str, Callable[..., pulumi.CustomResource]] = {
@@ -187,23 +189,38 @@ def register_foundation(
     cfg: FoundationConfig,
     account: dict[str, Any],
     profile: dict[str, Any],
-    inventory: dict[str, Any],
+    inventory: bytes,
+    *,
+    envelope: bytes,
+    commit: str,
 ) -> tuple[Network, Oke]:
     """Library composition only; normal CLI/program activation remains forbidden."""
+    cfg, account, profile = deepcopy((cfg, account, profile))
     graph = foundation_graph(cfg)
     require(account.get("home_region") == cfg.region, "OCI001", "provider must match account home")
     account_id = text(account.get("account_id"), "tenancy identity")
     for item in graph:
         validate_resource(item.kind, wire(item.props))
-    audit(account, profile, inventory, proposal(graph, account_id, cfg.region))
-    # No provider or component registration occurs before every preflight above succeeds.
-    provider = oci.Provider(
-        cfg.name + "-provider",
-        region=cfg.region,
-        tenancy_ocid=account_id,
-        opts=pulumi.ResourceOptions(protect=True),
+
+    def register() -> tuple[Network, Oke]:
+        # This closure owns the same frozen configuration and graph used by the audit.
+        provider = oci.Provider(
+            cfg.name + "-provider",
+            region=cfg.region,
+            tenancy_ocid=account_id,
+            opts=pulumi.ResourceOptions(protect=True),
+        )
+        registered: dict[str, pulumi.CustomResource] = {}
+        network = Network(cfg, graph, provider, registered, account_id, _permit=_PERMIT)
+        oke = Oke(cfg, graph, provider, registered, network, account_id, _permit=_PERMIT)
+        return network, oke
+
+    return preflight(
+        account,
+        profile,
+        inventory,
+        proposal(graph, account_id, cfg.region),
+        register,
+        envelope=envelope,
+        commit=commit,
     )
-    registered: dict[str, pulumi.CustomResource] = {}
-    network = Network(cfg, graph, provider, registered, account_id, _permit=_PERMIT)
-    oke = Oke(cfg, graph, provider, registered, network, account_id, _permit=_PERMIT)
-    return network, oke

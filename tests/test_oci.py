@@ -233,13 +233,17 @@ def test_native_sdk_matches_every_proposed_property_and_failed_preflight_registe
     script = tmp_path / "mock_components.py"
     script.write_text(
         r"""
+import hashlib
 import json
 import sys
 from dataclasses import replace
+from datetime import datetime, timedelta
 import pulumi
 from infra_core.oci.config import FoundationConfig, ImageEvidence
 from infra_core.oci.graph import Ref, foundation_graph, wire
-from infra_program.oci.components import register_foundation
+from infra_program.oci.components import register_foundation as bound_foundation
+from infra_core.inventory_evidence import capture_inventory
+from infra_program import governance
 from infra_program.governance import validate_resource
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -251,6 +255,20 @@ for key in ("administrator_cidrs", "availability_domains", "supported_versions")
     values[key] = tuple(values[key])
 cfg = FoundationConfig(**values)
 account, profile, inventory = payload["evidence"]
+COMMIT = 'a' * 40
+base_payload, base_envelope = capture_inventory(account, profile, inventory, commit=COMMIT)
+expected_account_id = account['account_id']
+
+def register_foundation(cfg, account, profile, inventory):
+    # Rebind deliberate negative fixtures without pre-validating them in a producer helper.
+    payload = json.dumps(inventory).encode()
+    envelope = json.loads(base_envelope)
+    envelope['subject'][0]['digest']['sha256'] = hashlib.sha256(payload).hexdigest()
+    canonical = json.dumps({'account': account, 'profile': profile}, sort_keys=True,
+                           separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()
+    envelope['predicate']['scope']['configuration_sha256'] = hashlib.sha256(canonical).hexdigest()
+    return bound_foundation(cfg, account, profile, payload,
+                            envelope=json.dumps(envelope).encode(), commit=COMMIT)
 expected = {cfg.name + "-" + item.key: item for item in foundation_graph(cfg)}
 observed = {}
 violations = []
@@ -266,6 +284,9 @@ def expected_wire(value):
 
 class Offline(pulumi.runtime.Mocks):
     def new_resource(self, args):
+        if args.typ == 'pulumi:providers:oci':
+            assert args.inputs['region'] == cfg.region
+            assert args.inputs['tenancyOcid'] == expected_account_id
         if args.typ.startswith("oci:"):
             spec = expected[args.name]
             assert args.typ == spec.kind
@@ -287,6 +308,7 @@ for bad_cfg, bad_account, bad_inventory in [
     (cfg, dict(account, verified=False), inventory),
     (cfg, {key: value for key, value in account.items() if key != "account_id"}, inventory),
     (cfg, account, dict(inventory, complete=False)),
+    (cfg, account, dict(inventory, usage=None)),
     (replace(cfg, memory_gb_per_node=8), account, inventory),
     (replace(cfg, region="us-ashburn-1"), account, inventory),
 ]:
@@ -299,6 +321,40 @@ for bad_cfg, bad_account, bad_inventory in [
     else:
         raise AssertionError("invalid preflight passed")
 assert not observed
+with patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early registration')):
+    for fault in ('dictionary', 'mutable', 'bytes', 'missing', 'scope', 'commit', 'stale', 'clock'):
+        data, envelope, commit = base_payload, base_envelope, COMMIT
+        if fault == 'dictionary':
+            data = inventory
+        elif fault == 'mutable':
+            data = bytearray(data)
+        elif fault == 'bytes':
+            data += b' '
+        elif fault == 'missing':
+            envelope = b'{}'
+        elif fault == 'commit':
+            commit = 'b' * 40
+        else:
+            statement = json.loads(envelope)
+            if fault == 'scope':
+                statement['predicate']['scope']['unit'] = 'oci-oke'
+            else:
+                age = timedelta(hours=1) if fault == 'stale' else timedelta(seconds=1)
+                statement['predicate']['collection_started_at'] = (
+                    datetime.fromisoformat(inventory['observed_at']) - age).isoformat()
+            envelope = json.dumps(statement).encode()
+        try:
+            bound_foundation(cfg, account, profile, data, envelope=envelope, commit=commit)
+            raise AssertionError('invalid evidence passed: ' + fault)
+        except ValueError as error:
+            assert 'EVID' in str(error) or 'GOV043' in str(error), (fault, str(error))
+    for kwargs in ({'commit': COMMIT}, {'envelope': base_envelope}):
+        try:
+            bound_foundation(cfg, account, profile, base_payload, **kwargs)
+            raise AssertionError('missing binding argument passed')
+        except TypeError:
+            pass
+assert not observed
 from infra_program.oci import components
 for kind, constructor in list(components.CONSTRUCTORS.items()):
     def guarded(resource_name, *, opts, _constructor=constructor, **props):
@@ -307,7 +363,14 @@ for kind, constructor in list(components.CONSTRUCTORS.items()):
         assert opts.import_ is None and not opts.aliases
         return _constructor(resource_name, opts=opts, **props)
     components.CONSTRUCTORS[kind] = guarded
-network, cluster = register_foundation(cfg, account, profile, inventory)
+real_audit = governance.audit
+def mutating_audit(a, p, observed_inventory, plan):
+    account['account_id'] = 'unexpected-account'
+    account['home_region'] = 'unexpected-region'
+    profile['enabled'] = False
+    return real_audit(a, p, observed_inventory, plan)
+with patch.object(governance, 'audit', mutating_audit):
+    network, cluster = register_foundation(cfg, account, profile, inventory)
 
 @pulumi.runtime.test
 def check():

@@ -49,6 +49,41 @@ StackReference wiring must be introduced and reviewed at cutover, with exported
 network contracts bound to their actual source stack/account and governance
 proposal. Do not point one combined program at either reserved stack identity.
 
+## Bound inventory at registration (M03-PR11)
+
+**Breaking library migration:** use
+`register_foundation(cfg, account, profile, inventory, *, envelope, commit)`.
+Inventory and envelope must be original immutable bytes from the
+[OCI collection handoff](free-tier-governance.md#oci-inventory-sidecars-m03-pr11-cli-slice).
+account/profile remain reviewed dictionaries; cfg remains FoundationConfig.
+Standalone dictionaries, missing binding arguments and mismatched/stale evidence
+fail before any provider/component/resource registration. Preserve schema-2 bytes
+and original clocks; recollect legacy observations rather than restamping them.
+
+The factory freezes reviewed inputs, builds/validates its own ordered graph and
+passes its complete normalized proposal through the common preflight gate. That
+gate freezes account/profile/proposal, validates exact-byte/config/scope/clock binding
+and measured coverage, then runs full eligibility/capacity/monthly accounting before
+invoking the private registration closure. The closure consumes its owned frozen
+configuration and graph, so mutation of caller dictionaries during audit cannot
+change the emitted tenancy, topology or properties. Network/OKE output schema 1,
+resource kinds, SDK serialization and protection/provider rules are unchanged.
+
+The lower-level adapter is
+`preflight(account, profile, inventory, plan, register, *, envelope, commit)`.
+Its inventory/envelope also require bytes; plan remains a dictionary. It invokes
+the callback once after successful validation, but callbacks are trusted Python:
+it cannot prove that arbitrary callback code registers the audited plan. Use the
+sole OCI composer for that graph contract; this gate is not a sandbox or permit.
+
+Both APIs require an independently established expected clean commit. They do not
+discover Git or authenticate sources; never copy expected commit from the sidecar.
+A future approved executor must bind its running checkout, reviewed configuration,
+stack/backend and real proposal. Sidecars remain unsigned consistency evidence.
+Pure accounting and cutover still accept dictionaries pending explicit migration.
+Rollback requires compatible code/contracts and weakens transport checks; no version
+of this library grants deployment, import or state-transfer authority.
+
 ## Topology and security boundaries
 
 | Layer | Component contract | Enforced boundary |
