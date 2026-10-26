@@ -3,7 +3,7 @@ name = "infra-core"
 version = "0.1.0"
 description = "Repository verification and infrastructure automation"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = ["cryptography==50.0.2"]
 
 [project.scripts]
 infra = "infra_core.cli:main"

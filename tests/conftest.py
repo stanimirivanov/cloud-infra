@@ -99,3 +99,11 @@ def workload():
             },
         },
     }
+
+
+@pytest.fixture
+def review_signer():
+    # Ephemeral test-only keys are never serialized or enrolled in repository policy.
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.generate()

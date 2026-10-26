@@ -333,6 +333,9 @@ wheels = [
 name = "infra-core"
 version = "0.1.0"
 source = { editable = "packages/infra-core" }
+dependencies = [
+    { name = "cryptography" },
+]
 
 [package.optional-dependencies]
 inventory-oci = [
@@ -340,7 +343,10 @@ inventory-oci = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "oci", marker = "extra == 'inventory-oci'", specifier = ">=2.150,<3" }]
+requires-dist = [
+    { name = "cryptography", specifier = "==50.0.2" },
+    { name = "oci", marker = "extra == 'inventory-oci'", specifier = ">=2.150,<3" },
+]
 provides-extras = ["inventory-oci"]
 
 [[package]]
