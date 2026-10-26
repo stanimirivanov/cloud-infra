@@ -1,7 +1,8 @@
 # Shared security evidence sidecars
 
-M03-PR6 adds infra_core.evidence as a pure consistency API. Existing evidence
-formats and validators are unchanged; later consuming PRs must migrate explicitly.
+M03-PR6 adds infra_core.evidence as a pure consistency API. M03-PR9 migrates
+backend posture; other formats and validators retain their existing contracts
+until their consuming PRs explicitly migrate them.
 
 ## Contract
 
@@ -43,3 +44,10 @@ A producer label is a claim; an attacker able to replace artifact and sidecar ca
 recompute hashes. This proves neither source authenticity, IAM visibility, semantic
 truth nor operational authority. Signatures/trusted provenance and deployment
 policy remain later work; no existing evidence is upgraded by wrapping or restamping.
+
+
+Backend posture is the first migrated consumer: the private payload retains schema 1,
+with an adjacent filename ending in .json.envelope.json. See the
+[backend handoff](pulumi-backend.md#read-only-backend-posture) for independent
+account/commit expectations, exact-byte transport and strict migration. Other
+consumers remain on their existing contracts until their own migration PRs.

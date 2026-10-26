@@ -94,6 +94,7 @@ def test_remote_credentials_are_required_without_ambient_fallback(tmp_path):
         "AWS_PROFILE": "ambient",
         "PULUMI_CONFIG_PASSPHRASE_FILE": "unexpected",
         "BACKEND_POSTURE_JSON": "private evidence",
+        "BACKEND_POSTURE_ENVELOPE_JSON": "private sidecar",
         "PATH": "tools",
     }
     env = backend.qualification_environment(source, tmp_path, local=False)
@@ -108,6 +109,7 @@ def test_remote_credentials_are_required_without_ambient_fallback(tmp_path):
             "AWS_PROFILE",
             "PULUMI_CONFIG_PASSPHRASE_FILE",
             "BACKEND_POSTURE_JSON",
+            "BACKEND_POSTURE_ENVELOPE_JSON",
         )
     )
 

@@ -10,7 +10,12 @@ from importlib.metadata import version
 from pathlib import Path
 
 from infra_core.backend import QualificationError, qualify, validate_receipt
-from infra_core.backend_posture import validate_posture
+from infra_core.backend_posture import (
+    capture_posture,
+    envelope_path,
+    read_posture_pair,
+    validate_posture_evidence,
+)
 from infra_core.foundation import deny_deployment, load_foundation
 from infra_core.repository import find_repository
 from infra_core.security import check_workflows
@@ -37,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
     qualifier.add_argument(
         "--local-test", action="store_true", help="isolated filesystem backend, not OCI evidence"
     )
+    qualifier.add_argument(
+        "--account-id", help="independently reviewed OCI tenancy; required remotely"
+    )
     qualifier.add_argument("--posture", type=Path, default=Path(".infra/backend-posture.json"))
     qualifier.add_argument("--receipt", type=Path, default=Path(".infra/qualification.json"))
     receipt_check = backend_commands.add_parser(
@@ -46,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     posture_check = backend_commands.add_parser(
         "check-posture", help="validate read-only OCI bucket evidence"
     )
+    posture_check.add_argument("--account-id", required=True)
     posture_check.add_argument("--evidence", type=Path, default=Path(".infra/backend-posture.json"))
     posture_collect = backend_commands.add_parser(
         "collect-posture", help="read-only OCI bucket metadata scan"
@@ -105,6 +114,18 @@ def build_parser() -> argparse.ArgumentParser:
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
     return parser
+
+
+def _posture_commit(root: Path) -> str:
+    from infra_core.cutover import repository_state
+
+    try:
+        commit, clean = repository_state(root)
+    except (OSError, subprocess.SubprocessError):
+        raise ValueError("BACKEND006: cannot establish checkout identity") from None
+    if not clean:
+        raise ValueError("BACKEND006: posture requires a clean reviewed checkout")
+    return commit
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -222,6 +243,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise ValueError("BACKEND001: posture output must stay under .infra")
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.unlink(missing_ok=True)
+                sidecar = envelope_path(destination)
+                sidecar.unlink(missing_ok=True)
+                commit = _posture_commit(root)
                 try:
                     reader = OCIReader(
                         str((root / args.oci_config).resolve()), args.oci_profile, args.account_id
@@ -231,14 +255,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise ValueError(
                         "BACKEND005: OCI posture collection failed; inspect credentials privately"
                     ) from None
-                validate_posture(config, posture)
-                destination.write_text(json.dumps(posture, indent=2) + "\n", encoding="utf-8")
+                payload, envelope = capture_posture(
+                    config, posture, account_id=args.account_id, commit=commit
+                )
+                if _posture_commit(root) != commit:
+                    raise ValueError("BACKEND006: checkout changed during posture collection")
+                try:
+                    destination.write_bytes(payload)
+                    sidecar.write_bytes(envelope)
+                except OSError:
+                    destination.unlink(missing_ok=True)
+                    sidecar.unlink(missing_ok=True)
+                    raise ValueError("BACKEND006: posture pair publication failed") from None
                 print("PASS: read-only backend posture collected; deployment disabled")
             elif args.backend_command == "check-posture":
+                payload, envelope = read_posture_pair(root / args.evidence)
                 print(
                     json.dumps(
-                        validate_posture(
-                            config, json.loads((root / args.evidence).read_text(encoding="utf-8"))
+                        validate_posture_evidence(
+                            config,
+                            payload,
+                            envelope,
+                            account_id=args.account_id,
+                            commit=_posture_commit(root),
                         )
                     )
                 )
@@ -266,13 +305,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 # Never leave stale successful evidence after a failed retry.
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.unlink(missing_ok=True)
+                payload, envelope, commit = None, None, None
+                if not args.local_test:
+                    if not args.account_id:
+                        raise ValueError("BACKEND006: remote qualification requires --account-id")
+                    commit = _posture_commit(root)
+                    payload, envelope = read_posture_pair(root / args.posture)
                 receipt = qualify(
                     config,
                     local=args.local_test,
                     allow_writes=args.allow_backend_writes,
-                    posture=None
-                    if args.local_test
-                    else json.loads((root / args.posture).read_text(encoding="utf-8")),
+                    posture=payload,
+                    posture_envelope=envelope,
+                    account_id=args.account_id,
+                    commit=commit,
                 )
                 destination.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
                 print(f"PASS: {receipt['kind']} backend qualified; resource deployment disabled")

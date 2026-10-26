@@ -86,7 +86,8 @@ For a real OCI test, an authorized operator selects `qualify` in the **Pulumi
 foundation** manual workflow on main. The workflow serializes foundation operations,
 runs verification first, checks out the dispatch commit, and executes behind the
 `pulumi-backend-qualification` environment. It exposes only S3 HMAC credentials and
-the passphrase and fresh BACKEND_POSTURE_JSON evidence to the qualification step;
+the passphrase and fresh BACKEND_POSTURE_JSON/BACKEND_POSTURE_ENVELOPE_JSON evidence
+to the qualification step;
 there are no OCI provider/API credentials in the workflow.
 PRs cannot trigger that workflow. Preview/deploy dispatches intentionally fail.
 No real OCI qualification has been performed merely by merging this implementation.
@@ -101,9 +102,13 @@ Before enabling qualification, an administrator must:
    `PULUMI_CONFIG_PASSPHRASE` of at least 20 characters as environment secrets.
    These are existing S3-compatible HMAC credentials, not an OCI API signing key.
 3. Collect and review bucket posture using the read-only commands below. Store the
-   resulting JSON as environment secret `BACKEND_POSTURE_JSON` immediately before
-   qualification. It must be under one hour old at preflight. This is a manual
-   evidence handoff, not a signed collector attestation; protect who may update it.
+   payload as environment secret `BACKEND_POSTURE_JSON` and its sidecar as
+   `BACKEND_POSTURE_ENVELOPE_JSON` immediately before qualification, preserving
+   exact UTF-8 bytes including line endings and the final newline. Independently
+   set environment variable `BACKEND_POSTURE_ACCOUNT_ID` (GitHub environment vars,
+   not a value copied from evidence) to the reviewed tenancy. Collect from the
+   same clean commit dispatched by the workflow. Both documents must be under
+   one hour old at preflight. This is a manual evidence handoff, not a signed collector attestation; protect who may update it.
    Stale/missing/unsafe evidence fails before any remote checkpoint operation.
 4. Restrict the credential's object-storage permissions to the intended bucket and
    namespace to the extent OCI IAM permits. Do not assume S3 ARN/prefix IAM syntax
@@ -129,8 +134,29 @@ or changes bucket/IAM policy. With separate read-only API credentials:
 
 ```sh
 uv run --locked --extra inventory-oci infra backend collect-posture --account-id OCID --oci-config .infra/oci-config --output .infra/backend-posture.json
-uv run --locked infra backend check-posture --evidence .infra/backend-posture.json
+uv run --locked infra backend check-posture --account-id OCID --evidence .infra/backend-posture.json
 ```
+
+Collection requires a clean Git checkout and emits .infra/backend-posture.json
+plus .infra/backend-posture.json.envelope.json. Offline checks and remote
+qualification require both; --account-id supplies the independently reviewed
+expected tenancy. The consumer gets the commit from its own clean checkout,
+region/configuration from config/pulumi.toml and fixed unit backend. It never
+adopts scope expectations from the supplied envelope. The producer records the
+same original collection clocks in payload and envelope; a changed checkout
+during collection fails publication. Reads are bounded before parsing; duplicate
+payload keys and malformed JSON fail with sanitized diagnostics. The shared
+[unsigned envelope contract](security-evidence.md) binds the exact payload bytes;
+reformatting JSON or changing line endings fails validation.
+
+**Migration:** standalone legacy posture JSON is rejected. Collect a fresh pair
+from the reviewed commit, replace both protected environment secrets and set the
+independent tenancy variable, then explicitly requalify. Do not wrap old payloads,
+restamp observations or edit a sidecar to pass. Local disposable qualification is
+unchanged; receipt schema remains 3. Backend source changes still require renewed
+qualification. Reverting this change restores the older weaker handoff and needs
+compatible workflow code; do not retain newly collected evidence as activation
+proof after a revert.
 
 The schema-v1 posture document binds to the unchanged foundation configuration,
 bucket, namespace and region and records collection start/completion. Both clocks
@@ -139,19 +165,21 @@ versioning, Standard storage, explicit writable status, zero retention rules/PAR
 and no lifecycle-policy ETag. Unknown values fail; policies need separate reviewed
 support rather than a boolean override. Versioning is checked, never enabled;
 retained history still needs allowance/budget review. A failed collection removes
-stale output and exposes only safe errors. The reader cannot prove least-privilege
-IAM, audit-log configuration, retention durability or account eligibility.
+both stale outputs and exposes only safe errors. Partial file publication is
+removed on handled I/O failures; an interrupted/mixed pair fails consumer binding.
+The reader cannot prove least-privilege IAM, audit-log configuration, retention durability or account eligibility.
 
-The protected workflow writes its private evidence secret to the ignored default
-path and validates it before remote qualification. Operator-collected JSON can be
-forged; trusted collection/signing and fresh posture on every future protected
-preview remain activation prerequisites, not guarantees of this offline validator.
+The protected workflow writes both private evidence secrets byte-for-byte to the
+ignored default paths and validates the pair before remote qualification.
+Operator-collected JSON can be forged together with a matching unsigned sidecar; producer labels and clean Git
+status do not authenticate the source. Trusted collection/signing and fresh
+posture on every future protected preview remain activation prerequisites, not guarantees of this offline validator.
 
 An authorized local OCI qualification alternatively requires the three environment
 variables above, followed by:
 
 ```sh
-uv run --locked infra backend qualify --allow-backend-writes
+uv run --locked infra backend qualify --account-id OCID --allow-backend-writes
 uv run --locked infra backend check-receipt
 ```
 
