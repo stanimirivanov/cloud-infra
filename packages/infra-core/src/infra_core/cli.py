@@ -137,22 +137,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("PASS: workflow syntax/expressions; no workflow steps executed")
         elif args.command == "services":
             from infra_core.governance.contracts import mapping
-            from infra_core.services.governance import audit as audit_services
+            from infra_core.service_evidence import (
+                read_service_pair,
+                reviewed_commit,
+                validate_service_evidence,
+            )
 
+            commit = reviewed_commit(root)
             service_config = mapping(
                 json.loads((root / args.config).read_text(encoding="utf-8")), "service proposal"
             )
-            service_evidence = json.loads((root / args.evidence).read_text(encoding="utf-8"))
+            payload, envelope = read_service_pair(root / args.evidence)
             with (root / "config/quotas/profiles.toml").open("rb") as stream:
                 service_profiles = tomllib.load(stream)["profiles"]
             service_profile = service_profiles.get(
                 str(service_config.get("provider")) + "-free", {}
             )
-            print(
-                json.dumps(
-                    audit_services(service_config, service_evidence, service_profile), indent=2
-                )
+            result = validate_service_evidence(
+                service_config, service_profile, payload, envelope, commit=commit
             )
+            if reviewed_commit(root) != commit:
+                raise ValueError("EXT023: checkout changed during service audit")
+            print(json.dumps(result, indent=2))
         elif args.command == "cutover":
             from infra_core.cutover import check
 

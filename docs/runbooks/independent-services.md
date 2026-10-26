@@ -57,7 +57,7 @@ profile revision where limits change, policy changes and negative tests.
 ## Offline preflight
 
 Copy the examples into ignored `.infra`, fill the private identifiers and collect
-current evidence. The checked-in evidence intentionally fails validation.
+current evidence and its adjacent sidecar. The checked-in evidence intentionally fails validation.
 
 ```sh
 uv run --locked infra services audit --config .infra/cloudflare.json --evidence .infra/cloudflare-evidence.json
@@ -76,6 +76,45 @@ and `plan` must be `free`. Record a private review reference in `source`.
 Entitlement evidence expires in 30 days, inventory/usage in 15 minutes, published
 terms in 90 days. Future timestamps fail. `usage_month` must be current UTC month;
 confirm the provider's actual billing period and reconcile it conservatively.
+
+### CLI evidence sidecars (M03-PR11 transport slice)
+
+**BREAKING CLI migration:** services audit now requires the original evidence file
+and an adjacent file named by appending .envelope.json (for example,
+cloudflare-evidence.json.envelope.json).
+Missing sidecars fail EXT023; no legacy fallback or automatic restamping exists.
+Keep both private files under ignored .infra and preserve exact payload bytes.
+
+A trusted offline producer can call infra_core.service_evidence.capture_service_evidence
+with independently reviewed config/profile dictionaries, the original payload bytes,
+and commit=the clean reviewed Git HEAD. It returns sidecar bytes only, after checking
+the schema-2 payload. Supply the selected provider-free profile from
+config/quotas/profiles.toml. Persist the returned bytes beside the unchanged payload.
+The helper performs no collection or Git lookup and does not authenticate a producer;
+validate the observation sources and reviewed inputs independently. Do not wrap old
+observations to claim they were newly collected.
+
+The CLI independently resolves clean HEAD before and after validation. The service-usage
+predicate binds role usage to the exact payload SHA256, original collection start/end,
+account_id and unit from the reviewed proposal, region=global, and a configuration
+digest. Global denotes account/organization-wide coverage, not resource placement.
+The digest is SHA256 of UTF-8 JSON of {proposal: config, profile: selected_profile},
+with sorted keys, compact separators, ASCII escaping and nonfinite values rejected.
+It includes scope_id, every proposed resource, growth budget and all profile fields;
+JSON object formatting/key order in the proposal is intentionally immaterial.
+Any semantic configuration/profile change or code commit requires freshly reviewed
+matching evidence. Evidence is still limited to 15 minutes from collection start;
+sidecar and payload clocks must match exactly. Reads are bounded to 10 MiB payload
+and 64 KiB sidecar. EVID001-EVID004 and EXT023 omit private source values.
+
+This adapter reuses the Apache-2.0
+[in-toto Statement pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
+through the existing shared API, without dependencies. It is unsigned consistency,
+not source authenticity, billing eligibility or authorization. The pure audit and
+both Pulumi library factories retain their schema-2 dictionary interfaces in this
+slice; they do not yet require sidecars. Their explicit consumer migration remains
+M03 work. No service deployment entry point is enabled. Rollback requires matching
+code/contracts and weakens CLI transport checks; it never grants deployment authority.
 
 ### Collection and usage coverage (M03-PR11 service slice)
 
@@ -114,7 +153,7 @@ The explicit window versus sample distinction adapts the Apache-2.0
 [OpenTelemetry metric data model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/)
 using existing stdlib/governance helpers. No telemetry dependency, OTLP interface,
 SDK collector or architecture exception is added. Source authenticity, shared
-service/OCI envelopes and complete billing-history models remain separate work.
+OCI envelopes, service factory migration and complete billing-history models remain separate work.
 
 **Migration:** standalone schema-1 evidence is rejected at the CLI and both
 factories before secret lookup or registration. Collect new evidence with actual

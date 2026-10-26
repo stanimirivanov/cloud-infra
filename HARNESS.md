@@ -171,7 +171,7 @@ operational drift/cost/availability monitors remain prerequisites for activation
 ## M03 implementation status
 
 The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #47 (M03-PR11 service coverage slice):
+stay disabled. Status through issue #49 (M03-PR11 service CLI envelope slice):
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
@@ -183,12 +183,12 @@ stay disabled. Status through issue #47 (M03-PR11 service coverage slice):
 | PR8: independent recovery | #33/#39/#41: isolated restore, explicit encryption/custody guidance and required wrong-key rejection; same-host synthetic scope only |
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
-| PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric windows and capacity samples; envelope migrations and complete billing/history modeling remain pending |
+| PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; factory/OCI envelope migrations and complete billing/history modeling remain pending |
 | PR12: cutover evidence | Pending; consumes remaining evidence contracts and administrative review |
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
 
 The [shared evidence contract](docs/runbooks/security-evidence.md) now gates backend
-posture collection/checks and remote qualification. Other evidence consumers remain
+posture collection/checks, remote qualification and offline service CLI audits. Other evidence consumers remain
 unchanged until their explicit migration PRs.

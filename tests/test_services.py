@@ -305,27 +305,26 @@ def test_existing_service_records_count_and_new_records_remain_closed(service):
         audit(config, evidence, profile)
 
 
-def test_cli_audits_same_proposal_and_fails_closed(service, tmp_path, capsys):
+def test_cli_audits_same_proposal_and_fails_closed(service, tmp_path, capsys, monkeypatch):
     from infra_core.cli import main
+    from infra_core.service_evidence import capture_service_evidence
 
     config, evidence, profile = service
+    commit = "a" * 40
+    monkeypatch.setattr("infra_core.service_evidence.reviewed_commit", lambda root: commit)
     c, e = tmp_path / "proposal.json", tmp_path / "evidence.json"
     c.write_text(json.dumps(config))
-    e.write_text(json.dumps(evidence))
+    payload = json.dumps(evidence).encode()
+    e.write_bytes(payload)
+    e.with_name(e.name + ".envelope.json").write_bytes(
+        capture_service_evidence(config, profile, payload, commit=commit)
+    )
     argv = ["--root", str(ROOT), "services", "audit", "--config", str(c), "--evidence", str(e)]
     assert main(argv) == 0
     assert json.loads(capsys.readouterr().out) == audit(config, evidence, profile)
-    evidence["complete"] = False
-    e.write_text(json.dumps(evidence))
+    e.write_bytes(payload + b" ")
     assert main(argv) == 1
-    assert "EXT003" in capsys.readouterr().err
-    evidence["complete"] = True
-    evidence["collection_started_at"] = (
-        datetime.fromisoformat(evidence["observed_at"]) - timedelta(hours=1)
-    ).isoformat()
-    e.write_text(json.dumps(evidence))
-    assert main(argv) == 1
-    assert "EXT022" in capsys.readouterr().err
+    assert "EVID002" in capsys.readouterr().err
     c.write_text("[]")
     assert main(argv) == 1
     assert "GOV003" in capsys.readouterr().err
