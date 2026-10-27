@@ -1,5 +1,6 @@
 """Pure OCI contracts and actual native SDK serialization, without cloud credentials."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -114,6 +115,19 @@ def test_graph_is_complete_ordered_and_passes_governance(config):
     assert result["peak"] == {"ocpus": "2", "memory_gb": "12", "block_gb": "100"}
     assert result["deployment_authorized"] is False
     assert {item.unit for item in graph} == {NETWORK_UNIT, OKE_UNIT}
+
+
+def test_graph_matches_pre_extraction_baseline(config):
+    # Captured from merged PR82 before extracting builders: includes all properties,
+    # Ref targets, resource types, names, unit assignments and registration order.
+    graph = foundation_graph(config)
+    serialized = json.dumps(
+        [asdict(resource) for resource in graph], sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert len(graph) == 50
+    assert hashlib.sha256(serialized).hexdigest() == (
+        "1a657ca4fff980b001823eeb08cb9fccdd4c433d44ef422a9147986f2005ecb3"
+    )
 
 
 @pytest.mark.parametrize(
@@ -356,11 +370,28 @@ with patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('early
             pass
 assert not observed
 from infra_program.oci import components
+with patch.object(pulumi.Resource, '__init__', side_effect=AssertionError('permit bypass')):
+    for constructor, arguments in (
+        (components.Network, (cfg, (), None, {}, expected_account_id)),
+        (components.Oke, (cfg, (), None, {}, None, expected_account_id)),
+    ):
+        try:
+            constructor(*arguments)
+            raise AssertionError('component accepted a missing permit')
+        except ValueError as error:
+            assert 'OCI040' in str(error)
+registration_order = []
+parents = {}
 for kind, constructor in list(components.CONSTRUCTORS.items()):
     def guarded(resource_name, *, opts, _constructor=constructor, **props):
         assert opts.protect is True
         assert opts.parent is not None and opts.provider is not None
         assert opts.import_ is None and not opts.aliases
+        unit = expected[resource_name].unit
+        assert isinstance(opts.parent, components.Network if unit == 'oci-network'
+                          else components.Oke)
+        parents[unit] = opts.parent
+        registration_order.append(resource_name)
         return _constructor(resource_name, opts=opts, **props)
     components.CONSTRUCTORS[kind] = guarded
 real_audit = governance.audit
@@ -371,6 +402,16 @@ def mutating_audit(a, p, observed_inventory, plan):
     return real_audit(a, p, observed_inventory, plan)
 with patch.object(governance, 'audit', mutating_audit):
     network, cluster = register_foundation(cfg, account, profile, inventory)
+assert registration_order == list(expected)
+assert parents == {'oci-network': network, 'oci-oke': cluster}
+for field, value in (('schema_version', 2), ('region', 'other'),
+                     ('compartment_id', 'other'), ('account_id', 'other'), ('cidrs', {})):
+    try:
+        components._validate_network_outputs(replace(network.outputs, **{field: value}),
+                                             cfg, expected_account_id)
+        raise AssertionError('network interface mismatch accepted: ' + field)
+    except ValueError as error:
+        assert 'OCI001' in str(error)
 
 @pulumi.runtime.test
 def check():
@@ -378,11 +419,20 @@ def check():
         assert len(observed) == len(expected), (len(observed), len(expected))
         assert not violations, violations
         assert network.outputs.schema_version == 1
+        assert network.outputs.account_id == expected_account_id
+        assert network.outputs.region == cfg.region
+        assert network.outputs.compartment_id == cfg.compartment_id
+        assert network.outputs.cidrs == {'vcn': cfg.vcn_cidr, 'api': cfg.api_cidr,
+                                        'worker': cfg.worker_cidr, 'pod': cfg.pod_cidr}
         assert set(network.outputs.ids) == {"vcn", "api-subnet", "worker-subnet", "pod-subnet",
                                             "api-nsg", "worker-nsg", "pod-nsg"}
-        assert outputs == [cfg.name + "-cluster-id", cfg.name + "-workers-id"]
+        assert outputs[:2] == [cfg.name + "-cluster-id", cfg.name + "-workers-id"]
+        prefix = 'urn:pulumi:test::oci-offline::'
+        assert outputs[2:] == [prefix + 'infrastructure:oci:Network::' + cfg.name + '-network',
+                              prefix + 'infrastructure:oci:Oke::' + cfg.name + '-oke']
         print(json.dumps({"resources": len(observed), "violations": violations}))
-    return pulumi.Output.all(cluster.cluster_id, cluster.node_pool_id).apply(complete)
+    return pulumi.Output.all(cluster.cluster_id, cluster.node_pool_id,
+                             network.urn, cluster.urn).apply(complete)
 check()
 """,
         encoding="utf-8",

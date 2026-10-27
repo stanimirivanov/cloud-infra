@@ -62,6 +62,38 @@ class NetworkOutputs:
     ids: dict[str, pulumi.Output[str]]
 
 
+def _network_outputs(
+    cfg: FoundationConfig,
+    registered: dict[str, pulumi.CustomResource],
+    account_id: str,
+) -> NetworkOutputs:
+    """Construct the existing version-1 interface from registered network IDs."""
+    return NetworkOutputs(
+        1,
+        cfg.region,
+        cfg.compartment_id,
+        account_id,
+        {
+            "vcn": cfg.vcn_cidr,
+            "api": cfg.api_cidr,
+            "worker": cfg.worker_cidr,
+            "pod": cfg.pod_cidr,
+        },
+        {
+            key: registered[key].id
+            for key in (
+                "vcn",
+                "api-subnet",
+                "worker-subnet",
+                "pod-subnet",
+                "api-nsg",
+                "worker-nsg",
+                "pod-nsg",
+            )
+        },
+    )
+
+
 class Network(pulumi.ComponentResource):
     def __init__(
         self,
@@ -81,30 +113,7 @@ class Network(pulumi.ComponentResource):
             pulumi.ResourceOptions(protect=True),
         )
         _emit(self, NETWORK_UNIT, cfg, graph, provider, registered)
-        self.outputs = NetworkOutputs(
-            1,
-            cfg.region,
-            cfg.compartment_id,
-            account_id,
-            {
-                "vcn": cfg.vcn_cidr,
-                "api": cfg.api_cidr,
-                "worker": cfg.worker_cidr,
-                "pod": cfg.pod_cidr,
-            },
-            {
-                key: registered[key].id
-                for key in (
-                    "vcn",
-                    "api-subnet",
-                    "worker-subnet",
-                    "pod-subnet",
-                    "api-nsg",
-                    "worker-nsg",
-                    "pod-nsg",
-                )
-            },
-        )
+        self.outputs = _network_outputs(cfg, registered, account_id)
         self.register_outputs(
             {
                 "schema_version": 1,
@@ -115,6 +124,31 @@ class Network(pulumi.ComponentResource):
                 "ids": self.outputs.ids,
             }
         )
+
+
+def _validate_network_outputs(
+    outputs: NetworkOutputs, cfg: FoundationConfig, account_id: str
+) -> None:
+    """Keep OKE interface checks independent of the in-process network component."""
+    require(
+        outputs.schema_version == 1
+        and outputs.region == cfg.region
+        and outputs.compartment_id == cfg.compartment_id,
+        "OCI001",
+        "network interface must match schema, region and compartment",
+    )
+    require(
+        outputs.account_id == account_id
+        and outputs.cidrs
+        == {
+            "vcn": cfg.vcn_cidr,
+            "api": cfg.api_cidr,
+            "worker": cfg.worker_cidr,
+            "pod": cfg.pod_cidr,
+        },
+        "OCI001",
+        "network billing scope and CIDRs must match",
+    )
 
 
 class Oke(pulumi.ComponentResource):
@@ -130,25 +164,7 @@ class Oke(pulumi.ComponentResource):
         _permit: object | None = None,
     ) -> None:
         require(_permit is _PERMIT, "OCI040", "use register_foundation for governed registration")
-        require(
-            network.outputs.schema_version == 1
-            and network.outputs.region == cfg.region
-            and network.outputs.compartment_id == cfg.compartment_id,
-            "OCI001",
-            "network interface must match schema, region and compartment",
-        )
-        require(
-            network.outputs.account_id == account_id
-            and network.outputs.cidrs
-            == {
-                "vcn": cfg.vcn_cidr,
-                "api": cfg.api_cidr,
-                "worker": cfg.worker_cidr,
-                "pod": cfg.pod_cidr,
-            },
-            "OCI001",
-            "network billing scope and CIDRs must match",
-        )
+        _validate_network_outputs(network.outputs, cfg, account_id)
         super().__init__(
             "infrastructure:oci:Oke",
             cfg.name + "-oke",
@@ -185,6 +201,16 @@ def _emit(
             )
 
 
+def _register_provider(cfg: FoundationConfig, account_id: str) -> oci.Provider:
+    """Called only inside the preflight registration closure, never during planning."""
+    return oci.Provider(
+        cfg.name + "-provider",
+        region=cfg.region,
+        tenancy_ocid=account_id,
+        opts=pulumi.ResourceOptions(protect=True),
+    )
+
+
 def register_foundation(
     cfg: FoundationConfig,
     account: dict[str, Any],
@@ -204,12 +230,7 @@ def register_foundation(
 
     def register() -> tuple[Network, Oke]:
         # This closure owns the same frozen configuration and graph used by the audit.
-        provider = oci.Provider(
-            cfg.name + "-provider",
-            region=cfg.region,
-            tenancy_ocid=account_id,
-            opts=pulumi.ResourceOptions(protect=True),
-        )
+        provider = _register_provider(cfg, account_id)
         registered: dict[str, pulumi.CustomResource] = {}
         network = Network(cfg, graph, provider, registered, account_id, _permit=_PERMIT)
         oke = Oke(cfg, graph, provider, registered, network, account_id, _permit=_PERMIT)
