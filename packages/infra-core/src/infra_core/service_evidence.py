@@ -17,8 +17,9 @@ from infra_core.evidence import (
     create_envelope,
     validate_envelope,
 )
-from infra_core.governance.contracts import fields, require, text
+from infra_core.governance.contracts import fields, require, text, timestamp
 from infra_core.inventory.cloudflare import CloudflareCollection
+from infra_core.inventory.supabase import SupabaseCollection
 from infra_core.services.governance import audit
 
 
@@ -226,4 +227,88 @@ def capture_cloudflare_evidence(
         sort_keys=True,
         allow_nan=False,
     ).encode()
+    return payload, capture_service_evidence(config, profile, payload, commit=commit, now=now)
+
+
+def capture_supabase_evidence(
+    config: dict[str, Any],
+    profile: dict[str, Any],
+    collection: SupabaseCollection,
+    supplement: bytes,
+    *,
+    commit: str,
+    now: datetime | None = None,
+) -> tuple[bytes, bytes]:
+    """Reconcile explicit operator readings with management identities, never fill gaps."""
+    config, profile = deepcopy((config, profile))
+    now = now or datetime.now(UTC)
+    wrapper = fields(
+        _payload(supplement),
+        {"schema_version", "classification", "evidence", "database_observations"},
+        "Supabase supplement",
+    )
+    require(
+        type(wrapper["schema_version"]) is int
+        and wrapper["schema_version"] == 1
+        and wrapper["classification"] == "supplemental-operator-observations",
+        "SB004",
+        "explicit supplemental observation classification required",
+    )
+    data = wrapper["evidence"]
+    # Validate original clocks, all five metrics, billing cycle, DB sizes and review flags.
+    audit(config, data, profile, now=now)
+    require(
+        config.get("provider") == "supabase"
+        and collection.account_id == config["account_id"]
+        and config["scope_id"] in collection.free_organizations
+        and bool(collection.observations),
+        "SB001",
+        "management observations differ from reviewed Free target",
+    )
+    expected = {(project.id, project.scope_id) for project in collection.projects}
+    require(
+        {(item["id"], item["scope_id"]) for item in data["resources"]} == expected,
+        "SB004",
+        "supplement must cover every observed Free project exactly",
+    )
+    samples = wrapper["database_observations"]
+    require(isinstance(samples, list), "SB004", "database source clocks are required")
+    seen: set[tuple[str, str]] = set()
+    start = timestamp(data["collection_started_at"], "supplement start")
+    end = timestamp(data["collection_completed_at"], "supplement end")
+    for sample in samples:
+        sample = fields(sample, {"id", "scope_id", "as_of", "source"}, "database observation")
+        key = (text(sample["id"], "database project"), text(sample["scope_id"], "database scope"))
+        require(
+            key not in seen
+            and key in expected
+            and start <= timestamp(sample["as_of"], "database observation") <= end,
+            "SB004",
+            "database source scope or original clock is invalid",
+        )
+        text(sample["source"], "database source")
+        seen.add(key)
+    require(seen == expected, "SB004", "missing database size source observation")
+    api_start = collection.observations[0].collection_started_at
+    api_end = collection.observations[-1].collection_finished_at
+    data["observed_at"] = data["collection_started_at"] = min(start, api_start).isoformat()
+    data["collection_completed_at"] = max(end, api_end).isoformat()
+    provenance = hashlib.sha256(
+        json.dumps(
+            [
+                (
+                    o.request_sha256,
+                    o.response_sha256,
+                    o.collection_started_at.isoformat(),
+                    o.collection_finished_at.isoformat(),
+                )
+                for o in collection.observations
+            ]
+        ).encode()
+    ).hexdigest()
+    data["source"] += (
+        "; supplemental-operator-observations sha256=" + hashlib.sha256(supplement).hexdigest()
+    )
+    data["source"] += "; management-observations-sha256=" + provenance
+    payload = json.dumps(data, sort_keys=True, allow_nan=False).encode()
     return payload, capture_service_evidence(config, profile, payload, commit=commit, now=now)

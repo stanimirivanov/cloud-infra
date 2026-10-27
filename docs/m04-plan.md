@@ -56,6 +56,10 @@ agreed review size; do not silently extend milestone closeout.
 - M04-PR5: issue #89 collects scoped Cloudflare zone/DNS observations with bounded,
   unfiltered pagination and existing service evidence/envelopes. Free entitlement
   and other-service approval remain independently reviewed; no activation path added.
+- M04-PR6: issue #91 collects Supabase user/organization/plan/entitlement and Free
+  project identities. Explicit operator supplements supply all usage windows and
+  per-project DB samples, reconciled against complete membership without restamping.
+  Missing visibility/data blocks evidence; no deployment or cutover activation.
 
 ## PR1 contracts and compatibility
 
