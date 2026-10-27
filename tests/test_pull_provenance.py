@@ -147,7 +147,7 @@ def test_observed_merged_pull_does_not_claim_review_or_historical_enforcement(ob
     root, document, _ = observation
     result = administration.check(root, json.dumps(document).encode())
     assert result["deployment_authorized"] is result["cutover_authorized"] is False
-    assert any("independent PR approval" in gate for gate in result["remaining_gates"])
+    assert any("last-push reviewer independence" in gate for gate in result["remaining_gates"])
     # Actor identity structure is not an independent-human approval policy.
     document["responses"]["pull_request"]["merged_by"] = {"id": 32, "type": "Bot"}
     administration.check(root, json.dumps(document).encode())
