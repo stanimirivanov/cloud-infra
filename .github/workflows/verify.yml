@@ -43,3 +43,10 @@ jobs:
         run: |
           ./.github/scripts/install-providers.ps1
           uv run --locked pytest tests/test_provider_tools.py -q -m provider_integration --basetemp .infra/pytest-providers -o cache_dir=.infra/pytest-cache
+      - name: Verify Supabase cache and offline schema (no credentials)
+        shell: pwsh
+        env:
+          RUN_PROVIDER_INTEGRATION: '1'
+        run: |
+          ./.github/scripts/install-providers.ps1 -Provider supabase
+          uv run --locked pytest tests/test_supabase_provider_cache.py -q -m provider_integration --basetemp .infra/pytest-supabase-provider -o cache_dir=.infra/pytest-cache

@@ -1,13 +1,16 @@
 """Native executable verification rooted in pinned archives; never acquire or execute."""
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import platform
 import re
 import shutil
+import stat
 import tarfile
+import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -31,12 +34,34 @@ def load_assets(root: Path) -> dict[str, Any]:
     try:
         data = json.loads((root / "config/provider-toolchain.json").read_text())
         _require(
-            set(data) == {"schema_version", "providers"}
+            set(data) == {"schema_version", "providers", "downstream"}
             and type(data["schema_version"]) is int
-            and data["schema_version"] == 1
+            and data["schema_version"] == 2
             and set(data["providers"]) == NAMES,
             "unsupported provider manifest",
         )
+        downstream = data["downstream"]
+        _require(
+            set(downstream) == {"source", "version", "assets"}
+            and downstream["source"] == "registry.opentofu.org/supabase/supabase"
+            and downstream["version"] == "1.11.0"
+            and set(downstream["assets"]) == {"linux-x64", "windows-x64"},
+            "invalid downstream identity",
+        )
+        for target, asset in downstream["assets"].items():
+            system = target.split("-")[0]
+            binary = "terraform-provider-supabase_v1.11.0" + (".exe" if system == "windows" else "")
+            url = (
+                "https://github.com/supabase/terraform-provider-supabase/releases/download/v1.11.0/"
+                f"terraform-provider-supabase_1.11.0_{system}_amd64.zip"
+            )
+            _require(
+                set(asset) == {"url", "sha256", "binary"}
+                and asset["url"] == url
+                and asset["binary"] == binary
+                and re.fullmatch(r"[a-f0-9]{64}", asset["sha256"]) is not None,
+                "invalid downstream asset",
+            )
         for name, provider in data["providers"].items():
             version = provider["version"]
             _require(
@@ -188,12 +213,144 @@ def verified_environment(root: Path, home: Path) -> dict[str, str]:
     }
 
 
+def _supabase_paths(root: Path, home: Path) -> tuple[dict[str, str], Path, Path, Path]:
+    # Reuse native platform/home/reparse validation without executing the bridge.
+    _paths(root, "terraform-provider", home)
+    home = Path(os.path.abspath(home))
+    target = "windows-x64" if platform.system() == "Windows" else "linux-x64"
+    asset = json.loads((root / "config/provider-toolchain.json").read_text())["downstream"][
+        "assets"
+    ][target]
+    cache = home / "dynamic_tf_plugins"
+    directory = (
+        cache / "registry.opentofu.org/supabase/supabase/1.11.0" / target.replace("-x64", "_amd64")
+    )
+    archive = home / ".provider-archives" / f"supabase-1.11.0-{target}.zip"
+    _regular_path(directory)
+    _regular_path(archive)
+    return asset, cache, directory, archive
+
+
+def _zip_digest(archive: Path, asset: dict[str, str]) -> str:
+    _require(
+        archive.stat().st_size <= 32 * 1024 * 1024 and _digest(archive) == asset["sha256"],
+        "downstream archive checksum/size mismatch; nothing extracted or executed",
+    )
+    digest = None
+    with zipfile.ZipFile(archive) as package:
+        members = package.infolist()
+        _require(
+            len(members) <= 32 and sum(m.file_size for m in members) <= 128 * 1024 * 1024,
+            "downstream archive exceeds bounds",
+        )
+        names: set[str] = set()
+        for member in members:
+            path = PurePosixPath(member.filename)
+            _require(
+                not path.is_absolute()
+                and ".." not in path.parts
+                and member.filename not in names
+                and not any(c in member.filename for c in ("\\", ":"))
+                and stat.S_IFMT(member.external_attr >> 16) in (0, stat.S_IFREG, stat.S_IFDIR),
+                "unsafe or duplicate downstream archive member",
+            )
+            names.add(member.filename)
+            if member.filename == asset["binary"]:
+                _require(
+                    not member.is_dir()
+                    and stat.S_IFMT(member.external_attr >> 16) in (0, stat.S_IFREG),
+                    "downstream executable must be a regular file",
+                )
+                with package.open(member) as stream:
+                    hashed = hashlib.sha256()
+                    while chunk := stream.read(1024 * 1024):
+                        hashed.update(chunk)
+                    digest = hashed.hexdigest()
+    _require(digest is not None, "downstream executable missing from archive")
+    assert digest is not None
+    return digest
+
+
+def install_supabase(root: Path, archive: Path, home: Path) -> Path:
+    asset, _, directory, cached = _supabase_paths(root, home)
+    expected = _zip_digest(archive, asset)
+    _require(not directory.exists() and not cached.exists(), "use a fresh downstream destination")
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    with archive.open("rb") as source, cached.open("xb") as destination:
+        shutil.copyfileobj(source, destination)
+    _require(_digest(cached) == asset["sha256"], "downstream archive changed during capture")
+    directory.mkdir(parents=True)
+    binary = directory / asset["binary"]
+    with (
+        zipfile.ZipFile(cached) as package,
+        package.open(asset["binary"]) as member_stream,
+        binary.open("xb") as destination,
+    ):
+        shutil.copyfileobj(member_stream, destination)
+    _require(_digest(binary) == expected, "downstream executable checksum mismatch")
+    binary.chmod(0o755)
+    return binary
+
+
+def verify_supabase(root: Path, home: Path) -> Path:
+    try:
+        asset, cache, directory, archive = _supabase_paths(root, home)
+        expected = _zip_digest(archive, asset)
+        current = cache
+        for part in (*directory.relative_to(cache).parts, asset["binary"]):
+            _regular_path(current)
+            _require(
+                {p.name for p in current.iterdir()} == {part}, "unexpected downstream cache content"
+            )
+            current = current / part
+        _require(_digest(current) == expected, "downstream executable checksum mismatch")
+        _require(
+            os.name == "nt" or bool(current.stat().st_mode & 0o111), "downstream is not executable"
+        )
+        return current
+    except (OSError, zipfile.BadZipFile, EOFError):
+        raise RuntimeError("PROVIDER001: downstream cache cannot be verified") from None
+
+
+def verified_supabase_environment(root: Path, home: Path) -> dict[str, str]:
+    environment = verified_environment(root, home)
+    verify_supabase(root, home)
+    try:
+        metadata = json.loads(
+            (root / "sdks/supabase/pulumi_supabase/pulumi-plugin.json").read_text()
+        )
+        parameter = metadata["parameterization"]
+        _require(
+            metadata["name"] == "terraform-provider"
+            and metadata["resource"] is True
+            and metadata["version"] == "1.5.0"
+            and metadata["version"] == load_assets(root)["terraform-provider"]["version"]
+            and parameter["name"] == "supabase"
+            and parameter["version"] == "1.11.0"
+            and json.loads(base64.b64decode(parameter["value"], validate=True))
+            == {"remote": {"url": "registry.opentofu.org/supabase/supabase", "version": "1.11.0"}},
+            "SDK parameterization differs from verified cache",
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        raise RuntimeError("PROVIDER001: cannot verify SDK parameterization") from None
+    _, cache, _, _ = _supabase_paths(root, home)
+    return {
+        **environment,
+        "PULUMI_DYNAMIC_TF_PLUGIN_CACHE_DIR": str(cache),
+        "PULUMI_BRIDGE_REATTACH_PROVIDERS": "",
+        "TF_REATTACH_PROVIDERS": "",
+    }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--home", type=Path, required=True)
-    parser.add_argument("--provider", choices=sorted(NAMES), required=True)
+    parser.add_argument("--provider", choices=sorted(NAMES | {"supabase"}), required=True)
     parser.add_argument("--archive", type=Path, required=True)
     args = parser.parse_args()
-    install_provider(args.root, args.provider, args.archive, args.home)
-    print("Verified native provider installation")
+    if args.provider == "supabase":
+        install_supabase(args.root, args.archive, args.home)
+    else:
+        install_provider(args.root, args.provider, args.archive, args.home)
+    print("Verified provider installation")

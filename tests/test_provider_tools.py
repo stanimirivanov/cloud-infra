@@ -146,7 +146,8 @@ def test_junction_and_missing_files_fail_closed(fixture, monkeypatch):
         pt.install_provider(root, "oci", archives["oci"], home)
 
 
-def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path):
+@pytest.mark.parametrize("provider", ["oci", "supabase"])
+def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path, provider):
     root = tmp_path / "repository"
     installer = root / ".github/scripts/install-providers.ps1"
     installer.parent.mkdir(parents=True)
@@ -158,14 +159,14 @@ def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path
     )
     launcher = tmp_path / "hidden-directory.ps1"
     launcher.write_text(
-        "param([string]$Repository, [string]$Installer, [string]$Archive)\n"
+        "param([string]$Repository, [string]$Installer, [string]$Archive, [string]$Provider)\n"
         "$ErrorActionPreference = 'Stop'\n"
         "$directory = Join-Path $Repository '.infra'\n"
         "if ($IsWindows) {\n"
         "  [IO.File]::SetAttributes($directory, "
         "([IO.File]::GetAttributes($directory) -bor [IO.FileAttributes]::Hidden))\n"
         "}\n"
-        "& $Installer -Provider oci -Archive $Archive\n"
+        "& $Installer -Provider $Provider -Archive $Archive\n"
         "exit $LASTEXITCODE\n",
         encoding="utf-8",
     )
@@ -183,6 +184,8 @@ def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path
             str(installer),
             "-Archive",
             str(source),
+            "-Provider",
+            provider,
         ],
         cwd=ROOT,
         capture_output=True,
