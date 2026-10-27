@@ -1,6 +1,7 @@
 """Read/list-only OCI inventory. Missing permissions never yield a partial success."""
 
 import importlib
+import re
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -22,7 +23,7 @@ class Reader(Protocol):
 
 
 class OCIReader:
-    """SDK boundary; the only dispatched methods are the reviewed list operations."""
+    """SDK boundary for reviewed read-only list, posture and usage operations."""
 
     def __init__(self, config_file: str, profile: str, tenancy: str) -> None:
         try:
@@ -38,6 +39,50 @@ class OCIReader:
             "OCI credentials target another tenancy",
         )
         self.clients: dict[tuple[str, str], Any] = {}
+
+    def usage_page(
+        self,
+        *,
+        account_id: str,
+        region: str,
+        started: datetime,
+        ended: datetime,
+        page: str | None,
+    ) -> tuple[dict[str, Any], str | None]:
+        """One semantic read (POST /usage); never dispatch caller-selected methods."""
+        require(account_id == self.config["tenancy"], "USAGE001", "usage tenancy mismatch")
+        require(
+            bool(re.fullmatch(r"[a-z]{2}-[a-z]+-[1-9][0-9]*", region)),
+            "USAGE001",
+            "invalid usage region",
+        )
+        try:
+            key = ("UsageapiClient", region)
+            if key not in self.clients:
+                self.clients[key] = self.sdk.usage_api.UsageapiClient(
+                    self.config | {"region": region},
+                    timeout=(10, 30),
+                    retry_strategy=self.sdk.retry.NoneRetryStrategy(),
+                )
+            details = self.sdk.usage_api.models.RequestSummarizedUsagesDetails(
+                tenant_id=account_id,
+                time_usage_started=started,
+                time_usage_ended=ended,
+                granularity="HOURLY",
+                query_type="USAGE_ONLY",
+                is_aggregate_by_time=False,
+                group_by=["tenantId", "skuPartNumber", "unit"],
+            )
+            response = self.clients[key].request_summarized_usages(
+                details,
+                page=page,
+                limit=1000,
+                retry_strategy=self.sdk.retry.NoneRetryStrategy(),
+            )
+            require(response.status == 200, "USAGE001", "usage request failed")
+            return self.sdk.util.to_dict(response.data), response.headers.get("opc-next-page")
+        except Exception:
+            raise GovernanceError("USAGE001: usage page failed; raw details withheld") from None
 
     def list(
         self,
