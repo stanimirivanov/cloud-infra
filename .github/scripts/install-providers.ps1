@@ -20,7 +20,7 @@ foreach ($name in $Provider) {
     if ($version -notmatch '^\d+\.\d+\.\d+$' -or $asset.url -cne $expectedUrl -or $asset.sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'PROVIDER001: invalid release pin' }
     foreach ($parent in @('.infra', '.infra/provider-downloads')) {
         $candidate = Join-Path $repo $parent
-        if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'PROVIDER001: linked download path' }
+        if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'PROVIDER001: linked download path' }
     }
     $stage = Join-Path $repo ('.infra/provider-downloads/' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $stage -Force | Out-Null

@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import tarfile
 import tomllib
@@ -146,6 +147,28 @@ def test_junction_and_missing_files_fail_closed(fixture, monkeypatch):
 
 
 def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path):
+    root = tmp_path / "repository"
+    installer = root / ".github/scripts/install-providers.ps1"
+    installer.parent.mkdir(parents=True)
+    (root / "config").mkdir()
+    (root / ".infra").mkdir()
+    shutil.copyfile(ROOT / ".github/scripts/install-providers.ps1", installer)
+    shutil.copyfile(
+        ROOT / "config/provider-toolchain.json", root / "config/provider-toolchain.json"
+    )
+    launcher = tmp_path / "hidden-directory.ps1"
+    launcher.write_text(
+        "param([string]$Repository, [string]$Installer, [string]$Archive)\n"
+        "$ErrorActionPreference = 'Stop'\n"
+        "$directory = Join-Path $Repository '.infra'\n"
+        "if ($IsWindows) {\n"
+        "  [IO.File]::SetAttributes($directory, "
+        "([IO.File]::GetAttributes($directory) -bor [IO.FileAttributes]::Hidden))\n"
+        "}\n"
+        "& $Installer -Provider oci -Archive $Archive\n"
+        "exit $LASTEXITCODE\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "bad.tar.gz"
     source.write_bytes(b"not a release")
     result = subprocess.run(
@@ -153,9 +176,11 @@ def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path
             "pwsh",
             "-NoProfile",
             "-File",
-            str(ROOT / ".github/scripts/install-providers.ps1"),
-            "-Provider",
-            "oci",
+            str(launcher),
+            "-Repository",
+            str(root),
+            "-Installer",
+            str(installer),
             "-Archive",
             str(source),
         ],
@@ -169,6 +194,7 @@ def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path
     assert result.stderr.splitlines() == [
         "PROVIDER001: archive checksum mismatch; nothing extracted or executed"
     ]
+    assert not (root / ".infra/provider-home").exists()
 
 
 @pytest.mark.provider_integration
