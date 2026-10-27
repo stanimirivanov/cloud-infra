@@ -68,14 +68,19 @@ def proposal(resources: tuple[Resource, ...], account_id: str, region: str) -> d
 
 def foundation_graph(cfg: FoundationConfig, *, now: datetime | None = None) -> tuple[Resource, ...]:
     cfg.validate(now=now)
+    return _network_graph(cfg) + _oke_graph(cfg)
+
+
+def _network_graph(cfg: FoundationConfig) -> tuple[Resource, ...]:
+    """Build the network layer; validation remains at the governed caller boundary."""
     resources: list[Resource] = []
 
-    def add(key: str, family: str, name: str, props: dict[str, Any], *, oke: bool = False) -> None:
+    def add(key: str, family: str, name: str, props: dict[str, Any]) -> None:
         resources.append(
             Resource(
                 key,
                 f"oci:{family}/{name[0].lower() + name[1:]}:{name}",
-                OKE_UNIT if oke else NETWORK_UNIT,
+                NETWORK_UNIT,
                 props,
             )
         )
@@ -201,64 +206,68 @@ def foundation_graph(cfg: FoundationConfig, *, now: datetime | None = None) -> t
     for port in (80, 443):
         rule("worker", "internet" + str(port), "EGRESS", "0.0.0.0/0", "6", port)
     rule("worker", "metadata", "EGRESS", "169.254.169.254/32", "6", 80)
-    add(
-        "cluster",
-        "ContainerEngine",
-        "Cluster",
-        {
-            "compartment_id": cfg.compartment_id,
-            "name": cfg.name + "-cluster",
-            "vcn_id": Ref("vcn"),
-            "kubernetes_version": cfg.kubernetes_version,
-            "type": "BASIC_CLUSTER",
-            "cluster_pod_network_options": [{"cni_type": "OCI_VCN_IP_NATIVE"}],
-            "endpoint_config": {
-                "is_public_ip_enabled": True,
-                "subnet_id": Ref("api-subnet"),
-                "nsg_ids": [Ref("api-nsg")],
-            },
-            "options": {
-                "add_ons": {"is_kubernetes_dashboard_enabled": False},
-                "kubernetes_network_config": {"services_cidr": cfg.services_cidr},
-            },
-        },
-        oke=True,
-    )
-    add(
-        "workers",
-        "ContainerEngine",
-        "NodePool",
-        {
-            "compartment_id": cfg.compartment_id,
-            "cluster_id": Ref("cluster"),
-            "name": cfg.name + "-arm-pool",
-            "kubernetes_version": cfg.kubernetes_version,
-            "node_shape": "VM.Standard.A1.Flex",
-            "node_shape_config": {
-                "ocpus": cfg.ocpus_per_node,
-                "memory_in_gbs": cfg.memory_gb_per_node,
-            },
-            "node_source_details": {
-                "source_type": "IMAGE",
-                "image_id": cfg.image.image_id,
-                "boot_volume_size_in_gbs": str(cfg.boot_gb_per_node),
-            },
-            "node_config_details": {
-                "size": cfg.nodes,
-                "is_pv_encryption_in_transit_enabled": True,
-                "placement_configs": [
-                    {"availability_domain": ad, "subnet_id": Ref("worker-subnet")}
-                    for ad in cfg.availability_domains
-                ],
-                "nsg_ids": [Ref("worker-nsg")],
-                "node_pool_pod_network_option_details": {
-                    "cni_type": "OCI_VCN_IP_NATIVE",
-                    "max_pods_per_node": cfg.max_pods_per_node,
-                    "pod_subnet_ids": [Ref("pod-subnet")],
-                    "pod_nsg_ids": [Ref("pod-nsg")],
+    return tuple(resources)
+
+
+def _oke_graph(cfg: FoundationConfig) -> tuple[Resource, ...]:
+    """Build OKE with symbolic network references; never register or look up IDs."""
+    return (
+        Resource(
+            "cluster",
+            "oci:ContainerEngine/cluster:Cluster",
+            OKE_UNIT,
+            {
+                "compartment_id": cfg.compartment_id,
+                "name": cfg.name + "-cluster",
+                "vcn_id": Ref("vcn"),
+                "kubernetes_version": cfg.kubernetes_version,
+                "type": "BASIC_CLUSTER",
+                "cluster_pod_network_options": [{"cni_type": "OCI_VCN_IP_NATIVE"}],
+                "endpoint_config": {
+                    "is_public_ip_enabled": True,
+                    "subnet_id": Ref("api-subnet"),
+                    "nsg_ids": [Ref("api-nsg")],
+                },
+                "options": {
+                    "add_ons": {"is_kubernetes_dashboard_enabled": False},
+                    "kubernetes_network_config": {"services_cidr": cfg.services_cidr},
                 },
             },
-        },
-        oke=True,
+        ),
+        Resource(
+            "workers",
+            "oci:ContainerEngine/nodePool:NodePool",
+            OKE_UNIT,
+            {
+                "compartment_id": cfg.compartment_id,
+                "cluster_id": Ref("cluster"),
+                "name": cfg.name + "-arm-pool",
+                "kubernetes_version": cfg.kubernetes_version,
+                "node_shape": "VM.Standard.A1.Flex",
+                "node_shape_config": {
+                    "ocpus": cfg.ocpus_per_node,
+                    "memory_in_gbs": cfg.memory_gb_per_node,
+                },
+                "node_source_details": {
+                    "source_type": "IMAGE",
+                    "image_id": cfg.image.image_id,
+                    "boot_volume_size_in_gbs": str(cfg.boot_gb_per_node),
+                },
+                "node_config_details": {
+                    "size": cfg.nodes,
+                    "is_pv_encryption_in_transit_enabled": True,
+                    "placement_configs": [
+                        {"availability_domain": ad, "subnet_id": Ref("worker-subnet")}
+                        for ad in cfg.availability_domains
+                    ],
+                    "nsg_ids": [Ref("worker-nsg")],
+                    "node_pool_pod_network_option_details": {
+                        "cni_type": "OCI_VCN_IP_NATIVE",
+                        "max_pods_per_node": cfg.max_pods_per_node,
+                        "pod_subnet_ids": [Ref("pod-subnet")],
+                        "pod_nsg_ids": [Ref("pod-nsg")],
+                    },
+                },
+            },
+        ),
     )
-    return tuple(resources)

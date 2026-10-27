@@ -32,6 +32,17 @@ implementation. Apply/import, foreign-state adoption, monitoring and production
 recovery belong to M05. Reassess PR boundaries explicitly if a slice exceeds the
 agreed review size; do not silently extend milestone closeout.
 
+## Implementation record
+
+- M04-PR1: issue #81 / PR #82, merged with all checks passing.
+- M04-PR2: issue #83 extracts private network/OKE graph builders, provider
+  registration and network-output construction/validation. The existing
+  `register_foundation` entry point still validates and audits the entire frozen
+  proposal before any provider or component registration. Resource graph, names,
+  ordering, parent/provider/protection options and version-1 outputs are preserved.
+  Independent stack factories remain in PR10/PR11; this refactor enables no
+  preview or deployment path and performs no state migration.
+
 ## PR1 contracts and compatibility
 
 Foundation schema **3** replaces schema 2 without automatic migration. It pins
