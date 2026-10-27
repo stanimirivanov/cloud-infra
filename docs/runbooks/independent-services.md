@@ -4,11 +4,43 @@ This library adds offline service preflight and protected Pulumi components. It
 does not activate deployments. `config/pulumi.toml` identities remain disabled;
 the normal program, `infra preview --unit NAME` and `infra deploy --unit NAME` still reject provisioning.
 There is no Terraform adoption, OCI output dependency, Kubernetes integration,
-DNS zone creation or SQL migration here. Read-only Cloudflare collection is a library
+DNS zone creation or SQL migration here. Read-only management collection is a library
 API; there is no collection CLI/workflow activation yet. Configuration lookup
 is explicit through the library factory described below.
 
 ## Ownership and map
+
+### Supabase management collection (M04-PR6)
+
+`infra_core.inventory.supabase.collect_management(account_id, organizations, token=...)`
+requires an independent expected user and complete tuple of visible organization
+slugs. It checks profile gotrue_id, exact membership, organization IDs/plans and
+Free-organization entitlement metadata; Free projects use unfiltered offset/limit
+pagination with stable counts (100/page). Paused projects count; branches fail as
+unclassified. Known paid organizations are observed but excluded from the Free
+project count. Because the API does not prove Owner/Administrator roles, all visible
+Free projects are counted conservatively. Limits: 32 organizations, 128 calls,
+10,000 projects, 16 MiB total and 15 minutes from the first observation.
+
+`capture_supabase_evidence` in infra_core.service_evidence requires immutable
+supplement JSON bytes: schema_version=1, classification="supplemental-operator-observations",
+evidence=the existing complete schema-4 service evidence, and database_observations
+(one per observed Free project, with id, scope_id, as_of, source). Database MB stays
+in evidence.resources; each source clock must lie in the original supplemental
+collection interval. All five metric windows, billing anchor, review flags and
+database sizes must pass existing audit before the join. API identities must match
+every supplemental project, including projects outside the target organization.
+The output uses the earliest original start/latest completion, retaining original
+verification and metric clocks and binding exact supplement/API digests in source.
+No data-plane calls, SQL, scraping, disk-to-usage conversion or billing synthesis.
+
+See the [public OpenAPI contract](https://api.supabase.com/api/v1-json) and
+[organization projects](https://supabase.com/docs/reference/api/v1-get-all-projects-for-organization).
+Keep raw profile/project observations and supplements private under .infra. Effective
+full membership visibility, role/entitlement review, source authenticity and fresh
+authoritative usage remain administrator-owned live prerequisites. Pagination is
+not a transactional snapshot; whole-process deadlines remain orchestration work.
+No dependency, existing evidence schema, quota, freshness or activation change.
 
 ### Cloudflare observation collection (M04-PR5)
 
