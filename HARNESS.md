@@ -90,7 +90,7 @@ with a five-minute timeout. It needs no cloud credentials, provider plugins or
 deployed-state access. Generated SDK code is excluded from Ruff/mypy traversal;
 actual adapter serialization is exercised using the generated SDK in mocks.
 
-Default tests skip three opt-in backend/policy-host integration tests. CI explicitly
+Default tests skip four opt-in backend/policy-host/provider integration tests. CI explicitly
 sets RUN_PULUMI_LOCAL_QUALIFICATION=1 and runs the backend_integration marker with the
 pinned CLI on disposable local storage. This tests encryption, locking, recovery
 and policy protocol behavior without creating provider/cloud resources. Recovery

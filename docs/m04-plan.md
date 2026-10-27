@@ -60,6 +60,10 @@ agreed review size; do not silently extend milestone closeout.
   project identities. Explicit operator supplements supply all usage windows and
   per-project DB samples, reconciled against complete membership without restamping.
   Missing visibility/data blocks evidence; no deployment or cutover activation.
+- M04-PR7: issue #93 pins native provider archives and verifies executable members
+  in an explicit private home. Binary hashes derive from reverified pinned archives;
+  CI checks both platforms' real assets. Downstream Supabase cache remains PR8;
+  no provider execution or resource-operation activation is added.
 
 ## PR1 contracts and compatibility
 

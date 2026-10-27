@@ -10,7 +10,9 @@ qualification. Never expose either to PR validation or disabled resource operati
 reviewers/main-only environment branches is an administrator prerequisite.
 
 Pin external Actions to reviewed full SHAs in config/toolchain.json. Install tools
-only through .github/scripts/install-tools.ps1; verify hashes before extraction.
+only through .github/scripts/install-tools.ps1; native providers use
+.github/scripts/install-providers.ps1 and pinned archive-member verification.
+Neither installer executes provider code. Verify hashes before extraction.
 Keep complete checkout history and mandatory redacted secret scans; no blanket
 baselines, inline suppression or scanner-output uploads. See the trusted-toolchain
 runbook for updates and incident handling.
