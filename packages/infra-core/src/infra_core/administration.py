@@ -26,10 +26,13 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _json(payload: bytes) -> dict[str, Any]:
+def _json(payload: bytes, *, array: bool = False) -> dict[str, Any]:
     require(len(payload) <= MAX_BYTES, "ADMIN001", "administrative input exceeds size limit")
     try:
-        return mapping(json.loads(payload, object_pairs_hook=_object), "administrative input")
+        value = json.loads(payload, object_pairs_hook=_object)
+        if array:
+            return {"items": records(value, "associated pull requests")}
+        return mapping(value, "administrative input")
     except (ValueError, TypeError, RecursionError):
         raise ValueError("ADMIN001: invalid administrative JSON") from None
 
@@ -137,7 +140,10 @@ def _get(root: Path, endpoint: str) -> dict[str, Any]:
     except (OSError, subprocess.SubprocessError):
         raise ValueError("ADMIN004: GitHub GET unavailable; raw diagnostics suppressed") from None
     require(result.returncode == 0, "ADMIN004", "GitHub GET denied or unavailable; no evidence")
-    return _json(result.stdout)
+    return _json(
+        result.stdout,
+        array="/commits/" in endpoint and endpoint.endswith("/pulls?per_page=100&page=1"),
+    )
 
 
 def _controls(policy: dict[str, Any], responses: dict[str, Any], commit: str) -> None:
@@ -355,6 +361,71 @@ def _execution(
         )
 
 
+def _associated_pull(policy: dict[str, Any], value: object, commit: str) -> dict[str, Any]:
+    page = fields(value, {"items"}, "associated pull requests")
+    items = records(page["items"], "associated pull requests")
+    # A single result on a 100-record page cannot silently omit another page.
+    require(len(items) == 1, "ADMIN006", "one unambiguous introducing pull request is required")
+    pull = items[0]
+    _pull_identity(policy, pull, commit)
+    return pull
+
+
+def _pull_identity(policy: dict[str, Any], pull: dict[str, Any], commit: str) -> None:
+    base = mapping(pull.get("base"), "pull request base")
+    repo = mapping(base.get("repo"), "pull request repository")
+    require(
+        all(type(pull.get(name)) is int and pull[name] > 0 for name in ("id", "number"))
+        and pull.get("state") == "closed"
+        and pull.get("merge_commit_sha") == commit
+        and base.get("ref") == "main"
+        and type(repo.get("id")) is int
+        and repo["id"] == policy["repository_id"]
+        and repo.get("full_name") == policy["repository"],
+        "ADMIN006",
+        "introducing pull request must match the expected merge commit and repository/main",
+    )
+
+
+def _provenance(
+    policy: dict[str, Any], responses: dict[str, Any], commit: str, end: datetime
+) -> None:
+    associated = _associated_pull(policy, responses["pull_requests"], commit)
+    pull = mapping(responses["pull_request"], "canonical pull request")
+    _pull_identity(policy, pull, commit)
+    head = mapping(pull.get("head"), "pull request head")
+    require(
+        pull["id"] == associated["id"]
+        and pull["number"] == associated["number"]
+        and pull.get("merged") is True
+        and isinstance(head.get("sha"), str)
+        and re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", head["sha"]) is not None
+        and head.get("sha") == mapping(associated.get("head"), "associated head").get("sha"),
+        "ADMIN006",
+        "canonical merged pull request must match its association and reviewed head",
+    )
+    for name in ("user", "merged_by"):
+        actor = mapping(pull.get(name), "pull request actor")
+        require(
+            type(actor.get("id")) is int
+            and actor["id"] > 0
+            and actor.get("type") in ("User", "Bot"),
+            "ADMIN006",
+            "pull request actors require explicit numeric identities",
+        )
+    created, merged, closed = (
+        timestamp(pull.get(name), "pull request clock")
+        for name in ("created_at", "merged_at", "closed_at")
+    )
+    execution = responses["workflow_runs"]["workflow_runs"][0]
+    require(
+        created <= merged <= closed <= end
+        and merged <= timestamp(execution["created_at"], "workflow creation"),
+        "ADMIN006",
+        "merge clocks must precede main execution and observation",
+    )
+
+
 def validate_snapshot(
     payload: bytes, *, policy: bytes, reviewer_policy: bytes, commit: str, now: datetime
 ) -> dict[str, Any]:
@@ -381,7 +452,7 @@ def validate_snapshot(
     )
     require(
         type(data["schema_version"]) is int
-        and data["schema_version"] == 3
+        and data["schema_version"] == 4
         and data["commit"] == commit
         and data["policy_sha256"] == bindings,
         "ADMIN002",
@@ -410,19 +481,22 @@ def validate_snapshot(
             "branches",
             "checks",
             "workflow_runs",
+            "pull_requests",
+            "pull_request",
         },
         "GitHub observations",
     )
     _controls(expected, responses, commit)
     _environment(expected, responses)
     _execution(expected, responses, commit, end)
+    _provenance(expected, responses, commit, end)
     return {
         "status": "observed-controls-consistent",
         "deployment_authorized": False,
         "cutover_authorized": False,
         "remaining_gates": [
             "environment administrator bypass independently verified",
-            "reviewer identity, key enrollment/custody and protected commit provenance",
+            "independent PR approval, reviewer key enrollment/custody and historical protection",
             "cutover evidence consumption and explicit operational approval",
         ],
     }
@@ -475,9 +549,13 @@ def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None)
     responses["workflow_runs"] = fetch(
         base + "/actions/runs?check_suite_id=" + str(suite) + "&per_page=100&page=1"
     )
+    _execution(policy, responses, commit, datetime.now(UTC))
+    responses["pull_requests"] = fetch(base + "/commits/" + commit + "/pulls?per_page=100&page=1")
+    pull = _associated_pull(policy, responses["pull_requests"], commit)
+    responses["pull_request"] = fetch(base + "/pulls/" + str(pull["number"]))
     payload = json.dumps(
         {
-            "schema_version": 3,
+            "schema_version": 4,
             "commit": commit,
             "policy_sha256": _bindings(snapshots[POLICY], snapshots[KEYS]),
             "started_at": start.isoformat(),

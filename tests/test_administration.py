@@ -34,7 +34,9 @@ def observation(tmp_path, monkeypatch):
             return deepcopy(
                 responses["checks"][policy["required_checks"][len(calls) - 6]["context"]]
             )
-        return deepcopy(responses["workflow_runs"])
+        return deepcopy(
+            responses[{8: "workflow_runs", 9: "pull_requests", 10: "pull_request"}[len(calls)]]
+        )
 
     payload = admin.collect(tmp_path, query=query)
     return tmp_path, json.loads(payload), calls
@@ -46,12 +48,14 @@ def encoded(document):
 
 def test_collection_and_offline_revalidation_preserve_disabled_authority(observation):
     root, document, calls = observation
-    assert len(calls) == 8
+    assert len(calls) == 10
     policy = json.loads((root / admin.POLICY).read_bytes())
     base = "repos/" + policy["repository"] + "/environments/" + policy["environment"]
     assert calls[3:5] == [base, base + "/deployment-branch-policies?per_page=100&page=1"]
     assert "check_name=Credential-free%20verification%20%28ubuntu-24.04%29" in calls[5]
-    assert calls[-1].endswith("/actions/runs?check_suite_id=21&per_page=100&page=1")
+    assert calls[7].endswith("/actions/runs?check_suite_id=21&per_page=100&page=1")
+    assert calls[8].endswith("/commits/" + COMMIT + "/pulls?per_page=100&page=1")
+    assert calls[9].endswith("/pulls/31")
     result = admin.check(root, encoded(document))
     assert result["status"] == "observed-controls-consistent"
     assert result["deployment_authorized"] is result["cutover_authorized"] is False

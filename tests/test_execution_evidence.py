@@ -159,7 +159,7 @@ def test_failed_check_collection_never_fetches_a_run_or_writes_success(
     first["conclusion"] = "failure"
 
     def get(root, endpoint):
-        assert endpoint != calls[-1], "failed checks must not select a workflow run"
+        assert endpoint not in calls[7:], "failed checks must not select a workflow run or PR"
         return by_endpoint[endpoint]
 
     monkeypatch.setattr(administration, "_get", get)

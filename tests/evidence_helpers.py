@@ -138,4 +138,23 @@ def administration_responses(policy, commit):
             ],
         },
     }
+    pull = {
+        "id": 30,
+        "number": 31,
+        "state": "closed",
+        "merged": True,
+        "merge_commit_sha": commit,
+        "base": {
+            "ref": "main",
+            "repo": {"id": policy["repository_id"], "full_name": policy["repository"]},
+        },
+        "head": {"sha": "b" * 40},
+        "user": {"id": 32, "type": "User"},
+        "merged_by": {"id": 33, "type": "User"},
+        "created_at": "2025-12-31T23:58:00Z",
+        "merged_at": "2025-12-31T23:59:00Z",
+        "closed_at": "2025-12-31T23:59:00Z",
+    }
+    responses["pull_requests"] = {"items": [deepcopy(pull)]}
+    responses["pull_request"] = pull
     return responses

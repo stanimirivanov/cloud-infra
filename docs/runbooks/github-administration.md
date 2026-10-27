@@ -1,6 +1,6 @@
 # GitHub administrative observations
 
-M03-PR12 adds a read-only sensor for classic main, qualification environment protection and harness execution. It does not change
+M03-PR12 adds a read-only sensor for classic main, qualification environment protection, harness execution and merged-PR linkage. It does not change
 repository settings, enroll reviewer keys or grant operational authority. Normal infra verify exercises
 synthetic responses only; it never needs a GitHub token or calls GitHub.
 
@@ -9,9 +9,9 @@ synthetic responses only; it never needs a GitHub token or calls GitHub.
 Use a clean committed checkout at the current main HEAD, an installed trusted
 GitHub CLI and separately configured read-only authentication. GitHub documents
 Administration (read) permission for branch protection and Actions (read) for
-environment/run metadata, plus Checks (read) for check runs. Never give PR verification
+environment/run metadata, Checks (read) for check runs and Pull requests (read) for PR metadata. Never give PR verification
 these credentials. The adapter
-uses eight explicit GET requests for the current two required checks to github.com with API version 2022-11-28, a
+uses ten explicit GET requests for the current two required checks to github.com with API version 2022-11-28, a
 30-second timeout per request, and suppressed raw stdout/stderr on failure. It
 does not enumerate secret values, change settings or follow caller-provided URLs.
 
@@ -26,15 +26,15 @@ and unsafe settings fail without writing a successful snapshot. A 404 is absent
 or inaccessible, never proof that protection is unnecessary. Correct settings
 through a separate administrator-owned process; never weaken policy to get PASS.
 
-**BREAKING:** both the public policy and private snapshot now require schema 3.
-Schema-1/2 policies/snapshots fail closed. Use the current reviewed policy
-and recollect main, environment and execution observations; do not relabel old evidence.
+**BREAKING:** private snapshots now require schema 4; public policy remains schema 3.
+Older snapshots fail closed. Use the current reviewed policy
+and recollect main, environment, execution and PR observations; do not relabel old evidence.
 Rollback needs the matching checker/policy/snapshot contracts together.
 
-The closed schema-3 index contains commit, policy_sha256 (exact SHA-256 of both
+The closed schema-4 index contains commit, policy_sha256 (exact SHA-256 of both
 config/administration.json and config/cutover-reviewers.toml), started_at,
 completed_at and responses. Responses contain repository, branch, protection,
-environment, branches, checks and workflow_runs
+environment, branches, checks, workflow_runs, pull_requests and pull_request
 objects from their corresponding REST endpoints. The whole document and each
 parsed response are limited to 1 MiB; duplicate JSON
 fields fail. Collection must finish within five minutes; all observations expire
@@ -90,15 +90,41 @@ triggered, rerun, cancelled or polled. Missing/denied data fails without writing
 successful evidence. Normal verification exercises synthetic responses only.
 
 The schema-5 cutover subject set stays at 17 subjects/22 private artifacts. Recollect
-schema-3 observations and regenerate all reviews/signatures after policy migration;
+schema-4 observations and regenerate all reviews/signatures after snapshot migration;
 old environment-only snapshots cannot be upgraded by new outer hashes/signatures.
+
+## Merged-PR observations
+
+After execution validates, collection requests commits/{full_sha}/pulls with
+per_page=100&page=1. The REST array is stored as pull_requests.items. Exactly one
+record is supported: zero, multiple or malformed records fail ADMIN006, and a
+one-record first page cannot hide a later page. An ambiguous association requires
+operator investigation, never picking the first match or weakening the checker.
+Its positive numeric PR ID/number, closed state, merge_commit_sha and base
+repository ID/name/main must match the independently expected checkout/policy.
+
+Only then does the collector GET pulls/{number}, using the validated integer,
+never a response URL. Canonical details must match that PR ID/number and head SHA,
+repeat the merge/base binding, and report merged=true. Head SHA must be a full
+40/64-character lowercase hash. Author and merger must have positive numeric IDs
+and User/Bot types. These fields describe actors; they do not approve their identities.
+Original created/merged/closed timestamps must be ordered, not future, and the
+merge must precede the observed main workflow creation. Squash/merge/rebase results
+are accepted only when GitHub reports that exact introducing merge SHA; ambiguous
+or unsupported histories fail closed. No merge method is inferred from messages.
+
+This slice supplies canonical PR/head inputs for subsequent independent-review
+validation. It does not collect reviews, establish last-push approval, or prove
+that current branch protections were enforced at merge time. Missing/denied PR
+metadata writes no successful snapshot. Fresh outer cutover signatures cannot
+upgrade invalid or legacy inner observations; subject/artifact counts stay 17/22.
 
 ## Proof limits and remaining gates
 
 Success returns observed-controls-consistent and both authorization flags false.
 This is an unsigned, same-client, non-atomic snapshot. Offline validation cannot
 authenticate edited responses or clocks. Collection observes successful execution
-records, not independently authenticated execution, historical PR/protection
+and merged-PR records, not independently authenticated execution, independent PR approval or historical protection
 enforcement or that settings remained unchanged between requests. GitHub CLI and local checkout integrity are trusted.
 The documented environment GET contract does not guarantee administrator bypass
 is exposed; independent verification remains required even on success. An explicit
@@ -122,6 +148,8 @@ The adapter follows the official [branch protection](https://docs.github.com/en/
 and [environment](https://docs.github.com/en/rest/deployments/environments?apiVersion=2022-11-28)
 and [branch policy](https://docs.github.com/en/rest/deployments/branch-policies?apiVersion=2022-11-28)
 and [check runs](https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28)
-and [workflow runs](https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28)
+and [workflow runs](https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28),
+[commit-associated pull requests](https://docs.github.com/en/rest/commits/commits#list-pull-requests-associated-with-a-commit)
+and [pull request details](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request)
 REST contracts through stdlib plus the existing gh executable. This adapts the API
 pattern without copying an implementation or adding a Python dependency.
