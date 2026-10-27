@@ -197,7 +197,7 @@ def review(tmp_path, monkeypatch, kube_config, kube_inventory, review_signer):
     administrative_policy = (root / "config/administration.json").read_bytes()
     key_policy = (root / "config/cutover-reviewers.toml").read_bytes()
     administration = {
-        "schema_version": 3,
+        "schema_version": 4,
         "commit": COMMIT,
         "policy_sha256": {
             "config/administration.json": hashlib.sha256(administrative_policy).hexdigest(),
