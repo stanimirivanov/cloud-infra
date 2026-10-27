@@ -152,7 +152,9 @@ nor proves administrator bypass, reviewer independence/custody or protected-comm
 - M02 - Pulumi foundation: current libraries, offline governance and qualification.
 - M03 - Security and evidence hardening: engineering implemented; final documentation
   closeout is defined in [the closeout record](docs/m03-closeout.md). Activation remains blocked.
-- M04/M05: independent protected workflows, metering, cutover and reliable operations.
+- [M04 - Independent stacks and protected previews](docs/m04-plan.md): explicit
+  identities/contracts first; protected execution and synthetic closeout follow.
+- M05: controlled cutover and reliable operations.
 
 Retirement removes repository execution paths, not cloud resources, local private
 artifacts or external state ownership. The configured backend identity/prefix stays

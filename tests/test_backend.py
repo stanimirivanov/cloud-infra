@@ -340,7 +340,7 @@ def test_inspection_needs_no_credentials_or_cli(monkeypatch, capsys):
 @pytest.mark.parametrize(
     "change",
     [
-        ("schema_version = 2", "schema_version = 1"),
+        ("schema_version = 3", "schema_version = 2"),
         ('secrets_provider = "passphrase"', ""),
         ('secrets_provider = "passphrase"', 'secrets_provider = "default"'),
         ('secrets_provider = "passphrase"', 'secrets_provider = "awskms://key"'),

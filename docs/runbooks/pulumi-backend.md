@@ -20,13 +20,14 @@ Never use qualification tooling against an adopted resource stack.
 
 ## Explicit encryption policy and custody
 
-Foundation schema 2 requires `secrets_provider = "passphrase"`. Other providers,
-implicit defaults and schema 1 fail closed; no KMS/Vault service is provisioned.
+Foundation schema 3 requires `secrets_provider = "passphrase"`. Other providers,
+implicit defaults and schemas 1/2 fail closed; no KMS/Vault service is provisioned.
 Both synthetic initial and recovery stack initialization use this reviewed policy.
 Backend bucket/prefix/region and disabled units stay unchanged. The current
 qualification receipt version is described below.
 
-**Migration:** the new policy is included in the configuration digest. Old
+**Migration:** project identity, preview flags and dependencies are now included
+in the configuration digest alongside the encryption policy. Old
 qualification receipts and backend-posture documents therefore fail binding even
 if their timestamps/check lists remain current. Collect new posture and explicitly
 requalify; never edit digests or restamp old evidence. No stack re-encryption or

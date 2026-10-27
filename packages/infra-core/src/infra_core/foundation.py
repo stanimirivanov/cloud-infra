@@ -63,6 +63,14 @@ class DeploymentUnit:
     name: str
     provider: Provider
     stack: str
+    project: str
+    preview_enabled: bool
+    depends_on: tuple[str, ...]
+
+    @property
+    def stack_identity(self) -> str:
+        """Project-scoped DIY backend identity; never an ambient stack selection."""
+        return f"organization/{self.project}/{self.stack}"
 
 
 @dataclass(frozen=True)
@@ -72,10 +80,14 @@ class FoundationConfig:
     qualification_ttl_hours: int
     units: tuple[DeploymentUnit, ...]
     secrets_provider: str
+    project: str
 
     def __post_init__(self) -> None:
         if self.secrets_provider != "passphrase":
             raise ValueError("SECRET001: only explicit passphrase encryption is supported")
+        if self.project != "free-infrastructure":
+            raise ValueError("STACK001: unsupported Pulumi project identity")
+        _validate_units(self.units, self.project)
 
     @property
     def digest(self) -> str:
@@ -92,11 +104,12 @@ def load_foundation(root: Path) -> FoundationConfig:
         "secrets_provider",
         "backend",
         "units",
+        "project",
     }:
         raise ValueError("unexpected/missing foundation configuration fields")
     if (
         type(data["schema_version"]) is not int
-        or data["schema_version"] != 2
+        or data["schema_version"] != 3
         or not isinstance(data["pulumi_version"], str)
         or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", data["pulumi_version"])
     ):
@@ -116,15 +129,23 @@ def load_foundation(root: Path) -> FoundationConfig:
     units = []
     for name, unit in data["units"].items():
         _validate_unit(name, unit)
-        units.append(DeploymentUnit(name, Provider(unit["provider"]), unit["stack"]))
-    if not units or len({unit.stack for unit in units}) != len(units):
-        raise ValueError("deployment stack identities must be nonempty and distinct")
+        units.append(
+            DeploymentUnit(
+                name,
+                Provider(unit["provider"]),
+                unit["stack"],
+                data["project"],
+                unit["preview_enabled"],
+                tuple(unit["depends_on"]),
+            )
+        )
     return FoundationConfig(
         BackendConfig(**backend_data),
         data["pulumi_version"],
         ttl,
         tuple(units),
         data["secrets_provider"],
+        data["project"],
     )
 
 
@@ -133,13 +154,67 @@ def _validate_unit(name: str, unit: dict[str, Any]) -> None:
         raise ValueError("invalid deployment unit name")
     if (
         not isinstance(unit, dict)
-        or set(unit) != {"provider", "stack", "enabled"}
+        or set(unit) != {"provider", "stack", "enabled", "preview_enabled", "depends_on"}
         or unit["enabled"] is not False
     ):
-        raise ValueError("all resource deployment units must remain explicitly disabled in PR 2")
+        raise ValueError("STACK001: all resource deployment units must remain explicitly disabled")
     if unit["stack"] != name:
         raise ValueError("stack must equal the reviewed unit identity")
+    if (
+        type(unit["preview_enabled"]) is not bool
+        or not isinstance(unit["depends_on"], list)
+        or any(not isinstance(value, str) for value in unit["depends_on"])
+    ):
+        raise ValueError("STACK001: preview_enabled must be boolean and depends_on a string array")
     Provider(unit["provider"])
+
+
+def _validate_units(units: tuple[DeploymentUnit, ...], project: str) -> None:
+    expected = {
+        "oci-network": Provider.OCI,
+        "oci-oke": Provider.OCI,
+        "cloudflare-edge": Provider.CLOUDFLARE,
+        "supabase-database": Provider.SUPABASE,
+    }
+    by_name = {unit.name: unit for unit in units}
+    if len(by_name) != len(units) or set(by_name) != set(expected):
+        raise ValueError("STACK001: exactly the four reviewed distinct units are required")
+    if len({unit.stack_identity for unit in units}) != len(units):
+        raise ValueError("STACK001: duplicate stack identities")
+    for unit in units:
+        if (
+            unit.project != project
+            or unit.stack != unit.name
+            or unit.provider != expected[unit.name]
+            or type(unit.preview_enabled) is not bool
+            or not isinstance(unit.depends_on, tuple)
+            or any(not isinstance(name, str) for name in unit.depends_on)
+        ):
+            raise ValueError("STACK001: invalid reviewed unit identity or preview fields")
+        if len(set(unit.depends_on)) != len(unit.depends_on) or any(
+            name not in by_name for name in unit.depends_on
+        ):
+            raise ValueError("STACK002: unknown or duplicate dependency")
+
+    visited: set[str] = set()
+    active: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in active:
+            raise ValueError("STACK002: dependency cycle")
+        if name not in visited:
+            active.add(name)
+            for dependency in by_name[name].depends_on:
+                visit(dependency)
+            active.remove(name)
+            visited.add(name)
+
+    for name in sorted(by_name):
+        visit(name)
+    for unit in units:
+        dependencies = ("oci-network",) if unit.name == "oci-oke" else ()
+        if unit.depends_on != dependencies:
+            raise ValueError("STACK002: only OKE may depend on the network stack")
 
 
 def deny_deployment(config: FoundationConfig, unit_name: str) -> None:

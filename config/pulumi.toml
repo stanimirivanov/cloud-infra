@@ -1,4 +1,5 @@
-schema_version = 2
+schema_version = 3
+project = "free-infrastructure"
 pulumi_version = "3.272.0"
 qualification_ttl_hours = 24
 secrets_provider = "passphrase"
@@ -9,23 +10,31 @@ prefix = "pulumi"
 region = "eu-frankfurt-1"
 endpoint = "https://frx6hbt3t4bu.compat.objectstorage.eu-frankfurt-1.oraclecloud.com"
 
-# Immutable disabled identities. Enabling resource deployment needs later code/governance PRs.
+# Explicit project-scoped identities; preview flags do not grant execution authority.
 [units.oci-network]
 provider = "oci"
 stack = "oci-network"
 enabled = false
+preview_enabled = false
+depends_on = []
 
 [units.oci-oke]
 provider = "oci"
 stack = "oci-oke"
 enabled = false
+preview_enabled = false
+depends_on = ["oci-network"]
 
 [units.cloudflare-edge]
 provider = "cloudflare"
 stack = "cloudflare-edge"
 enabled = false
+preview_enabled = false
+depends_on = []
 
 [units.supabase-database]
 provider = "supabase"
 stack = "supabase-database"
 enabled = false
+preview_enabled = false
+depends_on = []
