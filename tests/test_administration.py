@@ -28,7 +28,13 @@ def observation(tmp_path, monkeypatch):
 
     def query(endpoint):
         calls.append(endpoint)
-        return deepcopy(responses[list(responses)[len(calls) - 1]])
+        if len(calls) <= 5:
+            return deepcopy(responses[list(responses)[len(calls) - 1]])
+        if len(calls) <= 5 + len(policy["required_checks"]):
+            return deepcopy(
+                responses["checks"][policy["required_checks"][len(calls) - 6]["context"]]
+            )
+        return deepcopy(responses["workflow_runs"])
 
     payload = admin.collect(tmp_path, query=query)
     return tmp_path, json.loads(payload), calls
@@ -40,10 +46,12 @@ def encoded(document):
 
 def test_collection_and_offline_revalidation_preserve_disabled_authority(observation):
     root, document, calls = observation
-    assert len(calls) == 5
+    assert len(calls) == 8
     policy = json.loads((root / admin.POLICY).read_bytes())
     base = "repos/" + policy["repository"] + "/environments/" + policy["environment"]
-    assert calls[-2:] == [base, base + "/deployment-branch-policies?per_page=100&page=1"]
+    assert calls[3:5] == [base, base + "/deployment-branch-policies?per_page=100&page=1"]
+    assert "check_name=Credential-free%20verification%20%28ubuntu-24.04%29" in calls[5]
+    assert calls[-1].endswith("/actions/runs?check_suite_id=21&per_page=100&page=1")
     result = admin.check(root, encoded(document))
     assert result["status"] == "observed-controls-consistent"
     assert result["deployment_authorized"] is result["cutover_authorized"] is False
@@ -287,6 +295,7 @@ def test_policy_check_names_match_both_workflow_matrix_jobs():
         (ROOT / ".github/workflows/pulumi.yml").read_text(), Loader=yaml.BaseLoader
     )
     assert foundation["jobs"]["foundation"]["environment"] == policy["environment"]
+    assert policy["workflow"]["path"] == ".github/workflows/verify.yml"
 
 
 @pytest.mark.parametrize(
@@ -373,7 +382,7 @@ def test_team_review_and_additional_restrictive_rules_leave_unproven_gates(obser
 
 
 @pytest.mark.parametrize("fault", ["old-snapshot", "main-only", "old-policy", "policy-environment"])
-def test_main_only_evidence_cannot_satisfy_schema_two(observation, fault):
+def test_incomplete_or_legacy_evidence_cannot_satisfy_current_schema(observation, fault):
     root, document, _ = observation
     if fault == "old-snapshot":
         document["schema_version"] = 1

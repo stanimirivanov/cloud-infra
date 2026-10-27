@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from infra_core.cutover import repository_state
 from infra_core.governance.contracts import fields, mapping, records, require, timestamp
@@ -52,12 +53,19 @@ def _context(root: Path) -> tuple[dict[str, Any], str, dict[str, bytes]]:
 def _policy(payload: bytes) -> dict[str, Any]:
     policy = fields(
         _json(payload),
-        {"schema_version", "repository", "repository_id", "environment", "required_checks"},
+        {
+            "schema_version",
+            "repository",
+            "repository_id",
+            "environment",
+            "workflow",
+            "required_checks",
+        },
         "administrative policy",
     )
     require(
         type(policy["schema_version"]) is int
-        and policy["schema_version"] == 2
+        and policy["schema_version"] == 3
         and isinstance(policy["repository"], str)
         and re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}", policy["repository"]
@@ -70,6 +78,15 @@ def _policy(payload: bytes) -> dict[str, Any]:
         and re.fullmatch(r"[A-Za-z0-9_-]{1,100}", policy["environment"]) is not None,
         "ADMIN001",
         "unsupported administrative policy identity",
+    )
+    workflow = fields(policy["workflow"], {"id", "path"}, "verification workflow")
+    require(
+        type(workflow["id"]) is int
+        and workflow["id"] > 0
+        and isinstance(workflow["path"], str)
+        and re.fullmatch(r"\.github/workflows/[A-Za-z0-9_-]+\.ya?ml", workflow["path"]) is not None,
+        "ADMIN001",
+        "verification workflow identity must be explicit",
     )
     checks = records(policy["required_checks"], "required checks")
     require(1 <= len(checks) <= 16, "ADMIN001", "required checks must be explicit")
@@ -235,6 +252,109 @@ def _environment(policy: dict[str, Any], responses: dict[str, Any]) -> None:
     )
 
 
+def _successful(value: dict[str, Any], commit: str) -> bool:
+    return (
+        value.get("head_sha") == commit
+        and value.get("status") == "completed"
+        and value.get("conclusion") == "success"
+    )
+
+
+def _check_suite(
+    policy: dict[str, Any], value: object, commit: str
+) -> tuple[int, list[dict[str, Any]]]:
+    checks = fields(
+        value, {item["context"] for item in policy["required_checks"]}, "check observations"
+    )
+    suite_id = None
+    observed = []
+    ids = set()
+    for expected in policy["required_checks"]:
+        response = mapping(checks[expected["context"]], "check-run page")
+        runs = records(response.get("check_runs"), "check runs")
+        require(
+            type(response.get("total_count")) is int
+            and response["total_count"] == 1
+            and len(runs) == 1,
+            "ADMIN005",
+            "one complete unambiguous latest required check is needed",
+        )
+        run = runs[0]
+        app = mapping(run.get("app"), "check app")
+        suite = mapping(run.get("check_suite"), "check suite").get("id")
+        identity = run.get("id")
+        require(
+            type(identity) is int
+            and identity > 0
+            and identity not in ids
+            and type(suite) is int
+            and suite > 0
+            and (suite_id is None or suite_id == suite)
+            and run.get("name") == expected["context"]
+            and type(app.get("id")) is int
+            and app["id"] == expected["app_id"]
+            and _successful(run, commit),
+            "ADMIN005",
+            "required checks must succeed at the expected commit/app in one suite",
+        )
+        ids.add(identity)
+        suite_id = suite
+        observed.append(run)
+    assert isinstance(suite_id, int)
+    return suite_id, observed
+
+
+def _execution(
+    policy: dict[str, Any], responses: dict[str, Any], commit: str, end: datetime
+) -> None:
+    suite, checks = _check_suite(policy, responses["checks"], commit)
+    page = mapping(responses["workflow_runs"], "workflow-run page")
+    runs = records(page.get("workflow_runs"), "workflow runs")
+    require(
+        type(page.get("total_count")) is int and page["total_count"] == 1 and len(runs) == 1,
+        "ADMIN005",
+        "one complete workflow run must correspond to the check suite",
+    )
+    run = runs[0]
+    require(
+        _successful(run, commit)
+        and type(run.get("id")) is int
+        and run["id"] > 0
+        and type(run.get("workflow_id")) is int
+        and run["workflow_id"] == policy["workflow"]["id"]
+        and run.get("path") == policy["workflow"]["path"]
+        and run.get("event") == "push"
+        and run.get("head_branch") == "main"
+        and type(run.get("check_suite_id")) is int
+        and run["check_suite_id"] == suite
+        and all(
+            type(mapping(run.get(name), "run repository").get("id")) is int
+            and run[name]["id"] == policy["repository_id"]
+            for name in ("repository", "head_repository")
+        ),
+        "ADMIN005",
+        "successful execution must belong to the pinned workflow and main repository",
+    )
+    created, started, updated = (
+        timestamp(run.get(name), "workflow execution")
+        for name in ("created_at", "run_started_at", "updated_at")
+    )
+    require(
+        created <= started <= updated <= end,
+        "ADMIN005",
+        "workflow clocks are inconsistent or future",
+    )
+    for check in checks:
+        first, last = (
+            timestamp(check.get(name), "check execution") for name in ("started_at", "completed_at")
+        )
+        require(
+            started <= first <= last <= updated,
+            "ADMIN005",
+            "check clocks differ from workflow execution",
+        )
+
+
 def validate_snapshot(
     payload: bytes, *, policy: bytes, reviewer_policy: bytes, commit: str, now: datetime
 ) -> dict[str, Any]:
@@ -261,7 +381,7 @@ def validate_snapshot(
     )
     require(
         type(data["schema_version"]) is int
-        and data["schema_version"] == 2
+        and data["schema_version"] == 3
         and data["commit"] == commit
         and data["policy_sha256"] == bindings,
         "ADMIN002",
@@ -282,11 +402,20 @@ def validate_snapshot(
     )
     responses = fields(
         data["responses"],
-        {"repository", "branch", "protection", "environment", "branches"},
+        {
+            "repository",
+            "branch",
+            "protection",
+            "environment",
+            "branches",
+            "checks",
+            "workflow_runs",
+        },
         "GitHub observations",
     )
     _controls(expected, responses, commit)
     _environment(expected, responses)
+    _execution(expected, responses, commit, end)
     return {
         "status": "observed-controls-consistent",
         "deployment_authorized": False,
@@ -328,9 +457,27 @@ def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None)
     }
     fetch = query or (lambda endpoint: _get(root, endpoint))
     responses = {name: fetch(endpoint) for name, endpoint in endpoints.items()}
+    # Reject unsafe base settings before spending requests on execution observations.
+    _controls(policy, responses, commit)
+    _environment(policy, responses)
+    responses["checks"] = {
+        item["context"]: fetch(
+            base
+            + "/commits/"
+            + commit
+            + "/check-runs?check_name="
+            + quote(item["context"], safe="")
+            + "&filter=latest&per_page=100&page=1"
+        )
+        for item in policy["required_checks"]
+    }
+    suite, _ = _check_suite(policy, responses["checks"], commit)
+    responses["workflow_runs"] = fetch(
+        base + "/actions/runs?check_suite_id=" + str(suite) + "&per_page=100&page=1"
+    )
     payload = json.dumps(
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "commit": commit,
             "policy_sha256": _bindings(snapshots[POLICY], snapshots[KEYS]),
             "started_at": start.isoformat(),
