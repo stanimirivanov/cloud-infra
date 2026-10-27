@@ -42,6 +42,13 @@ agreed review size; do not silently extend milestone closeout.
   ordering, parent/provider/protection options and version-1 outputs are preserved.
   Independent stack factories remain in PR10/PR11; this refactor enables no
   preview or deployment path and performs no state migration.
+- M04-PR3: issue #85 adds a standard-library fixed-host HTTPS GET transport for
+  Cloudflare/Supabase and shared exact-byte observation bindings usable by OCI.
+  Verified TLS, no redirects/proxies, 1 MiB response limit, ten-second socket waits
+  and at most three attempts for reviewed transient statuses are enforced. Collection
+  clocks start before the first attempt; response digests imply neither authenticity
+  nor completeness/billing coverage. Provider collectors and protected execution
+  remain later tasks. No new dependency, evidence-schema migration or activation.
 
 ## PR1 contracts and compatibility
 
