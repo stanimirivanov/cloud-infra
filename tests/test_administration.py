@@ -35,7 +35,11 @@ def observation(tmp_path, monkeypatch):
                 responses["checks"][policy["required_checks"][len(calls) - 6]["context"]]
             )
         return deepcopy(
-            responses[{8: "workflow_runs", 9: "pull_requests", 10: "pull_request"}[len(calls)]]
+            responses[
+                {8: "workflow_runs", 9: "pull_requests", 10: "pull_request", 11: "reviews"}[
+                    len(calls)
+                ]
+            ]
         )
 
     payload = admin.collect(tmp_path, query=query)
@@ -48,7 +52,7 @@ def encoded(document):
 
 def test_collection_and_offline_revalidation_preserve_disabled_authority(observation):
     root, document, calls = observation
-    assert len(calls) == 10
+    assert len(calls) == 11
     policy = json.loads((root / admin.POLICY).read_bytes())
     base = "repos/" + policy["repository"] + "/environments/" + policy["environment"]
     assert calls[3:5] == [base, base + "/deployment-branch-policies?per_page=100&page=1"]
@@ -56,6 +60,7 @@ def test_collection_and_offline_revalidation_preserve_disabled_authority(observa
     assert calls[7].endswith("/actions/runs?check_suite_id=21&per_page=100&page=1")
     assert calls[8].endswith("/commits/" + COMMIT + "/pulls?per_page=100&page=1")
     assert calls[9].endswith("/pulls/31")
+    assert calls[10].endswith("/pulls/31/reviews?per_page=100&page=1")
     result = admin.check(root, encoded(document))
     assert result["status"] == "observed-controls-consistent"
     assert result["deployment_authorized"] is result["cutover_authorized"] is False

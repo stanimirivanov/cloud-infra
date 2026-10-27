@@ -32,8 +32,8 @@ disabled with no enrolled keys. Public keys/principal/role enrollment needs inde
 review; never add private keys or treat valid signatures as operational approval.
 
 administration.json pins public GitHub repository/check-app identities and the
-qualification environment name. Schema-4 observations require main/environment controls, successful execution
-from the pinned verification workflow and canonical merged-PR linkage; public policy stays schema 3.
+qualification environment name. Schema-5 observations require main/environment controls, successful execution
+from the pinned verification workflow and canonical merged-PR linkage with non-author final-head approvals; public policy stays schema 3.
 Old snapshots must be recollected. Administrative observations stay private under .infra;
 passing the read-only sensor cannot enable deployment or enroll reviewer keys.
 

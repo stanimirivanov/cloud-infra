@@ -31,7 +31,7 @@ def _json(payload: bytes, *, array: bool = False) -> dict[str, Any]:
     try:
         value = json.loads(payload, object_pairs_hook=_object)
         if array:
-            return {"items": records(value, "associated pull requests")}
+            return {"items": records(value, "GitHub array")}
         return mapping(value, "administrative input")
     except (ValueError, TypeError, RecursionError):
         raise ValueError("ADMIN001: invalid administrative JSON") from None
@@ -142,7 +142,8 @@ def _get(root: Path, endpoint: str) -> dict[str, Any]:
     require(result.returncode == 0, "ADMIN004", "GitHub GET denied or unavailable; no evidence")
     return _json(
         result.stdout,
-        array="/commits/" in endpoint and endpoint.endswith("/pulls?per_page=100&page=1"),
+        array=("/commits/" in endpoint and endpoint.endswith("/pulls?per_page=100&page=1"))
+        or ("/pulls/" in endpoint and endpoint.endswith("/reviews?per_page=100&page=1")),
     )
 
 
@@ -426,6 +427,72 @@ def _provenance(
     )
 
 
+def _review_approvals(policy: dict[str, Any], responses: dict[str, Any], end: datetime) -> None:
+    pull = responses["pull_request"]  # Canonical identity/head/clocks validated first.
+    page = fields(responses["reviews"], {"items"}, "PR reviews")
+    reviews = records(page["items"], "PR reviews")
+    require(1 <= len(reviews) < 100, "ADMIN007", "review page empty or potentially truncated")
+    created = timestamp(pull["created_at"], "PR creation")
+    merged = timestamp(pull["merged_at"], "PR merge")
+    previous = created
+    ids = set()
+    decisions: dict[int, tuple[datetime, dict[str, Any]]] = {}
+    for review in reviews:
+        actor = mapping(review.get("user"), "review actor")
+        identity = review.get("id")
+        state = review.get("state")
+        require(
+            type(identity) is int
+            and identity > 0
+            and identity not in ids
+            and type(actor.get("id")) is int
+            and actor["id"] > 0
+            and actor.get("type") in ("User", "Bot")
+            and state in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED", "COMMENTED")
+            and review.get("pull_request_url")
+            == "https://api.github.com/repos/"
+            + policy["repository"]
+            + "/pulls/"
+            + str(pull["number"])
+            and isinstance(review.get("commit_id"), str)
+            and re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", review["commit_id"]) is not None,
+            "ADMIN007",
+            "review must have unique identities, a known submitted state and matching PR",
+        )
+        submitted = timestamp(review.get("submitted_at"), "review submission")
+        require(previous <= submitted <= end, "ADMIN007", "review clocks unordered or future")
+        previous = submitted
+        ids.add(identity)
+        if state != "COMMENTED":
+            prior = decisions.get(actor["id"])
+            require(
+                prior is None or prior[0] < submitted,
+                "ADMIN007",
+                "same-user decision clocks are ambiguous",
+            )
+            decisions[actor["id"]] = (submitted, review)
+    require(
+        all(review["state"] != "CHANGES_REQUESTED" for _, review in decisions.values()),
+        "ADMIN007",
+        "unresolved change requests block approval evidence",
+    )
+    approvals = sum(
+        review["state"] == "APPROVED"
+        and identity != pull["user"]["id"]
+        and review["user"]["type"] == "User"
+        and review.get("author_association") in ("OWNER", "MEMBER", "COLLABORATOR")
+        and review["commit_id"] == pull["head"]["sha"]
+        and submitted <= merged
+        for identity, (submitted, review) in decisions.items()
+    )
+    required = responses["protection"]["required_pull_request_reviews"][
+        "required_approving_review_count"
+    ]
+    require(
+        approvals >= required, "ADMIN007", "insufficient distinct non-author final-head approvals"
+    )
+
+
 def validate_snapshot(
     payload: bytes, *, policy: bytes, reviewer_policy: bytes, commit: str, now: datetime
 ) -> dict[str, Any]:
@@ -452,7 +519,7 @@ def validate_snapshot(
     )
     require(
         type(data["schema_version"]) is int
-        and data["schema_version"] == 4
+        and data["schema_version"] == 5
         and data["commit"] == commit
         and data["policy_sha256"] == bindings,
         "ADMIN002",
@@ -483,6 +550,7 @@ def validate_snapshot(
             "workflow_runs",
             "pull_requests",
             "pull_request",
+            "reviews",
         },
         "GitHub observations",
     )
@@ -490,13 +558,14 @@ def validate_snapshot(
     _environment(expected, responses)
     _execution(expected, responses, commit, end)
     _provenance(expected, responses, commit, end)
+    _review_approvals(expected, responses, end)
     return {
         "status": "observed-controls-consistent",
         "deployment_authorized": False,
         "cutover_authorized": False,
         "remaining_gates": [
             "environment administrator bypass independently verified",
-            "independent PR approval, reviewer key enrollment/custody and historical protection",
+            "last-push reviewer independence, key enrollment/custody and historical protection",
             "cutover evidence consumption and explicit operational approval",
         ],
     }
@@ -553,9 +622,13 @@ def collect(root: Path, *, query: Callable[[str], dict[str, Any]] | None = None)
     responses["pull_requests"] = fetch(base + "/commits/" + commit + "/pulls?per_page=100&page=1")
     pull = _associated_pull(policy, responses["pull_requests"], commit)
     responses["pull_request"] = fetch(base + "/pulls/" + str(pull["number"]))
+    _provenance(policy, responses, commit, datetime.now(UTC))
+    responses["reviews"] = fetch(
+        base + "/pulls/" + str(pull["number"]) + "/reviews?per_page=100&page=1"
+    )
     payload = json.dumps(
         {
-            "schema_version": 4,
+            "schema_version": 5,
             "commit": commit,
             "policy_sha256": _bindings(snapshots[POLICY], snapshots[KEYS]),
             "started_at": start.isoformat(),

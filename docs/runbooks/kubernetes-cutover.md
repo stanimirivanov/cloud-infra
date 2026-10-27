@@ -225,7 +225,7 @@ artifact roles (including the OCI inventory envelope and all four report payload
 plus quota_profiles, reviewer_policy and administrative_policy, the exact bytes of
 tracked config/quotas/profiles.toml, config/cutover-reviewers.toml and
 config/administration.json. The administration role contains the original private
-schema-4 main/environment/execution/PR observation snapshot. The four review
+schema-5 main/environment/execution/PR/review observation snapshot. The four review
 envelopes and four DSSE signature artifacts are excluded from subjects
 to avoid cycles. Finalize the reports and their actual reviewed inputs before
 creating these sidecars. Changing any subject, even formatting or an unrelated quota
@@ -321,7 +321,7 @@ exceptions in infra_core.review_signatures; pure domains retain their import rul
 ### Administrative observation consumption (M03-PR12)
 
 The mandatory administration artifact pins a distinct private JSON file, normally
-.infra/administration.json. Its original schema-4 bytes and the tracked
+.infra/administration.json. Its original schema-5 bytes and the tracked
 config/administration.json bytes join every role's signed subject set. Recollect
 with the [administrative sensor](github-administration.md) at the actual clean main
 commit; finalize subjects, review envelopes, external signatures and a schema-5

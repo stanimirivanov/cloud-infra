@@ -69,7 +69,7 @@ do not discover Git. Pure accounting retains dictionaries. The schema-5
 and validates an explicit inventory_envelope role from the same hashed snapshot;
 four role-specific cutover-review sidecars now bind the entire captured review set
 and tracked quota/reviewer/administrative-policy bytes, including the original
-private schema-4 administrative snapshot. Administrative semantics are recomputed
+private schema-5 administrative snapshot. Administrative semantics are recomputed
 from that same immutable snapshot; no GitHub collection or file reopen occurs. Four mandatory DSSE/Ed25519 signature
 artifacts authenticate role-authorized keys against the disabled-by-default repository
 policy. Enrollment/custody, administrative provenance and other evidence consumers

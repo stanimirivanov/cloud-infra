@@ -157,4 +157,17 @@ def administration_responses(policy, commit):
     }
     responses["pull_requests"] = {"items": [deepcopy(pull)]}
     responses["pull_request"] = pull
+    responses["reviews"] = {
+        "items": [
+            {
+                "id": 40,
+                "user": {"id": 34, "type": "User"},
+                "state": "APPROVED",
+                "author_association": "COLLABORATOR",
+                "commit_id": pull["head"]["sha"],
+                "pull_request_url": base + "/pulls/31",
+                "submitted_at": "2025-12-31T23:58:30Z",
+            }
+        ]
+    }
     return responses
