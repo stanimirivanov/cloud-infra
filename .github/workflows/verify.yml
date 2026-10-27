@@ -36,3 +36,10 @@ jobs:
         run: |
           uv run --locked python -c "from pathlib import Path; Path('.infra').mkdir(exist_ok=True)"
           uv run --locked pytest -q -m backend_integration --basetemp .infra/pytest-backend -o cache_dir=.infra/pytest-cache
+      - name: Verify native provider release assets (no credentials or execution)
+        shell: pwsh
+        env:
+          RUN_PROVIDER_INTEGRATION: '1'
+        run: |
+          ./.github/scripts/install-providers.ps1
+          uv run --locked pytest tests/test_provider_tools.py -q -m provider_integration --basetemp .infra/pytest-providers -o cache_dir=.infra/pytest-cache

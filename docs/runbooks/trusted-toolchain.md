@@ -39,6 +39,36 @@ The Gitleaks Action is not used.
 
 ## Coverage and failure handling
 
+### Native providers (M04-PR7)
+
+[The provider manifest](../../config/provider-toolchain.json) pins OCI 5.5.0,
+Cloudflare 6.23.1 and terraform-provider 1.5.0 for Linux/Windows x64, matching
+the SDK/bridge pins. Release archive SHA-256 values were read from the official
+GitHub release asset APIs on 27 October 2026. This reuses standard-library hashing
+and tar parsing; no dependency or upstream code is copied. Publisher/GitHub/TLS
+trust remains required, as with the existing toolchain.
+
+Run `./.github/scripts/install-providers.ps1` after normal workspace setup, before
+credentials. It installs into a fresh ignored .infra/provider-home, with an explicit
+HomeDirectory option for another .infra child. No overwrite, PATH fallback,
+plugin execution or automatic acquisition occurs. Original archives remain in that
+home (including upstream license material); only the expected executable is copied.
+No claim is made for Supabase's downstream binary cache until M04-PR8.
+
+`infra_core.provider_tools.verified_environment` verifies all three binaries,
+rejects extra plugin files/directories and returns the explicit home plus flags to
+disable automatic and ambient plugin acquisition. Every check rehashes the retained
+pinned archive, derives its executable member's SHA-256 and compares installed
+bytes. No writable receipt or independently unverified binary digest is trusted.
+Unsafe/link archive entries and symlink/junction paths fail. Callers must retain
+private control of the home between verification and execution; this is no OS
+sandbox or defense against concurrent filesystem modification by the same user.
+
+Default verification never downloads providers. CI installs the real release assets
+without credentials and runs the provider_integration marker with
+RUN_PROVIDER_INTEGRATION=1 on both platforms; it verifies bytes without executing
+providers or accessing cloud/state. Local focused tests use synthetic archives.
+
 The shared gate copies tracked and nonignored new working files to a temporary
 snapshot, scans staged additions separately, and scans all locally reachable Git
 refs including merge-parent diffs. Ignored private .infra/state/cache files are

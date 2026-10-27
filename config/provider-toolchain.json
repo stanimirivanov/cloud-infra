@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "providers": {
+    "oci": {
+      "version": "5.5.0",
+      "assets": {
+        "linux-x64": {
+          "url": "https://github.com/pulumi/pulumi-oci/releases/download/v5.5.0/pulumi-resource-oci-v5.5.0-linux-amd64.tar.gz",
+          "sha256": "db01aee55a815b7048fc030b7e0f312edb5dfc2e299386a5a353be9c9017d9dc",
+          "binary": "pulumi-resource-oci"
+        },
+        "windows-x64": {
+          "url": "https://github.com/pulumi/pulumi-oci/releases/download/v5.5.0/pulumi-resource-oci-v5.5.0-windows-amd64.tar.gz",
+          "sha256": "b4589af34adb61a8f6951cb643646b8f690418c2946a6fa124e7008ad37b6c86",
+          "binary": "pulumi-resource-oci.exe"
+        }
+      }
+    },
+    "cloudflare": {
+      "version": "6.23.1",
+      "assets": {
+        "linux-x64": {
+          "url": "https://github.com/pulumi/pulumi-cloudflare/releases/download/v6.23.1/pulumi-resource-cloudflare-v6.23.1-linux-amd64.tar.gz",
+          "sha256": "9f86f790d218b9c47a57f20668c0ea8f05084dec955bf0048dfd898b89175455",
+          "binary": "pulumi-resource-cloudflare"
+        },
+        "windows-x64": {
+          "url": "https://github.com/pulumi/pulumi-cloudflare/releases/download/v6.23.1/pulumi-resource-cloudflare-v6.23.1-windows-amd64.tar.gz",
+          "sha256": "0f76311e78331cf3b030655c5c75ae43deb461869cbc5f40b6f904862eb9af63",
+          "binary": "pulumi-resource-cloudflare.exe"
+        }
+      }
+    },
+    "terraform-provider": {
+      "version": "1.5.0",
+      "assets": {
+        "linux-x64": {
+          "url": "https://github.com/pulumi/pulumi-terraform-provider/releases/download/v1.5.0/pulumi-resource-terraform-provider-v1.5.0-linux-amd64.tar.gz",
+          "sha256": "2a23e7d090112ed5220528f26e110ef381de1337b62a588e95cd2fbd12efc769",
+          "binary": "pulumi-resource-terraform-provider"
+        },
+        "windows-x64": {
+          "url": "https://github.com/pulumi/pulumi-terraform-provider/releases/download/v1.5.0/pulumi-resource-terraform-provider-v1.5.0-windows-amd64.tar.gz",
+          "sha256": "8f927d37e45b956073f7e8975384da7df6dd8300bbedc3eea56b4c53014931e3",
+          "binary": "pulumi-resource-terraform-provider.exe"
+        }
+      }
+    }
+  }
+}

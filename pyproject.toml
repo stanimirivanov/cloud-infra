@@ -40,7 +40,10 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-config --strict-markers -ra"
-markers = ["backend_integration: real local Pulumi backend/policy host (explicit opt-in; no cloud)"]
+markers = [
+    "backend_integration: real local Pulumi backend/policy host (explicit opt-in; no cloud)",
+    "provider_integration: real provider release assets (explicit opt-in; verification only)",
+]
 
 [tool.mypy]
 python_version = "3.12"
