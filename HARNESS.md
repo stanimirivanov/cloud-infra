@@ -150,7 +150,8 @@ nor proves administrator bypass, reviewer independence/custody or protected-comm
 
 - M01 - Terraform OCI OKE: executable implementation retired; source remains in Git history.
 - M02 - Pulumi foundation: current libraries, offline governance and qualification.
-- M03 - Security and evidence hardening: next milestone; see audit recommendations.
+- M03 - Security and evidence hardening: engineering implemented; final documentation
+  closeout is defined in [the closeout record](docs/m03-closeout.md). Activation remains blocked.
 - M04/M05: independent protected workflows, metering, cutover and reliable operations.
 
 Retirement removes repository execution paths, not cloud resources, local private
@@ -175,21 +176,24 @@ operational drift/cost/availability monitors remain prerequisites for activation
 
 ## M03 implementation status
 
-The original plan remains Security and evidence hardening; resource operations
-stay disabled. Status through issue #77 (M03-PR12 final-head approval observations slice):
+The reconciled Security and evidence hardening scope is implemented through
+issue #77 / PR #78. This documentation-only closeout records the final dispositions;
+its CI and merge are required before owner-managed milestone closure. Resource
+operations stay disabled. See [M03 closeout](docs/m03-closeout.md) for the fixed scope,
+administrator-owned activation prerequisites and M04/M05 boundaries.
 
 | Planned task | Implementation / remaining work |
 | --- | --- |
 | PR1: trusted CI chain | SHA pins/installer in #31; verified actionlint and workflow CLI in #35 |
 | PR2: secret scanning | #31: current, staged and reachable history; no exceptions/baseline supported |
 | PR3-PR5: legacy ingress/capacity/image changes | Superseded by retirement in #27; live adoption checks still required |
-| PR6: shared evidence envelopes | #37: unsigned exact-byte/scope/clock sidecars; consumer migrations remain pending |
+| PR6: shared evidence envelopes | #37: unsigned exact-byte/scope/clock sidecars; intended backend, service, OCI and cutover consumers migrated in #43/#49/#51/#53/#55/#57/#63/#71 |
 | PR7: secret ingestion/encryption contracts | #39: explicit passphrase policy, config-backed secret factory and custody/migration guidance |
 | PR8: independent recovery | #33/#39/#41: isolated restore, explicit encryption/custody guidance and required wrong-key rejection; same-host synthetic scope only |
 | PR9: backend posture | #33/#43: read-only collection/checks and exact-byte envelopes bound to independent tenancy, clean commit and backend configuration |
 | PR10: protected backend audit workflow | #45: protected read-only audit and same-job qualification handoff; temporary signing credentials, sanitized summary and cleanup; admin/IAM settings remain prerequisites |
 | PR11: usage coverage | #33: OCI coverage; #47: service collection clocks/per-metric coverage; #49: service CLI exact-byte envelopes bound to proposal/profile and clean HEAD; #51: factory envelopes before secret lookup/registration; #53: OCI collector/audit envelopes; #55: OCI preflight/composer envelopes; #57: cutover inventory consumer; #59: Supabase anniversary billing periods; #61: mandatory cumulative storage GB-hours and remaining-cycle budgets; source collection/authenticity and runtime cost controls remain prerequisites |
-| PR12: cutover evidence | #57: inventory consumer; #63: exact review-input envelopes; #65: DSSE/Ed25519 configured-key authentication; #67: read-only classic main administrative observations; #69: schema-2 environment reviewer/branch observations; #71: signed cutover administrative snapshot/policy consumption; #73: successful required checks linked to the pinned main workflow; #75: canonical merged-PR/HEAD linkage; #77: distinct non-author final-head review observations; last-push independence, key enrollment/custody, administrator bypass and historical protection remain pending |
+| PR12: cutover evidence | #57: inventory consumer; #63: exact review-input envelopes; #65: DSSE/Ed25519 configured-key authentication; #67: read-only classic main administrative observations; #69: schema-2 environment reviewer/branch observations; #71: signed cutover administrative snapshot/policy consumption; #73: successful required checks linked to the pinned main workflow; #75: canonical merged-PR/HEAD linkage; #77: distinct non-author final-head review observations; repository validators complete; administrator-owned last-push independence, key enrollment/custody, bypass and historical protection remain activation gates |
 
 These implementation references are issue numbers. Completion of source checks
 cannot establish live backend/IAM posture, billing eligibility or deployment authority.
@@ -200,4 +204,6 @@ factory entry points, OCI inventory collection/audit and OCI pre-registration.
 Schema-5 cutover bundles validate that inventory pair and schema-5 administrative
 observations, schema-3 policy, required-check execution, merged-PR linkage and final-head review observations, four review-input sidecars and four DSSE signatures against
 a disabled-by-default reviewer policy. All 17 subjects use the captured bytes.
-Other report/evidence consumers retain their contracts until explicit migrations.
+Pure accounting APIs and synthetic recovery receipts retain their existing contracts
+by design. The closeout enumerates these boundaries; no blanket future migration is
+an unfinished M03 task. Deployment and cutover authorization remain false.

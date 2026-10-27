@@ -184,3 +184,19 @@ CLI, alongside #31's Action/credential boundary tests. See the
 coverage and the [M03 status map](../HARNESS.md#m03-implementation-status) for
 remaining work. Workflow shell behavior and administrative protections remain
 outside this syntax sensor's evidence.
+
+## M03 closeout follow-up: 27 October 2026
+
+The [M03 engineering closeout](m03-closeout.md) reconciles the retained twelve-task
+map and accepted issue criteria through merged PR #78. It records implemented
+controls, superseded legacy tasks and completed intended evidence migrations.
+This final documentation-only PR requires its own CI and merge before the owner
+closes the milestone. The original dated findings and verification results above
+remain historical observations, not a fresh live-administration assessment.
+
+Engineering completion leaves deployment and cutover disabled. Actual GitHub
+protections/bypass, reviewer independence and key custody, cloud/backend IAM and
+account/ownership evidence remain administrator-owned activation prerequisites.
+Separate-stack execution, trusted live collection, operational monitoring and
+production recovery belong to separately approved M04/M05 planning. No additional
+M03 runtime feature PRs are planned by this closeout.
