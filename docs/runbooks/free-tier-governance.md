@@ -129,6 +129,35 @@ for the current UTC month and matching tenancy. If billing telemetry cannot
 provide sufficiently fresh complete values, the audit fails; do not invent them.
 Omitting --usage allows collection for investigation but cannot pass audit.
 
+### Automated OCI usage observations (M04-PR4)
+
+`infra_core.inventory.oci_usage.collect_usage` uses the existing optional OCI SDK
+through `OCIReader.usage_page`: only `request_summarized_usages`, `USAGE_ONLY`,
+HOURLY, no filters, grouped by tenancy/SKU/unit. An explicit elapsed hour cutoff
+in the current UTC month is required. Queries use contiguous start-inclusive,
+end-exclusive windows of at most 36 hours, with 1,000 rows/page and no SDK retries.
+Budgets are 64 pages, 10,000 rows and 16 MiB aggregate canonical observations;
+each observation is limited to 1 MiB. Failures never return a partial collection.
+
+The closed mapping covers A1 CPU B93297, A1 memory B93298 and block storage
+B91961/B91445 using the corresponding dimensional price-list unit strings. No
+unit conversion, fuzzy matching or cost-based inference occurs. Other SKU/unit
+pairs, duplicate aggregate rows, malformed quantities and intervals fail closed.
+Absent metrics remain unknown; only an explicit returned zero becomes zero.
+Decimal arithmetic preserves decoded quantities, with bounded precision. SDK
+float decoding may already lose wire precision: hashes bind canonical SDK
+snapshots, not original HTTP response bytes. All observations remain private.
+
+Sources: [Oracle Usage API semantics](https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/costanalysisoverview.htm)
+and [Oracle SKU price list](https://www.oracle.com/ae/a/ocom/docs/corporate/pricing/oracle-paas-and-iaas-global-price-list.pdf).
+The query end and latest row end are not completeness proofs; `covered_through`
+always remains None. This result cannot replace the existing manual usage evidence.
+Administrator-owned live acceptance must establish actual API unit mappings,
+complete account/billing visibility, source precision and a fresh authoritative
+coverage watermark. Reporting lag or absent proof blocks acceptance; never
+restamp observations or relax the 15-minute gate. SDK buffering/socket waits are
+not hard process bounds; later protected orchestration must enforce its deadline.
+
 ## OCI inventory sidecars (M03-PR11 CLI slice)
 
 **Breaking transport migration:** collection publishes inventory.json and adjacent

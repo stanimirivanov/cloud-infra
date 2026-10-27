@@ -49,6 +49,10 @@ agreed review size; do not silently extend milestone closeout.
   clocks start before the first attempt; response digests imply neither authenticity
   nor completeness/billing coverage. Provider collectors and protected execution
   remain later tasks. No new dependency, evidence-schema migration or activation.
+- M04-PR4: issue #87 adds bounded, unfiltered tenancy-wide OCI Usage API queries
+  and Decimal classification. Query completion never supplies a billing watermark;
+  missing metrics remain unknown and collected results stay investigative. Manual
+  `--usage` input, audit freshness and deployment/cutover restrictions are unchanged.
 
 ## PR1 contracts and compatibility
 
