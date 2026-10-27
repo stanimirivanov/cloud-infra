@@ -427,9 +427,12 @@ def check():
         assert set(network.outputs.ids) == {"vcn", "api-subnet", "worker-subnet", "pod-subnet",
                                             "api-nsg", "worker-nsg", "pod-nsg"}
         assert outputs[:2] == [cfg.name + "-cluster-id", cfg.name + "-workers-id"]
-        prefix = 'urn:pulumi:test::oci-offline::'
-        assert outputs[2:] == [prefix + 'infrastructure:oci:Network::' + cfg.name + '-network',
-                              prefix + 'infrastructure:oci:Oke::' + cfg.name + '-oke']
+        # MockMonitor qualifies children with the implicit root stack's type.
+        # This assertion describes SDK mock serialization, not a live engine URN.
+        prefix = 'urn:pulumi:test::oci-offline::pulumi:pulumi:Stack$'
+        expected_urns = [prefix + 'infrastructure:oci:Network::' + cfg.name + '-network',
+                         prefix + 'infrastructure:oci:Oke::' + cfg.name + '-oke']
+        assert outputs[2:] == expected_urns, (outputs[2:], expected_urns)
         print(json.dumps({"resources": len(observed), "violations": violations}))
     return pulumi.Output.all(cluster.cluster_id, cluster.node_pool_id,
                              network.urn, cluster.urn).apply(complete)
