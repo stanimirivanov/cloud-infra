@@ -7,6 +7,32 @@ administrator-owned activation prerequisites and later engineering.
 
 ## Contract
 
+### Provider observations (M04-PR3)
+
+`infra_core.inventory.http.observe_get` accepts only relative API targets for the
+fixed Cloudflare/Supabase HTTPS hosts and explicit bearer credentials. It uses
+verified TLS without ambient proxies, redirects, caller-controlled headers or
+credential discovery. Only 429/502/503/504 retry, with at most three attempts and
+fixed one/two-second waits; Retry-After cannot increase the wait. Response bodies
+are bounded to 1 MiB and must be uncompressed UTF-8 JSON. Failed/partial responses
+produce sanitized errors, never observations. Keep raw response bytes private.
+
+`infra_core.provider_evidence.record_observation` also accepts OCI SDK observation
+bytes. Its immutable result hashes the exact request description and response
+and preserves the original timezone-aware collection interval. Descriptions must
+exclude authentication data. Response bytes are omitted from object repr; the
+transport does not log requests, headers or bodies. This in-memory binding is not
+a persisted sidecar, signed attestation, account entitlement, pagination completion,
+billing coverage watermark or operational approval. Existing sidecar schemas stay
+unchanged; later collectors must validate scope and coverage independently.
+
+Ten-second socket timeouts bound individual waits, not total slow-drip execution
+or DNS resolution. Later collectors must bound page counts/aggregate bytes, and
+protected orchestration must impose a whole-process deadline. Do not expose this
+primitive as an operational preview path before those admission controls exist.
+
+### Sidecar format
+
 The [in-toto Statement v1 pattern](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
 is adapted with closed repository-specific predicates (Apache-2.0 specification;
 no copied implementation or new dependency). This is an unsigned sidecar, not a
