@@ -4,6 +4,7 @@ import hashlib
 import json
 import subprocess
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,8 @@ from infra_core.evidence import (
     create_envelope,
     validate_envelope,
 )
-from infra_core.governance.contracts import require
+from infra_core.governance.contracts import fields, require, text
+from infra_core.inventory.cloudflare import CloudflareCollection
 from infra_core.services.governance import audit
 
 
@@ -146,3 +148,82 @@ def capture_service_evidence(
         now=now,
         max_age=timedelta(minutes=15),
     )
+
+
+def capture_cloudflare_evidence(
+    config: dict[str, Any],
+    profile: dict[str, Any],
+    collection: CloudflareCollection,
+    review: dict[str, Any],
+    *,
+    commit: str,
+    now: datetime | None = None,
+) -> tuple[bytes, bytes]:
+    """Join API observations to independent review; never synthesize entitlement."""
+    config, profile, review = deepcopy((config, profile, review))
+    review = fields(
+        review,
+        {
+            "schema_version",
+            "account_id",
+            "scope_id",
+            "scope_name",
+            "profile_revision",
+            "verified",
+            "verified_at",
+            "plan",
+            "other_services_reviewed",
+            "source",
+        },
+        "Cloudflare review",
+    )
+    require(
+        type(review["schema_version"]) is int
+        and review["schema_version"] == 1
+        and config.get("provider") == "cloudflare"
+        and collection.account_id == config.get("account_id") == review["account_id"]
+        and collection.zone_id == config.get("scope_id") == review["scope_id"]
+        and collection.zone_name == review["scope_name"]
+        and review["profile_revision"] == profile.get("revision")
+        and collection.reported_plan in (None, "free")
+        and bool(collection.observations),
+        "CF001",
+        "collection, independent review and proposal scope must agree",
+    )
+    provenance = hashlib.sha256(
+        json.dumps(
+            [
+                {
+                    "request": o.request_sha256,
+                    "response": o.response_sha256,
+                    "start": o.collection_started_at.isoformat(),
+                    "end": o.collection_finished_at.isoformat(),
+                }
+                for o in collection.observations
+            ],
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    payload = json.dumps(
+        {
+            **{key: value for key, value in review.items() if key != "schema_version"},
+            "schema_version": 4,
+            "provider": "cloudflare",
+            "complete": True,
+            "coverage": "all-zone-dns-records",
+            "usage": {},
+            "billing_period": None,
+            "observed_at": collection.observations[0].collection_started_at.isoformat(),
+            "collection_started_at": collection.observations[0].collection_started_at.isoformat(),
+            "collection_completed_at": collection.observations[
+                -1
+            ].collection_finished_at.isoformat(),
+            "resources": [asdict(record) for record in collection.records],
+            "source": text(review["source"], "independent review source")
+            + "; api-observations-sha256="
+            + provenance,
+        },
+        sort_keys=True,
+        allow_nan=False,
+    ).encode()
+    return payload, capture_service_evidence(config, profile, payload, commit=commit, now=now)

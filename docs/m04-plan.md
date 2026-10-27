@@ -53,6 +53,9 @@ agreed review size; do not silently extend milestone closeout.
   and Decimal classification. Query completion never supplies a billing watermark;
   missing metrics remain unknown and collected results stay investigative. Manual
   `--usage` input, audit freshness and deployment/cutover restrictions are unchanged.
+- M04-PR5: issue #89 collects scoped Cloudflare zone/DNS observations with bounded,
+  unfiltered pagination and existing service evidence/envelopes. Free entitlement
+  and other-service approval remain independently reviewed; no activation path added.
 
 ## PR1 contracts and compatibility
 

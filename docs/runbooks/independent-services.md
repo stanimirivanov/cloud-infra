@@ -4,10 +4,35 @@ This library adds offline service preflight and protected Pulumi components. It
 does not activate deployments. `config/pulumi.toml` identities remain disabled;
 the normal program, `infra preview --unit NAME` and `infra deploy --unit NAME` still reject provisioning.
 There is no Terraform adoption, OCI output dependency, Kubernetes integration,
-DNS zone creation, SQL migration or cloud API collector here. Configuration lookup
+DNS zone creation or SQL migration here. Read-only Cloudflare collection is a library
+API; there is no collection CLI/workflow activation yet. Configuration lookup
 is explicit through the library factory described below.
 
 ## Ownership and map
+
+### Cloudflare observation collection (M04-PR5)
+
+`infra_core.inventory.cloudflare.collect_zone(account_id, zone_id, zone_name, token=...)`
+requires independent 32-hex account/zone IDs, an expected domain and an explicit
+zone-scoped token with Zone Read and DNS Read permissions. It uses PR3 transport
+for zone details and unfiltered DNS pagination (100 records/page), checking scope,
+active status, stable totals, page sizes and duplicate IDs. All types count,
+including TXT, SRV and wildcard/underscore names. Limits: 100 DNS pages, 10,000
+records, 16 MiB response bytes and a 15-minute original collection interval.
+
+`infra_core.service_evidence.capture_cloudflare_evidence` joins this collection to
+the reviewed proposal/profile and a separate closed schema-1 review: account_id,
+scope_id, scope_name, profile_revision, verified, verified_at, plan,
+other_services_reviewed and source. It produces the existing schema-4 payload and
+sidecar, preserving verification/collection clocks and binding observation digests
+in source. No API success or deprecated zone-plan field can supply entitlement;
+observed non-Free plan metadata blocks Free evidence. Raw DNS content stays out of
+the normalized payload; keep observations/reviews private under ignored .infra.
+See [zone details](https://developers.cloudflare.com/api/resources/zones/methods/get/)
+and [DNS pagination](https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list/).
+Pagination is not a transactional snapshot or proof of token visibility; confirm
+effective scope and concurrent-change controls before live acceptance. Whole-process
+deadlines belong to protected orchestration. Quotas and deployment freeze are unchanged.
 
 ```text
 config/{cloudflare,supabase}.example.json        Additive service inputs
