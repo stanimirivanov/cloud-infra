@@ -1,9 +1,9 @@
 # Shared security evidence sidecars
 
-M03-PR6 adds infra_core.evidence as a pure consistency API. M03-PR9 migrates
-backend posture; M03-PR11 also migrates the service CLI and library factories. Other
-formats and validators retain their existing contracts
-until their consuming PRs explicitly migrate them.
+M03-PR6 adds infra_core.evidence as a pure consistency API. Its intended backend
+posture, service, OCI and cutover consumer migrations are complete. The
+[M03 closeout](../m03-closeout.md) separates these repository deliverables from
+administrator-owned activation prerequisites and later engineering.
 
 ## Contract
 
@@ -43,15 +43,19 @@ semantics after binding. EVID001-EVID004 identify schema/subject/scope/clock fai
 errors omit private values. No filesystem, subprocess, network or cloud I/O occurs.
 A producer label is a claim; an attacker able to replace artifact and sidecar can
 recompute hashes. This proves neither source authenticity, IAM visibility, semantic
-truth nor operational authority. Signatures/trusted provenance and deployment
-policy remain later work; no existing evidence is upgraded by wrapping or restamping.
+truth nor operational authority. Cutover role envelopes now require configured-key
+DSSE signatures; the other transport sidecars remain unsigned. Independent source
+authentication and active deployment-policy enforcement remain later activation
+work. No existing evidence is upgraded by wrapping or restamping.
 
 
 Backend posture is the first migrated consumer: the private payload retains schema 1,
 with an adjacent filename ending in .json.envelope.json. See the
 [backend handoff](pulumi-backend.md#read-only-backend-posture) for independent
-account/commit expectations, exact-byte transport and strict migration. Other
-consumers remain on their existing contracts until their own migration PRs.
+account/commit expectations, exact-byte transport and strict migration. Service,
+OCI and cutover migrations are described below. Pure accounting dictionary APIs
+and schema-3 synthetic recovery receipts intentionally retain their own validators;
+the reserved backend-recovery kind does not claim a signed or migrated receipt.
 
 The [service CLI handoff](independent-services.md#cli-evidence-sidecars-m03-pr11-transport-slice)
 uses service-usage sidecars over original schema-5 service payloads, with independently
@@ -72,5 +76,7 @@ and tracked quota/reviewer/administrative-policy bytes, including the original
 private schema-5 administrative snapshot. Administrative semantics are recomputed
 from that same immutable snapshot; no GitHub collection or file reopen occurs. Four mandatory DSSE/Ed25519 signature
 artifacts authenticate role-authorized keys against the disabled-by-default repository
-policy. Enrollment/custody, administrative provenance and other evidence consumers
-remain separate work; no signature grants operational authority.
+policy. Independent enrollment/custody and live administrative acceptance are
+administrator-owned activation prerequisites. They are not additional M03 framework
+features; new consumers require separately approved scope. No signature grants
+operational authority, and deployment/cutover remain disabled.

@@ -172,8 +172,11 @@ now binds these original bytes and the administrative policy into all four signe
 reviews. It calls infra_core.administration.validate_snapshot with captured immutable
 payload/policy/reviewer_policy bytes, an independent expected commit and clock;
 that API performs no I/O. The CLI wrapper still enforces clean Git before/after.
-Independent reviewer-key enrollment/custody and protected-commit evidence remain
-separate M03 work.
+The [M03 closeout](../m03-closeout.md) records this repository implementation as
+complete. Actual reviewer identity/permissions, independent key enrollment/custody,
+administrator-bypass acceptance and protected-commit/last-push evidence remain
+administrator-owned activation prerequisites. No further M03 collector feature is
+implied by these proof limits. Future provenance automation needs separate approval.
 Deployment and cutover stay disabled. Keep the raw snapshot private; do not upload
 it to public CI or treat it as an approval token.
 
