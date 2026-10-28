@@ -5,7 +5,7 @@ import json
 import subprocess
 import sys
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from importlib.metadata import version
 from pathlib import Path
 
@@ -78,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
             operation, help="readiness check; resource operations are disabled"
         )
         deployment.add_argument("--unit", required=True)
+        if operation == "preview":
+            deployment.add_argument("--commit", help="independently approved full commit SHA")
+            deployment.add_argument("--request", type=Path, help="explicit private preview request")
     governance = commands.add_parser(
         "governance", help="account-wide cost preflight; no deployment"
     )
@@ -138,7 +141,11 @@ def _posture_commit(root: Path) -> str:
     return commit
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    preview: Callable[[Path, argparse.Namespace], None] | None = None,
+) -> int:
     args = build_parser().parse_args(argv)
     try:
         root = find_repository(args.root)
@@ -384,6 +391,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     config, json.loads((root / args.receipt).read_text(encoding="utf-8"))
                 )
                 print("PASS: OCI receipt binding/freshness only; deployment remains disabled")
+        elif args.command == "preview" and preview is not None:
+            preview(root, args)
         elif args.command in ("preview", "deploy"):
             deny_deployment(load_foundation(root), args.unit)
         elif args.command == "verify":

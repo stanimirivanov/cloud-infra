@@ -3,7 +3,7 @@
 ## Start here
 
 This uv workspace contains Pulumi Python component libraries and offline
-free-tier governance. Resource preview/deployment, production stack initialization
+free-tier governance. Tracked resource previews, deployment, production stack initialization
 and ownership transfer are disabled. A passing check is not deployment authority.
 
 | Location | Responsibility |
@@ -42,6 +42,11 @@ SDK. Relative, lazy and literal dynamic imports follow the same rules; unresolve
 dynamic imports fail. Generated SDKs are excluded. This is a static dependency
 sensor, not an OS sandbox or proof that Python code cannot perform I/O.
 Component factories compose libraries; they do not implement separate-stack deployment orchestration.
+The infra console entry point belongs to infra-program, which injects preview
+orchestration into core's parser. Offline commands load no Pulumi runtime. Core-only
+installations no longer install the infra console script; normal workspace sync
+installs the composition entry point. Core's direct CLI API still denies previews
+without the explicitly injected adapter. See [the PR14 contract](docs/m04-plan.md#pr14-cli-orchestration).
 
 ## Setup and verification
 
