@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from infra_core.governance.contracts import require
 from infra_core.oci.config import FoundationConfig
 
 NETWORK_UNIT = "oci-network"
@@ -37,7 +38,21 @@ def wire(value: Any) -> Any:
     return value
 
 
-def proposal(resources: tuple[Resource, ...], account_id: str, region: str) -> dict[str, Any]:
+def proposal(
+    resources: tuple[Resource, ...],
+    account_id: str,
+    region: str,
+    *,
+    units: tuple[str, ...] = (NETWORK_UNIT, OKE_UNIT),
+) -> dict[str, Any]:
+    require(
+        bool(units)
+        and len(set(units)) == len(units)
+        and set(units) <= {NETWORK_UNIT, OKE_UNIT}
+        and all(item.unit in units for item in resources),
+        "OCI001",
+        "proposal units must include every graph resource",
+    )
     return {
         "schema_version": 1,
         "provider": "oci",
@@ -61,7 +76,7 @@ def proposal(resources: tuple[Resource, ...], account_id: str, region: str) -> d
                     if item.unit == unit
                 ],
             }
-            for unit in (NETWORK_UNIT, OKE_UNIT)
+            for unit in units
         ],
     }
 
@@ -69,6 +84,12 @@ def proposal(resources: tuple[Resource, ...], account_id: str, region: str) -> d
 def foundation_graph(cfg: FoundationConfig, *, now: datetime | None = None) -> tuple[Resource, ...]:
     cfg.validate(now=now)
     return _network_graph(cfg) + _oke_graph(cfg)
+
+
+def network_graph(cfg: FoundationConfig, *, now: datetime | None = None) -> tuple[Resource, ...]:
+    """Validated network-only graph; retain the existing conservative config contract."""
+    cfg.validate(now=now)
+    return _network_graph(cfg)
 
 
 def _network_graph(cfg: FoundationConfig) -> tuple[Resource, ...]:

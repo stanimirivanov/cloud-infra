@@ -1,6 +1,7 @@
 # OCI components
 
-Use register_foundation as the sole component composition entry point. It builds
+Use register_foundation for combined library composition and register_network for
+the independent network graph. Each builds
 the pure infra-core OCI graph, validates resource security and audits the complete
 account proposal before registering a provider or any component. Require original
 immutable inventory/envelope bytes and an independently supplied expected commit;
@@ -17,6 +18,8 @@ lookups, invoke calls, imports, aliases, dynamic providers or unreviewed resourc
 types. Keep the constructor table closed. Every native resource uses an explicit
 OCI provider, parent and protect=True. Network cannot reference cluster resources.
 Versioned network outputs contain identities/CIDRs only, never secrets or kubeconfig.
+Only admitted in-process oci-network previews may export the network contract and
+explicit source stack identity. OKE dispatch/references remain blocked until PR11.
 
 Pure planning, image/version/placement validation and governance belong in
 infra-core/oci. Pulumi objects belong here. Any is confined to heterogeneous

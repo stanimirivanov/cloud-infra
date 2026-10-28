@@ -15,6 +15,7 @@ from infra_core.oci.graph import (
     Ref,
     Resource,
     foundation_graph,
+    network_graph,
     proposal,
     wire,
 )
@@ -241,6 +242,38 @@ def register_foundation(
         profile,
         inventory,
         proposal(graph, account_id, cfg.region),
+        register,
+        envelope=envelope,
+        commit=commit,
+    )
+
+
+def register_network(
+    cfg: FoundationConfig,
+    account: dict[str, Any],
+    profile: dict[str, Any],
+    inventory: bytes,
+    *,
+    envelope: bytes,
+    commit: str,
+) -> Network:
+    """Governed independent graph; no OKE registration, stack selection or state moves."""
+    cfg, account, profile = deepcopy((cfg, account, profile))
+    graph = network_graph(cfg)
+    require(account.get("home_region") == cfg.region, "OCI001", "provider must match account home")
+    account_id = text(account.get("account_id"), "tenancy identity")
+    for item in graph:
+        validate_resource(item.kind, wire(item.props))
+
+    def register() -> Network:
+        provider = _register_provider(cfg, account_id)
+        return Network(cfg, graph, provider, {}, account_id, _permit=_PERMIT)
+
+    return preflight(
+        account,
+        profile,
+        inventory,
+        proposal(graph, account_id, cfg.region, units=(NETWORK_UNIT,)),
         register,
         envelope=envelope,
         commit=commit,
