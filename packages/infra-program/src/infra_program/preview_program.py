@@ -58,6 +58,8 @@ class NetworkPreviewContext(PreviewContext):
 class OkePreviewContext(NetworkPreviewContext):
     """OKE uses the exact dependency identity from its reviewed preview contract."""
 
+    expected_network_sha256: str | None = None
+
 
 def dispatch_preview(
     context: ServicePreviewContext | NetworkPreviewContext | OkePreviewContext | None,
@@ -114,6 +116,7 @@ def dispatch_preview(
                 envelope=context.envelope,
                 commit=context.expected_commit,
                 dependency_stack=expected.dependency_stacks[0],
+                expected_network_sha256=context.expected_network_sha256,
             )
 
             def export_oke(oke: Oke) -> Oke:

@@ -1,5 +1,7 @@
 """Closed, non-secret committed network interface; no fallback to preview IDs."""
 
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -70,7 +72,10 @@ def validate_network(value: Any, cfg: FoundationConfig, account_id: str) -> dict
 
 
 async def read_network(
-    reference: pulumi.StackReference, cfg: FoundationConfig, account_id: str
+    reference: pulumi.StackReference,
+    cfg: FoundationConfig,
+    account_id: str,
+    expected_sha256: str | None = None,
 ) -> dict[str, str]:
     """Await SDK metadata explicitly; ordinary apply would silently skip unknowns."""
     try:
@@ -91,7 +96,18 @@ async def read_network(
             if type(network.get("schema_version")) is float and network["schema_version"] == 1.0:
                 network["schema_version"] = 1
             value = dict(value, network=network)
-        return validate_network(value, cfg, account_id)
+        ids = validate_network(value, cfg, account_id)
+        if expected_sha256 is not None:
+            assert isinstance(value, dict)
+            require(network_digest(value) == expected_sha256, "OCI041", _MESSAGE)
+        return ids
     except Exception:
         # Do not forward dependency diagnostics or output values in this adapter's exception.
         raise GovernanceError(_MESSAGE) from None
+
+
+def network_digest(value: dict[str, Any]) -> str:
+    """Canonical dependency identity; raw capture bytes are separately receipt-bound."""
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    ).hexdigest()

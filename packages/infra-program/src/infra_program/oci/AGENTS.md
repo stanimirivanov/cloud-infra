@@ -8,7 +8,8 @@ immutable inventory/envelope bytes and an independently supplied expected commit
 never derive expectations from the sidecar or accept a dictionary fallback. Freeze
 reviewed inputs and delegate through infra_program.governance.preflight before
 executing the private graph registration closure. Library calls do not discover
-Git: the future approved caller must establish clean reviewed checkout identity.
+Git: preview_driver establishes exact clean checkout identity; protected callers
+must additionally establish review/operational authority.
 Constructor
 permits prevent accidental direct registration; Python modules are not a security
 sandbox. Normal program/CLI operations and configured deployment units stay disabled.

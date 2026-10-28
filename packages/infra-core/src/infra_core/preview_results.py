@@ -105,6 +105,14 @@ def _counts(value: Any) -> None:
     _require(0 < sum(value.values()) <= MAX_EVENTS)
 
 
+def preview_input_digests(
+    contract: PreviewContract, artifacts: Mapping[str, bytes]
+) -> dict[str, str]:
+    """Validate/bind captured inputs before execution as well as during receipt validation."""
+    digests: dict[str, str] = _scope(contract, artifacts)["inputs"]
+    return digests
+
+
 def _time(value: Any) -> datetime:
     _require(type(value) is str and len(value) <= 64)
     try:
