@@ -4,6 +4,10 @@ Engineering completion requires synthetic integration and the existing CI gates.
 Live acceptance is tracked separately against administrator prerequisites. A
 passing test or preview description grants no operational authority. Deployment
 and cutover remain disabled throughout M04.
+The [finite engineering closeout](m04-closeout.md) reconciles the complete fixed
+scope, test boundaries and administrator-owned activation prerequisites. Its final
+acceptance requires PR17 CI and merge. Historical implementation records below
+describe each slice at delivery; they do not add further runtime tasks.
 
 ## Fixed implementation sequence
 
@@ -115,6 +119,10 @@ to the fixed sequence and does not expand milestone scope.
 - M04-PR16: issue #113 adds manual OCI network/OKE workflow wiring through an
   explicit mode of the existing handoff, separate signing scopes and required
   captured OKE dependency inputs. Flags stay false; synthetic closeout remains PR17.
+- M04-PR17: issue #115 joins actual SDK, owned process and loopback raw RPC to
+  receipt validation using a synthetic CLI worker. It adds the required CI gate,
+  direct-process cleanup fallback and finite engineering closeout, without live
+  activation. No further M04 runtime feature PRs are planned after CI/merge.
 
 ## PR16 protected OCI preview workflow
 

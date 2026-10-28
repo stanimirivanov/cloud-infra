@@ -225,7 +225,9 @@ def test_timeout_terminates_owned_process_and_redacts_error(prepared, monkeypatc
     monkeypatch.setattr(
         runtime.subprocess,
         "Popen",
-        lambda *a, **kw: SimpleNamespace(wait=wait, poll=lambda: None, pid=12345),
+        lambda *a, **kw: SimpleNamespace(
+            wait=wait, poll=lambda: None, pid=12345, kill=lambda: actions.append("direct-kill")
+        ),
     )
     if sys.platform == "win32":
         monkeypatch.setattr(runtime.subprocess, "run", lambda args, **kw: actions.append(args))
@@ -247,6 +249,45 @@ def test_wire_retains_sdk_omitted_events_and_limits_private_data(monkeypatch):
     with pytest.raises(RuntimeError, match="PREVIEW005"):
         wire.StreamEvents(iter([SimpleNamespace(event="private-message-too-large")]), context)
     assert wire.records == [raw.encode()]
+
+
+@pytest.mark.parametrize("failure", ["denied", "ineffective"])
+def test_tree_kill_failure_still_reaps_owned_process(prepared, monkeypatch, failure):
+    root, archive, work = prepared
+    cli = runtime.cli_runtime(root, archive, work / "bin")
+    command = runtime.Command(
+        cli,
+        work,
+        environment(work),
+        "organization/free-infrastructure/oci-network",
+        ROOT / "policies",
+    )
+    state = SimpleNamespace(alive=True, waits=0, killed=False)
+
+    def wait(**kwargs):
+        state.waits += 1
+        if state.alive:
+            raise subprocess.TimeoutExpired("synthetic", 1)
+        return 0
+
+    def kill():
+        state.killed, state.alive = True, False
+
+    def tree(*args, **kwargs):
+        if failure == "denied":
+            raise PermissionError("private-tree-diagnostic")
+        return SimpleNamespace(returncode=1)
+
+    process = SimpleNamespace(
+        pid=12345, wait=wait, kill=kill, poll=lambda: None if state.alive else 0
+    )
+    monkeypatch.setattr(runtime.subprocess, "Popen", lambda *a, **kw: process)
+    monkeypatch.setattr(runtime.subprocess, "run", tree)
+    if sys.platform != "win32":
+        monkeypatch.setattr(runtime.os, "killpg", tree)
+    with pytest.raises(RuntimeError, match="PREVIEW005"):
+        command.run(["stack", "select", "--stack", command.stack], str(work), {})
+    assert state.killed and not state.alive and state.waits == 2
 
 
 def test_materialize_native_home_uses_reverified_local_archives(fixture):

@@ -95,7 +95,11 @@ with a five-minute timeout. It needs no cloud credentials, provider plugins or
 deployed-state access. Generated SDK code is excluded from Ruff/mypy traversal;
 actual adapter serialization is exercised using the generated SDK in mocks.
 
-Default tests skip five opt-in backend/policy-host/provider integration tests. CI explicitly
+Default tests skip opt-in backend/policy-host/provider and synthetic process
+integration tests. CI requires the real SDK/subprocess/loopback RPC test gate with
+RUN_SYNTHETIC_PREVIEW_INTEGRATION=1 on both platforms; its CLI worker and events are
+synthetic, with no engine/provider/cloud execution. See [the M04 closeout](docs/m04-closeout.md).
+CI explicitly
 sets RUN_PULUMI_LOCAL_QUALIFICATION=1 and runs the backend_integration marker with the
 pinned CLI on disposable local storage. This tests encryption, locking, recovery
 and policy protocol behavior without creating provider/cloud resources. Recovery
@@ -167,7 +171,9 @@ nor proves administrator bypass, reviewer independence/custody or protected-comm
 - M03 - Security and evidence hardening: engineering implemented; final documentation
   closeout is defined in [the closeout record](docs/m03-closeout.md). Activation remains blocked.
 - [M04 - Independent stacks and protected previews](docs/m04-plan.md): explicit
-  identities/contracts first; protected execution and synthetic closeout follow.
+  identities, protected execution and synthetic integration implemented;
+  [engineering closeout](docs/m04-closeout.md) requires PR17 CI/merge, with live
+  acceptance separately blocked.
 - M05: controlled cutover and reliable operations.
 
 Retirement removes repository execution paths, not cloud resources, local private

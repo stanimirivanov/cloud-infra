@@ -6,6 +6,8 @@ DNS, and Supabase Free projects.
 Resource deployment is disabled. The project currently supports offline proposal
 validation, cost and security policies, and isolated backend qualification.
 Account eligibility and measured usage must be verified before deployment.
+The [M04 closeout](docs/m04-closeout.md) separates implemented preview engineering
+from administrator-owned live acceptance; all tracked preview flags remain false.
 
 ## Development
 

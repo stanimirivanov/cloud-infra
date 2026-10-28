@@ -14,8 +14,9 @@ an authorization boundary against arbitrary Python callers. The library preview_
 checks clean head, contracts, frozen inputs and the owned runtime. infra-program
 owns the infra console composition: core accepts an explicit preview callback,
 without importing program/Pulumi. CLI collection requires explicit private inputs,
-backend evidence and an enabled tracked preview contract; workflow admission
-remains PR15/16. Never add environment-based
+backend evidence and an enabled tracked preview contract. Manual service/OCI
+workflows provide pre-credential admission; external approvals, IAM and custody
+remain administrator prerequisites. Never add environment-based
 admission or a non-preview branch to this adapter.
 The OCI component library may register only after its complete preflight gate;
 credential-free tests use Pulumi mocks. Backend qualification
