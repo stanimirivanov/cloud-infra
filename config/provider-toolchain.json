@@ -1,5 +1,21 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "downstream": {
+    "source": "registry.opentofu.org/supabase/supabase",
+    "version": "1.11.0",
+    "assets": {
+      "linux-x64": {
+        "url": "https://github.com/supabase/terraform-provider-supabase/releases/download/v1.11.0/terraform-provider-supabase_1.11.0_linux_amd64.zip",
+        "sha256": "5a0dbc0ff4aa5dea54347335c3a79e765893375d463198e10c1214b06669b192",
+        "binary": "terraform-provider-supabase_v1.11.0"
+      },
+      "windows-x64": {
+        "url": "https://github.com/supabase/terraform-provider-supabase/releases/download/v1.11.0/terraform-provider-supabase_1.11.0_windows_amd64.zip",
+        "sha256": "edbf189d7e107ac64f095d7025ca354af3e33afa3b6654a5881304d093e0f037",
+        "binary": "terraform-provider-supabase_v1.11.0.exe"
+      }
+    }
+  },
   "providers": {
     "oci": {
       "version": "5.5.0",

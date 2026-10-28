@@ -53,7 +53,7 @@ credentials. It installs into a fresh ignored .infra/provider-home, with an expl
 HomeDirectory option for another .infra child. No overwrite, PATH fallback,
 plugin execution or automatic acquisition occurs. Original archives remain in that
 home (including upstream license material); only the expected executable is copied.
-No claim is made for Supabase's downstream binary cache until M04-PR8.
+Supabase's downstream binary cache is verified separately below.
 
 `infra_core.provider_tools.verified_environment` verifies all three binaries,
 rejects extra plugin files/directories and returns the explicit home plus flags to
@@ -94,6 +94,33 @@ just to make the gate pass. Any narrowly justified policy change needs review an
 a negative regression test preserving the original detection requirement.
 
 ## Updates and external enforcement
+
+### Supabase downstream cache (M04-PR8)
+
+Provider-manifest schema 2 adds Supabase 1.11.0 ZIP pins from its official
+[release assets](https://github.com/supabase/terraform-provider-supabase/releases/tag/v1.11.0).
+Old schema-1 provider manifests fail closed; foundation/evidence schemas and SDK
+versions are unchanged. Run `./.github/scripts/install-providers.ps1 -Provider supabase`
+after native setup, using the same explicit private home. ZIP checks precede any
+member processing/copy; the original archive retains upstream MPL-2.0 material.
+No generated SDK or remote parameterization is rewritten.
+
+`verified_supabase_environment` requires native verification, the exact cache tree,
+ZIP-rooted executable hashes and matching SDK source/version/resource metadata.
+It sets PULUMI_DYNAMIC_TF_PLUGIN_CACHE_DIR to the private dynamic_tf_plugins cache
+and clears PULUMI_BRIDGE_REATTACH_PROVIDERS and TF_REATTACH_PROVIDERS. The unpacked path is
+registry.opentofu.org/supabase/supabase/1.11.0/linux_amd64 (windows_amd64 on Windows).
+Alternate hosts, versions, platforms, executables or links fail before admission.
+This adapts the cache-first loader in the
+[bridge 1.5.0 source](https://github.com/pulumi/pulumi-terraform-bridge/blob/20da3e0a7d568b355b3da17fd0e6a83b0f36b4fd/dynamic/internal/shim/run/loader.go).
+
+The upstream bridge still has registry fallback on cache misses; native acquisition
+flags do not disable it. Callers must use this preflight and preserve filesystem
+control until execution. CI alone opts into a credential-free package get-schema
+probe through the real bridge/cache, with an allowlisted environment and denied
+external proxies. It requests metadata only, captures diagnostics privately, and
+neither regenerates SDK files nor configures/calls cloud resources. Proxies are not
+an OS network sandbox. Live acceptance and preview/deployment remain disabled.
 
 For a tool update, review the official release/tag, retrieve its asset digest and
 compare the actual archive hash, then update both supported platforms in the
