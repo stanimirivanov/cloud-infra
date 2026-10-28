@@ -68,6 +68,11 @@ agreed review size; do not silently extend milestone closeout.
   cache layout and SDK parameterization. A CI-only offline schema probe checks the
   cache-hit path; registry fallback is guarded by preflight, not claimed disabled
   in upstream code. No SDK rewrite or preview/deployment/cutover activation.
+- M04-PR9: issue #97 adds explicit in-process service preview admission and dispatch
+  through existing configuration-backed factories. SDK dry-run and runtime
+  organization/project/stack must match the enabled, configuration/commit-bound
+  contract before service evidence validation, secret lookup or registration.
+  Standalone execution, CLI operations and OCI dispatch remain blocked.
 
 ## PR1 contracts and compatibility
 
@@ -88,7 +93,7 @@ namespace layout must be assessed before later live use; no automatic upgrade.
 Git commit SHA, exact stack/dependency identities and foundation SHA-256. The digest
 binds backend, project, encryption, flags and dependency graph. It contains neither
 secrets nor live observations. It can describe disabled units and is **not** an
-admission token: current CLI/program preview and deployment continue to fail even
+admission token: standalone program and CLI preview/deployment continue to fail even
 if a private configuration sets a preview flag true. Later consumers must check
 evidence, freshness, verified tools and committed dependency output contents.
 
@@ -102,6 +107,28 @@ occurs. No new dependency is added; project-scoped identities adapt the existing
 Focused tests: `uv run --locked pytest tests/test_config.py tests/test_preview_contracts.py tests/test_backend.py -q -m "not backend_integration"`.
 Full checks/build and opt-in local integration run in the existing credential-free
 CI workflow. User preference is to leave heavy checks on CI.
+
+## PR9 admission boundary
+
+**BEHAVIOR-ADJACENT:** `infra_program.__main__.main(context)` accepts a
+`ServicePreviewContext` from a reviewed in-process caller. No default, environment
+variable or file loader constructs that context. The adapter checks the expected
+full commit independently supplied by the caller, recomputes the preview contract
+from foundation configuration, requires its preview flag and matches SDK runtime
+identity and `is_dry_run()`. It then snapshots service inputs and dispatches only
+Cloudflare/Supabase to the existing evidence-first, per-unit `require_secret`
+factory. The context carries immutable evidence/envelope bytes; it is neither a
+credential container nor proof of checkout/backend/tool authorization.
+
+This is a cooperative program guard, not a sandbox against a Python caller able
+to change runtime settings. PR13 must establish clean checkout, verified tools,
+backend and bounded execution; PR14-PR16 provide protected orchestration. OCI
+dispatch waits for PR10/PR11. There is no new stack creation, state migration,
+apply/import path or workflow activation. Reverting restores unconditional
+program denial without changing state or configuration. Tracked preview flags
+and deployment/cutover authorization remain false.
+
+Focused tests: `uv run --locked pytest tests/test_preview_program.py tests/test_pulumi.py tests/test_services.py -q`.
 
 ## Administrator-owned live acceptance
 
