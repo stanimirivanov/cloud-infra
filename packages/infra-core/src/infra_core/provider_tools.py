@@ -213,6 +213,20 @@ def verified_environment(root: Path, home: Path) -> dict[str, str]:
     }
 
 
+def materialize_home(root: Path, source: Path, target: Path, *, supabase: bool) -> dict[str, str]:
+    """Reverify local assets and populate a new invocation home without downloading."""
+    verifier = verified_supabase_environment if supabase else verified_environment
+    verifier(root, source)
+    _require(not target.exists(), "invocation home must be new")
+    for name in sorted(NAMES):
+        _, _, archive = _paths(root, name, source)
+        install_provider(root, name, archive, target)
+    if supabase:
+        _, _, _, archive = _supabase_paths(root, source)
+        install_supabase(root, archive, target)
+    return verifier(root, target)
+
+
 def _supabase_paths(root: Path, home: Path) -> tuple[dict[str, str], Path, Path, Path]:
     # Reuse native platform/home/reparse validation without executing the bridge.
     _paths(root, "terraform-provider", home)
