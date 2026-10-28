@@ -137,6 +137,11 @@ the dispatch commit, restricts execution to main/owner, serializes qualification
 and uses pulumi-backend-qualification. Only the qualification step receives HMAC
 credentials and a passphrase. Only its sanitized receipt is uploaded.
 Resource preview/deployment requests still fail.
+The [manual service-preview workflow](.github/workflows/service-preview.yml) adds
+separate protected service handoffs after verification and a credential-free
+enabled-contract gate. Current flags deny that gate. See [PR15's input and admin
+contract](docs/m04-plan.md#pr15-protected-service-preview-workflow); no live
+activation or environment protection is established by this YAML.
 
 Required status checks, reviewer rules, main-only environment branches, effective
 IAM scope and bucket retention must be verified outside this YAML. Inspection for

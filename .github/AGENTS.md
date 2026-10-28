@@ -6,7 +6,11 @@ pull_request_target to execute PR code. The manual Pulumi foundation workflow
 depends on shared verification, requires main and owner checks, and uses the
 dedicated protected environment. OCI signing credentials belong only to its
 read-only audit step; S3 credentials and passphrase belong only to isolated
-qualification. Never expose either to PR validation or disabled resource operations. Configuration of required
+qualification. The manual service-preview workflow uses per-service protected
+environments, a matching explicit main dispatch SHA and a credential-free enabled
+contract check before its secret-bearing CLI handoff. Signing material is ephemeral;
+only the sanitized CLI receipt may be uploaded. Tracked flags stay false. Never
+expose operational credentials to PR validation. Configuration of required
 reviewers/main-only environment branches is an administrator prerequisite.
 
 Pin external Actions to reviewed full SHAs in config/toolchain.json. Install tools
