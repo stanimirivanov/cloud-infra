@@ -1,0 +1,73 @@
+name: Protected OCI preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      unit:
+        description: Reviewed existing OCI stack; no stack creation or network-output synthesis
+        type: choice
+        required: true
+        options: [oci-network, oci-oke]
+      commit:
+        description: Approved full commit SHA; must equal this main dispatch commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulumi-preview-${{ github.repository }}-${{ inputs.unit }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    uses: ./.github/workflows/verify.yml
+  preview:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: pulumi-preview-${{ inputs.unit }}
+    env:
+      PREVIEW_UNIT: ${{ inputs.unit }}
+      PREVIEW_COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install checksum-verified tools
+        shell: pwsh
+        run: ./.github/scripts/install-tools.ps1
+      - run: uv sync --locked --all-groups --extra inventory-oci
+      - name: Check enabled OCI contract before credentials
+        run: uv run --locked python .github/scripts/service-preview.py --oci --check
+      - name: Prepare verified native provider caches without credentials
+        shell: pwsh
+        run: ./.github/scripts/install-providers.ps1
+      - name: Collect evidence and run constrained OCI preview
+        id: preview
+        env:
+          OCI_PREVIEW_INPUTS: ${{ secrets.OCI_PREVIEW_INPUTS }}
+          OCI_RESOURCE_PREVIEW_CREDENTIALS: ${{ secrets.OCI_RESOURCE_PREVIEW_CREDENTIALS }}
+          OCI_BACKEND_AUDIT_CREDENTIALS: ${{ secrets.OCI_BACKEND_AUDIT_CREDENTIALS }}
+          BACKEND_POSTURE_ACCOUNT_ID: ${{ vars.BACKEND_POSTURE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: ./.venv/bin/python .github/scripts/service-preview.py --oci
+      - name: Save sanitized OCI preview receipt
+        if: success() && steps.preview.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: oci-preview-${{ inputs.unit }}
+          path: .infra/oci-preview.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove private OCI preview material and receipt
+        if: always()
+        run: python3 .github/scripts/service-preview.py --oci --cleanup

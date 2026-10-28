@@ -112,6 +112,59 @@ to the fixed sequence and does not expand milestone scope.
 - M04-PR15: issue #111 adds manual protected service workflow wiring, guarded
   private handoff/cleanup and workflow capability regression sensors. Current
   flags deny credential admission; live acceptance remains separately blocked.
+- M04-PR16: issue #113 adds manual OCI network/OKE workflow wiring through an
+  explicit mode of the existing handoff, separate signing scopes and required
+  captured OKE dependency inputs. Flags stay false; synthetic closeout remains PR17.
+
+## PR16 protected OCI preview workflow
+
+The manual OCI workflow uses the same main/owner/matching dispatch-commit,
+credential-free verification, full pinned checkout, verified tools/providers,
+25-minute job limit and no-cancel per-unit concurrency controls as PR15. Its unit
+choice is closed to oci-network/oci-oke. Before credentials, explicit --oci --check
+mode verifies the clean commit and enabled tracked contract. The credential step
+runs the prepared venv directly with --oci. No service tokens are exposed.
+Service mode remains service-only; mode selection cannot override tracked flags.
+
+OCI_PREVIEW_INPUTS is a closed schema-1 JSON object with unit, configuration,
+account, usage, usage_cutoff, encrypted_configuration and qualification. Except
+schema_version/unit/usage_cutoff, values are strings containing original document
+bytes: configuration/account are TOML, usage/qualification/ciphertext settings are
+JSON. usage_cutoff is an explicit elapsed whole-hour timestamp. OKE additionally
+requires dependency_outputs, a string containing the captured committed network
+JSON object. Network rejects that extra field. Existing PR14/PR13 checks validate
+coverage, graph, scope and actual dependency digest before resource registration.
+The adapter preserves the independent usage watermark/clocks and does not invent
+zero usage, outputs, stack identities or dependency deployment order.
+
+OCI_RESOURCE_PREVIEW_CREDENTIALS is a separate closed tenancy/user/fingerprint/
+key_content JSON object; its tenancy must match the independent account TOML.
+Resource key passphrases and caller-supplied key paths are rejected, consistent
+with PR14. Backend signing uses OCI_BACKEND_AUDIT_CREDENTIALS bound independently
+to BACKEND_POSTURE_ACCOUNT_ID, retaining optional backend pass_phrase support.
+Both become separate ephemeral mode-0600 key/config files; only their owned paths
+enter the CLI request. No signing material or private evidence is uploaded.
+
+Administrators must protect pulumi-preview-oci-network and pulumi-preview-oci-oke
+with main-only branches, independent reviewers and appropriate bypass controls.
+Configure environment-scoped OCI_PREVIEW_INPUTS, OCI_RESOURCE_PREVIEW_CREDENTIALS,
+OCI_BACKEND_AUDIT_CREDENTIALS, OCI_S3_ACCESS_KEY, OCI_S3_SECRET_KEY and
+PULUMI_CONFIG_PASSPHRASE, plus BACKEND_POSTURE_ACCOUNT_ID. Independently verify
+effective read/preview IAM scopes, backend custody, fresh account/usage coverage,
+reviewed source, existing project-scoped stacks and matching qualification.
+The current administrative sensor does not establish these environment controls.
+
+OKE needs actual compatible committed network outputs. A network preview receipt
+does not create them; missing outputs block live acceptance. Creation, import,
+apply and ownership transfer remain outside M04. All tracked flags remain false;
+this change dispatches nothing and changes no settings or cloud state. GitHub's
+secret-size limit and PR15's trusted-CLI publication/runner-disposal limits apply.
+Only the new sanitized .infra/oci-preview.json receipt is uploaded for one day.
+OCI cleanup targets its own receipt/temporary namespace and preserves service
+files. Synthetic handoff and workflow mutation tests cover both units; complete
+runtime integration and finite engineering reconciliation remain PR17.
+
+Focused gate: `uv run --locked pytest tests/test_oci_preview_workflow.py tests/test_service_preview_workflow.py tests/test_preview_orchestration.py -q`.
 
 ## PR15 protected service preview workflow
 
