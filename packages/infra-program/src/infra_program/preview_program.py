@@ -15,7 +15,7 @@ from infra_program.services.components import Services
 from infra_program.services.configuration import register_services_from_config
 
 if TYPE_CHECKING:
-    from infra_program.oci.components import Network
+    from infra_program.oci.components import Network, Oke
 
 
 @dataclass(frozen=True)
@@ -54,13 +54,18 @@ class NetworkPreviewContext(PreviewContext):
     envelope: bytes = field(repr=False)
 
 
+@dataclass(frozen=True)
+class OkePreviewContext(NetworkPreviewContext):
+    """OKE uses the exact dependency identity from its reviewed preview contract."""
+
+
 def dispatch_preview(
-    context: ServicePreviewContext | NetworkPreviewContext | None,
-) -> Services | Network:
+    context: ServicePreviewContext | NetworkPreviewContext | OkePreviewContext | None,
+) -> Services | Network | pulumi.Output[Oke]:
     """Deny before secret lookup/registration unless SDK and explicit inputs agree."""
     message = "PREVIEW002: Provisioning is not enabled; valid preview admission required"
     if (
-        type(context) not in (ServicePreviewContext, NetworkPreviewContext)
+        type(context) not in (ServicePreviewContext, NetworkPreviewContext, OkePreviewContext)
         or pulumi.runtime.is_dry_run() is not True
     ):
         raise RuntimeError(message)
@@ -87,9 +92,10 @@ def dispatch_preview(
         or expected.stack_identity != runtime_identity
     ):
         raise RuntimeError(message)
-    if type(context) is NetworkPreviewContext:
+    if type(context) in (NetworkPreviewContext, OkePreviewContext):
+        assert isinstance(context, NetworkPreviewContext)
         if (
-            expected.unit != "oci-network"
+            expected.unit != ("oci-oke" if type(context) is OkePreviewContext else "oci-network")
             or type(context.configuration) is not OciConfig
             or type(context.account) is not dict
             or type(context.profile) is not dict
@@ -97,6 +103,32 @@ def dispatch_preview(
             or type(context.envelope) is not bytes
         ):
             raise RuntimeError(message)
+        if type(context) is OkePreviewContext:
+            from infra_program.oci.components import register_oke
+
+            result = register_oke(
+                context.configuration,
+                context.account,
+                context.profile,
+                context.inventory,
+                envelope=context.envelope,
+                commit=context.expected_commit,
+                dependency_stack=expected.dependency_stacks[0],
+            )
+
+            def export_oke(oke: Oke) -> Oke:
+                pulumi.export(
+                    "oke",
+                    {
+                        "schema_version": 1,
+                        "region": context.configuration.region,
+                        "cluster_id": oke.cluster_id,
+                        "node_pool_id": oke.node_pool_id,
+                    },
+                )
+                return oke
+
+            return result.apply(export_oke)
         from infra_program.oci.components import register_network
 
         network = register_network(

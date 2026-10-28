@@ -16,12 +16,14 @@ from infra_core.oci.graph import (
     Resource,
     foundation_graph,
     network_graph,
+    oke_graph,
     proposal,
     wire,
 )
 from infra_core.oci.security import validate_resource
 
 from infra_program.governance import preflight
+from infra_program.oci.dependencies import NETWORK_STACK, read_network
 
 # Closed constructor table: no arbitrary resource types, SDK lookups or dynamic imports.
 CONSTRUCTORS: dict[str, Callable[..., pulumi.CustomResource]] = {
@@ -159,13 +161,14 @@ class Oke(pulumi.ComponentResource):
         graph: tuple[Resource, ...],
         provider: oci.Provider,
         registered: dict[str, pulumi.CustomResource],
-        network: Network,
+        network: Network | pulumi.StackReference,
         account_id: str,
         *,
         _permit: object | None = None,
     ) -> None:
         require(_permit is _PERMIT, "OCI040", "use register_foundation for governed registration")
-        _validate_network_outputs(network.outputs, cfg, account_id)
+        if isinstance(network, Network):
+            _validate_network_outputs(network.outputs, cfg, account_id)
         super().__init__(
             "infrastructure:oci:Oke",
             cfg.name + "-oke",
@@ -275,6 +278,63 @@ def register_network(
         inventory,
         proposal(graph, account_id, cfg.region, units=(NETWORK_UNIT,)),
         register,
+        envelope=envelope,
+        commit=commit,
+    )
+
+
+def register_oke(
+    cfg: FoundationConfig,
+    account: dict[str, Any],
+    profile: dict[str, Any],
+    inventory: bytes,
+    *,
+    envelope: bytes,
+    commit: str,
+    dependency_stack: str,
+) -> pulumi.Output[Oke]:
+    """Read one committed dependency, then audit the exact OKE graph before emitting."""
+    cfg, account, profile = deepcopy((cfg, account, profile))
+    require(dependency_stack == NETWORK_STACK, "OCI041", "explicit network stack required")
+    graph = oke_graph(cfg)
+    require(account.get("home_region") == cfg.region, "OCI001", "provider must match account home")
+    account_id = text(account.get("account_id"), "tenancy identity")
+
+    def read() -> pulumi.Output[Oke]:
+        reference = pulumi.StackReference(
+            cfg.name + "-network-reference",
+            stack_name=dependency_stack,
+            opts=pulumi.ResourceOptions(protect=True),
+        )
+
+        async def resolved() -> Oke:
+            ids = await read_network(reference, cfg, account_id)
+            bound = oke_graph(cfg, ids)
+            for item in bound:
+                validate_resource(item.kind, wire(item.props))
+
+            def register() -> Oke:
+                provider = _register_provider(cfg, account_id)
+                return Oke(cfg, bound, provider, {}, reference, account_id, _permit=_PERMIT)
+
+            return preflight(
+                account,
+                profile,
+                inventory,
+                proposal(bound, account_id, cfg.region, units=(OKE_UNIT,)),
+                register,
+                envelope=envelope,
+                commit=commit,
+            )
+
+        return pulumi.Output.from_input(resolved())
+
+    return preflight(
+        account,
+        profile,
+        inventory,
+        proposal(graph, account_id, cfg.region, units=(OKE_UNIT,)),
+        read,
         envelope=envelope,
         commit=commit,
     )

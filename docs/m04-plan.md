@@ -78,6 +78,11 @@ agreed review size; do not silently extend milestone closeout.
   still precedes the provider and all registrations; the existing combined factory
   is unchanged. Stack exports are `network` (existing schema 1) and
   `network_stack_identity` (full source identity). OKE dispatch remains PR11.
+- M04-PR11: issue #101 adds the fixed read-only network StackReference, closed
+  committed-output validation and OKE-only dispatch/exports. Initial preflight
+  precedes the read; the exact resolved OKE proposal is audited again before any
+  managed registration. Unknown/secret/missing/mismatched dependency values fail.
+  Policy permits only that exact full reference; operations remain disabled.
 
 ## PR1 contracts and compatibility
 

@@ -1,6 +1,6 @@
 """OCI-only graph shared verbatim by governance and native SDK registration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -90,6 +90,27 @@ def network_graph(cfg: FoundationConfig, *, now: datetime | None = None) -> tupl
     """Validated network-only graph; retain the existing conservative config contract."""
     cfg.validate(now=now)
     return _network_graph(cfg)
+
+
+def oke_graph(
+    cfg: FoundationConfig, network_ids: dict[str, str] | None = None
+) -> tuple[Resource, ...]:
+    """Build only OKE; bind validated committed IDs while retaining the cluster Ref."""
+    cfg.validate()
+
+    def bind(value: Any) -> Any:
+        if isinstance(value, Ref) and value.key != "cluster":
+            if network_ids is None:
+                return value
+            require(value.key in network_ids, "OCI041", "committed network ID required")
+            return network_ids[value.key]
+        if isinstance(value, dict):
+            return {key: bind(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [bind(item) for item in value]
+        return value
+
+    return tuple(replace(item, props=bind(item.props)) for item in _oke_graph(cfg))
 
 
 def _network_graph(cfg: FoundationConfig) -> tuple[Resource, ...]:
