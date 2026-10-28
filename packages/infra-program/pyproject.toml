@@ -12,6 +12,9 @@ dependencies = [
     "pulumi-supabase==1.11.0",
 ]
 
+[project.scripts]
+infra = "infra_program.cli:main"
+
 [build-system]
 requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"

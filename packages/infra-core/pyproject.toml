@@ -5,9 +5,6 @@ description = "Repository verification and infrastructure automation"
 requires-python = ">=3.12,<3.13"
 dependencies = ["cryptography==50.0.2"]
 
-[project.scripts]
-infra = "infra_core.cli:main"
-
 [project.optional-dependencies]
 inventory-oci = [
     "oci>=2.150,<3",

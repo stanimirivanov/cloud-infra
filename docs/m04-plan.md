@@ -105,6 +105,75 @@ to the fixed sequence and does not expand milestone scope.
   It consumes PR13a and produces PR12 receipts only after completion/source/runtime
   rechecks. PR13's engineering implementation is complete after this slice's CI
   and merge; CLI/workflow activation remains PR14-PR16.
+- M04-PR14: issue #109 adds explicit CLI composition, same-invocation backend and
+  provider collection, frozen-input rechecks and private sanitized receipt output.
+  Tracked preview flags and deployment/cutover remain false; protected workflow
+  wiring remains PR15/16 and live acceptance remains administrator-owned.
+
+## PR14 CLI orchestration
+
+Issue #109 connects the four collectors to the existing executor without adding
+workflow activation or changing any tracked preview flag. The infra console
+composition moves from infra-core to infra-program; workspace sync installs the
+new entry point with no new dependency or lock resolution. **Compatibility:** a
+core-only installation no longer provides the console script; its direct CLI API
+retains offline behavior and denies previews unless a callback is explicitly injected.
+
+The preview parser accepts `--unit`, `--commit` (independently approved full SHA)
+and `--request` (private JSON). For example:
+
+```shell
+uv run --locked --extra inventory-oci infra preview --unit cloudflare-edge --commit 0000000000000000000000000000000000000000 --request .infra/preview-request.json
+```
+
+The placeholder cannot pass live admission. Schema-1 requests have exactly these
+common fields: schema_version (integer 1), configuration, encrypted_configuration,
+qualification, cli_archive, provider_home, backend_account_id, backend_oci_config,
+output. All but schema_version/backend_account_id are explicit checkout .infra
+paths. No symlink/junction ancestors or resolved path escapes are accepted.
+Small input files are captured once (1 MiB each); CLI archives/provider caches are
+verified by the executor. Output must be a new path and is created exclusively.
+
+| Unit | Additional request fields / file formats |
+| --- | --- |
+| cloudflare-edge | review: independent schema-1 Cloudflare review JSON; configuration: service JSON |
+| supabase-database | supplement: original classified operator supplement JSON; organizations: complete array of organization slugs; configuration: service JSON |
+| oci-network | account: account TOML; usage: independent monthly usage JSON with original covered_through; usage_cutoff: explicit elapsed whole-hour timestamp; oci_config: signing config; configuration: OCI TOML |
+| oci-oke | All network fields plus dependency_outputs: captured committed network object JSON, checked against actual StackReference by PR13b |
+
+Backend and resource OCI signing files use the explicit DEFAULT profile. Backend
+tenancy is independent of resource/service scope. A fresh schema-3 OCI qualification
+receipt must match the foundation. Same-invocation read-only backend collection
+creates and validates posture bytes/sidecar in memory. AWS_ACCESS_KEY_ID,
+AWS_SECRET_ACCESS_KEY, PULUMI_CONFIG_PASSPHRASE (at least twenty characters) and optional
+AWS_SESSION_TOKEN are copied explicitly. Service collection additionally requires
+CLOUDFLARE_API_TOKEN or SUPABASE_API_TOKEN; the executor receives only the permitted
+backend environment and decrypts its provider secrets from encrypted_configuration.
+OCI provider identity/key path comes from the resource signing config; inline and
+passphrase-protected resource keys are rejected by this adapter. Never place tokens
+or plaintext passwords in the request, proposals, receipt or command arguments.
+
+Service collectors retain entitlement and supplemental source clocks. OCI usage
+queries cannot supply a watermark: independent evidence remains mandatory, every
+metric must be known, and independent totals cannot understate observed totals.
+Its original clocks/watermark remain unchanged; usage source text binds the
+original supplement and query observation digests. Existing account/evidence
+preflight still runs before any provider/resource registration.
+
+Clean expected HEAD, foundation, captured small inputs, profiles, qualification and
+posture are rechecked before/after the executor. Failures emit only PREVIEW006;
+raw observations/events/configuration remain private and no failed new receipt is
+retained. Success writes a bounded schema-1 preview-orchestration wrapper containing
+the PR12 preview_result, request/qualification/posture/sidecar hashes and false
+deployment/cutover authorization. An existing output is never overwritten or reused.
+Digests prove consistency, not source authenticity, review approval or IAM scope.
+Source review, protected environments, least privilege and custody remain external
+activation gates; PR15/16 add workflow wiring. No live operation is part of CI.
+Collection retains the individual collectors' existing limits; PR13's 300-second
+execution budget begins after collection. Protected workflow job timeouts must
+bound the entire invocation. This cooperative CLI is not a hostile-host sandbox.
+
+Focused gate: `uv run --locked pytest tests/test_preview_orchestration.py tests/test_verification.py tests/test_preview_contracts.py -q`.
 
 ## PR13b executor and bootstrap
 
