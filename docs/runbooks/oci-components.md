@@ -46,7 +46,7 @@ There are no credentials or kubeconfig outputs.
 The existing register_foundation factory still composes both logical units for
 library consumers; do not point that combined graph at a reserved single-unit stack.
 The independent network preview path below registers only oci-network. OKE
-StackReference wiring and committed-output validation remain M04-PR11.
+StackReference wiring and committed-output validation are described below.
 
 ## Independent network preview (M04-PR10)
 
@@ -78,6 +78,40 @@ denial without affecting resources/state. Tracked preview flags, deployment and
 cutover remain disabled; protected driver/workflow activation is still later work.
 
 Focused tests: `uv run --locked pytest tests/test_oci_network.py tests/test_oci.py tests/test_preview_program.py -q`.
+
+## Independent OKE dependency (M04-PR11)
+
+**BEHAVIOR-ADJACENT:** explicit `OkePreviewContext` admission requires SDK dry-run,
+the oci-oke identity, its enabled preview flag and the reviewed contract. The only
+dependency is `organization/free-infrastructure/oci-network`. `register_oke` runs
+the existing full account-wide inventory/usage preflight, then uses the SDK
+StackReference read (explicit resource ID), with no stack creation or selection.
+The mandatory policy permits only this fully scoped reference and closed SDK
+reference fields; it cannot independently prove the engine's read semantics.
+
+The source must export exactly `network` and `network_stack_identity` from PR10.
+All output metadata must be known and non-secret, with no secret output names.
+The schema-1 object must match expected source/account/region/compartment/CIDRs and
+contain seven distinct typed OCIDs. Missing, secret, unknown, malformed or mismatched
+outputs fail with OCI041 before any managed resource/provider/component registration.
+Adapter errors omit output values and raw diagnostics; SDK/engine logging must also
+be isolated by the later constrained driver. Metadata consistency cannot
+prove live ownership, authenticity or that referenced resources still exist; trusted
+backend custody and administrator-owned live acceptance remain separate requirements.
+
+The exact OKE-only graph binds those IDs while retaining the internal cluster-to-pool
+reference. Preflight runs again before managed registration, including freshness,
+capacity and monthly budgets. No network resource is recreated. The protected OKE
+component depends on the read reference; children retain explicit parent/provider.
+The sole stack export `oke` contains schema 1, region, cluster ID and node-pool ID.
+It contains no kubeconfig or credentials. Existing combined/network APIs and exports
+are preserved; no state, alias, import or backend namespace migration occurs.
+
+Reverting this slice restores OKE preview denial. Tracked preview flags, standalone
+program/CLI execution, deployment and cutover stay disabled. The constrained driver
+and protected orchestration remain later M04 tasks.
+
+Focused tests: `uv run --locked pytest tests/test_oci_dependency.py tests/test_oci.py tests/test_oci_network.py tests/test_preview_program.py -q`.
 
 ## Bound inventory at registration (M03-PR11)
 

@@ -22,6 +22,8 @@ from pulumi_policy import (
     ResourceValidationPolicy,
 )
 
+from infra_program.oci.dependencies import NETWORK_STACK
+
 
 def _properties(value: Any) -> Any:
     """Materialize policy SDK proxies at the boundary, preserving unknown errors.
@@ -59,6 +61,14 @@ def validate_resource(args: ResourceValidationArgs, report: ReportViolation) -> 
         return
     try:
         properties = _properties(args.props)
+        if args.resource_type == "pulumi:pulumi:StackReference":
+            if properties.get("name") != NETWORK_STACK or set(properties) - {
+                "name",
+                "outputs",
+                "secretOutputNames",
+            }:
+                raise GovernanceError("OCI041: only the explicit OCI network reference is allowed")
+            return
         if args.resource_type in {DNS, PROJECT}:
             if args.resource_type == PROJECT:
                 # The generated SDK marks this sensitive input secret. Do not inspect/echo it.
