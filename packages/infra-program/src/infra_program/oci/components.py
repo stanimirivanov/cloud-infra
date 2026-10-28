@@ -292,6 +292,7 @@ def register_oke(
     envelope: bytes,
     commit: str,
     dependency_stack: str,
+    expected_network_sha256: str | None = None,
 ) -> pulumi.Output[Oke]:
     """Read one committed dependency, then audit the exact OKE graph before emitting."""
     cfg, account, profile = deepcopy((cfg, account, profile))
@@ -308,7 +309,7 @@ def register_oke(
         )
 
         async def resolved() -> Oke:
-            ids = await read_network(reference, cfg, account_id)
+            ids = await read_network(reference, cfg, account_id, expected_network_sha256)
             bound = oke_graph(cfg, ids)
             for item in bound:
                 validate_resource(item.kind, wire(item.props))

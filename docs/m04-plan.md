@@ -99,6 +99,58 @@ to the fixed sequence and does not expand milestone scope.
   event capture. No executor or bootstrap is exposed. PR13b still owns clean-commit,
   backend/contract/input admission, ciphertext configuration, dependency binding,
   source rechecks, workspace cleanup and PR12 receipt production.
+- M04-PR13b: issue #107 adds the library-only executor and owned bootstrap for
+  all four units, with clean expected-head/contract/version admission, encrypted
+  configuration, frozen input binding and actual OKE dependency-digest checks.
+  It consumes PR13a and produces PR12 receipts only after completion/source/runtime
+  rechecks. PR13's engineering implementation is complete after this slice's CI
+  and merge; CLI/workflow activation remains PR14-PR16.
+
+## PR13b executor and bootstrap
+
+`infra_program.preview_driver.run_preview` requires the actual checkout and its
+locked venv/Python version, clean exact expected HEAD, matching foundation/backend/
+project/unit contract and an enabled preview flag. It freezes caller inputs and
+runs existing semantic evidence/account preflight before selecting any stack.
+Installed Pulumi/provider/policy versions are checked against committed pins/lock
+before execution, in the child and after completion. Approval, required checks,
+environment/IAM/backend posture and custody remain upstream operational prerequisites;
+HEAD cleanliness does not establish review approval or source authenticity.
+
+The API accepts an explicit encrypted stack-configuration **JSON byte object** with
+only encryptionsalt and config, with ciphertext values preserved as YAML-compatible JSON in the private
+workspace. Only the exact per-unit token/password keys may appear, each wrapped
+in a v1 secure ciphertext object; OCI config is empty. Plaintext, extra/missing
+keys and duplicate JSON fields fail. Credentials are explicit, unit-scoped process
+environment inputs; the passphrase retains the existing twenty-character minimum.
+No config decrypt/set/export helpers, stack creation, imports or state moves occur.
+
+Receipt inputs bind canonical frozen configuration/profile/account data and a
+proposal capsule containing configuration plus ciphertext settings. Original
+evidence/envelope/dependency bytes remain exact; toolchain bytes and a policy/
+executor/lock source-digest bundle are also bound. `preview_input_digests` validates
+these budgets before execution. The owned JSON bootstrap reconstructs only known
+context classes, revalidates actual inputs and dispatches through SDK dry-run guards;
+it accepts no arbitrary callable, pickle, sys.path change or inherited Python/proxy
+environment. OKE requires a captured dependency object; its canonical digest must
+match the actual non-secret committed reference before managed registration.
+
+Preparation and commands share a 300-second budget, with PR13a's bounded process
+termination attempts. Private TemporaryDirectory ownership encloses the CLI,
+provider home, ciphertext and bootstrap. Before returning a PR12 receipt, the
+executor rechecks all owned files, source/head, installed versions, runtime/provider
+bytes and input digests. Failures return only PREVIEW005 and no receipt; normal
+success/failure paths remove the private workspace. This is cooperative isolation,
+not an OS sandbox or protection against a hostile concurrent host/filesystem.
+
+`run_preview` is a library API, not operational authorization. Tracked flags,
+standalone program/CLI operations, deployment and cutover remain disabled. Existing
+composition APIs remain compatible; the OKE expected-digest argument defaults to
+None for old library callers, while this executor always supplies it. No new
+dependency or state/configuration migration is introduced. Revert removes the
+executor without changing backend ownership. Live acceptance remains separate.
+
+Focused tests: `uv run --locked pytest tests/test_preview_driver.py tests/test_preview_results.py -q`.
 
 ## PR13a runtime foundation
 

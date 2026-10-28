@@ -118,7 +118,9 @@ def test_policy_allows_only_the_exact_network_reference(name, extra):
     assert bool(violations) == (name != NETWORK_STACK or bool(extra))
 
 
-@pytest.mark.parametrize("mode", ["valid", "secret", "unknown", "missing", "scope", "expired"])
+@pytest.mark.parametrize(
+    "mode", ["valid", "secret", "unknown", "missing", "scope", "expired", "changed"]
+)
 def test_sdk_oke_reference_and_no_registration_on_invalid_dependency(config, tmp_path, mode):
     data = tmp_path / "inputs.json"
     data.write_text(
@@ -148,6 +150,7 @@ from infra_core.oci.config import FoundationConfig, ImageEvidence
 from infra_core.oci.graph import Ref, oke_graph, wire
 from infra_program import governance, preview_program
 from infra_program.oci import components
+from infra_program.oci.dependencies import network_digest
 
 data = json.loads(Path(sys.argv[1]).read_text())
 mode = sys.argv[3]
@@ -159,7 +162,10 @@ cfg = FoundationConfig(**values)
 account, profile, inventory = data['evidence']
 payload, envelope = capture_inventory(account, profile, inventory, commit='a'*40)
 source = data['outputs']
+captured_digest = network_digest(source)
 ids = deepcopy(source['network']['ids'])
+if mode == 'changed':
+    source['network']['ids']['vcn'] = 'ocid1.vcn.oc1.eu-frankfurt-1.changed'
 if mode == 'missing':
     source = {}
 if mode == 'scope':
@@ -209,7 +215,8 @@ foundation = replace(foundation, units=tuple(replace(u, preview_enabled=True)
 from infra_core.preview_contracts import describe_preview
 context = preview_program.OkePreviewContext(foundation,
     describe_preview(foundation, 'oci-oke', 'a'*40), 'a'*40,
-    cfg, account, profile, payload, envelope)
+    cfg, account, profile, payload, envelope,
+    expected_network_sha256=captured_digest if mode == 'changed' else None)
 real_init = pulumi.Resource.__init__
 def record(self, typ, name, custom, props=None, opts=None, *args, **kwargs):
     assert opts.protect is True and opts.import_ is None and opts.aliases is None

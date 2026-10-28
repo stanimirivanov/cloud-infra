@@ -10,8 +10,9 @@ infra-program or Pulumi. infra-program may depend on infra-core and the Pulumi S
 standalone program/CLI resource operations and deployment units remain disabled.
 The in-process preview_program adapter accepts explicit reviewed service/network context
 only with the SDK dry-run flag and matching project/stack/organization. It is not
-an authorization boundary against arbitrary Python callers; the constrained driver
-and protected orchestration remain later M04 tasks. Never add environment-based
+an authorization boundary against arbitrary Python callers. The library preview_driver
+checks clean head, contracts, frozen inputs and the owned runtime; protected CLI/
+workflow admission remains later M04 work. Never add environment-based
 admission or a non-preview branch to this adapter.
 The OCI component library may register only after its complete preflight gate;
 credential-free tests use Pulumi mocks. Backend qualification
