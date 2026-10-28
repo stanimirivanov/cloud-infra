@@ -1,7 +1,7 @@
 # OCI networking and OKE components
 
 This protected component library and pure proposal renderer do not provision,
-adopt, resize or move existing resources. The root Pulumi program, CLI
+adopt, resize or move existing resources. Standalone Pulumi execution, CLI
 preview/deploy and all configured deployment identities remain disabled.
 Existing external resource/state ownership remains authoritative; source retirement
 does not transfer it. Cutover requires a separate explicit operational request.
@@ -29,7 +29,7 @@ OCI lookups, image selection or Kubernetes operations occur in the program.
 
 Every native resource has an explicit provider, parent and protect=True. The
 provider pins the reviewed region and tenancy. The guarded Network/Oke
-constructors are implementation details; use register_foundation. SDK mock tests
+constructors are implementation details; use the governed factories. SDK mock tests
 compare every actual resource type, input and reference to the normalized
 proposal and enforce provider/protection/import/alias options. Invalid inputs,
 missing inventory or failed cost checks are tested with all Pulumi registration
@@ -43,11 +43,41 @@ the schema, account, region, compartment and CIDRs. It consumes network IDs;
 networking never depends on OKE. OKE outputs only cluster ID, pool ID and region.
 There are no credentials or kubeconfig outputs.
 
-The current factory composes both logical units in an offline test program.
-It is not a multi-stack deployment orchestrator. Separate state deployment and
-StackReference wiring must be introduced and reviewed at cutover, with exported
-network contracts bound to their actual source stack/account and governance
-proposal. Do not point one combined program at either reserved stack identity.
+The existing register_foundation factory still composes both logical units for
+library consumers; do not point that combined graph at a reserved single-unit stack.
+The independent network preview path below registers only oci-network. OKE
+StackReference wiring and committed-output validation remain M04-PR11.
+
+## Independent network preview (M04-PR10)
+
+`network_graph(cfg)` validates the existing FoundationConfig and builds only the
+network subset. `register_network(cfg, account, profile, inventory, *, envelope, commit)`
+freezes inputs, validates resource security and audits a proposal containing only
+oci-network before registering its protected provider/component/resources. All
+existing account-wide inventory, usage coverage, entitlement and capacity checks
+remain mandatory; existing compute/storage still count even though the network
+graph proposes no compute/storage. The optional proposal `units` argument rejects
+any resource omitted from the declared units. The combined factory is unchanged.
+
+**BEHAVIOR-ADJACENT:** an explicit `NetworkPreviewContext` can reach this factory
+only through SDK dry-run/identity/flag/contract admission. No environment/file loader,
+standalone execution or CLI path activates it. Network configuration deliberately
+retains full conservative FoundationConfig validation, including image/version,
+placement and capacity requirements; this slice introduces no separate config schema.
+
+The stack exports exactly `network` (the existing version-1 account/region/
+compartment/CIDR/seven-ID object) and `network_stack_identity` (the explicit full
+`organization/free-infrastructure/oci-network` identity). These values contain no
+credentials or kubeconfig. Preview IDs may be unknown; preview outputs are not
+committed dependency evidence. PR11 must validate actual committed outputs and
+source identity before admitting OKE. No source stack is created or selected here.
+
+No import, alias, backend namespace upgrade, state move or adoption is performed.
+Existing owners remain authoritative. Reverting this slice restores network preview
+denial without affecting resources/state. Tracked preview flags, deployment and
+cutover remain disabled; protected driver/workflow activation is still later work.
+
+Focused tests: `uv run --locked pytest tests/test_oci_network.py tests/test_oci.py tests/test_preview_program.py -q`.
 
 ## Bound inventory at registration (M03-PR11)
 

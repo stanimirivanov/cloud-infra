@@ -73,6 +73,11 @@ agreed review size; do not silently extend milestone closeout.
   organization/project/stack must match the enabled, configuration/commit-bound
   contract before service evidence validation, secret lookup or registration.
   Standalone execution, CLI operations and OCI dispatch remain blocked.
+- M04-PR10: issue #99 adds the governed network-only graph/factory and explicit
+  in-process `oci-network` preview dispatch. Account-wide inventory/usage auditing
+  still precedes the provider and all registrations; the existing combined factory
+  is unchanged. Stack exports are `network` (existing schema 1) and
+  `network_stack_identity` (full source identity). OKE dispatch remains PR11.
 
 ## PR1 contracts and compatibility
 
@@ -123,7 +128,7 @@ credential container nor proof of checkout/backend/tool authorization.
 This is a cooperative program guard, not a sandbox against a Python caller able
 to change runtime settings. PR13 must establish clean checkout, verified tools,
 backend and bounded execution; PR14-PR16 provide protected orchestration. OCI
-dispatch waits for PR10/PR11. There is no new stack creation, state migration,
+dispatch is added incrementally in PR10/PR11. There is no new stack creation, state migration,
 apply/import path or workflow activation. Reverting restores unconditional
 program denial without changing state or configuration. Tracked preview flags
 and deployment/cutover authorization remain false.
