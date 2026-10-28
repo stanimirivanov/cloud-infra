@@ -83,6 +83,47 @@ agreed review size; do not silently extend milestone closeout.
   precedes the read; the exact resolved OKE proposal is audited again before any
   managed registration. Unknown/secret/missing/mismatched dependency values fail.
   Policy permits only that exact full reference; operations remain disabled.
+- M04-PR12: issue #103 adds canonical schema-1 preview result bytes and strict
+  result validation. Bounded CLI wire records must show positive policy checks,
+  one successful preview summary and terminal completion with zero exit status.
+  Exact input/contract digests, counts and clocks are retained; private event
+  content is discarded. No executor, CLI activation or operational authority added.
+
+## PR12 result and policy evidence
+
+`infra_core.preview_results.create_preview_result` consumes explicit immutable
+artifact bytes and raw CLI event records; `validate_preview_result` checks the
+result against independently supplied contract/artifacts and current clock. The
+common artifacts are proposal, profile, evidence, envelope, toolchain,
+provider_toolchain and policy; OCI also requires account, and OKE requires
+dependency_outputs. Callers must capture the complete reviewed inputs/policy source
+bundle and verify their actual use. Digests alone do not establish that they ran.
+
+Schema 1 records unit/stack/commit/configuration/preview-contract identity, exact
+input hashes, start/end clocks, operation counts, event count/digest and policy
+source/version digests plus positive-check count. Deployment/cutover authorization
+are always false. It contains no stdout/stderr, messages, properties, URNs, policy
+version strings or secret config. Do not supply credentials as input artifacts.
+
+Limits: 10,000 events, 256 KiB per record, 16 MiB aggregate input/event budgets,
+64 KiB result, fifteen-minute duration and result freshness. JSON rejects duplicate
+keys/nonfinite values; sequences strictly increase and wire timestamps must lie
+within the captured run's clock interval. One successful, non-corrupt
+`isPreview` summary, the expected policy pack/rule, positive analysis, no violations
+and a final cancel-event marker are required. Update/canceled/failed summaries,
+error diagnostics, remediation, unknown events and truncated streams fail closed.
+Event hashing frames each exact record with its eight-byte big-endian byte length.
+
+The [pinned CLI wire protocol](https://github.com/pulumi/pulumi/blob/v3.272.0/sdk/go/common/apitype/events.go)
+includes isPreview/result and policy-analysis events omitted by the Python SDK
+adapter. PR13 must preserve raw wire evidence before SDK cleanup; an SDK summary
+or zero exit status is insufficient. This unsigned contract checks consistency,
+not result authenticity, enforcement-mode attestation or complete policy coverage.
+Protected execution/channel and administrator-owned live acceptance remain separate.
+No existing schema/state migration or dependency addition; rollback removes these
+new APIs without activating or modifying infrastructure.
+
+Focused tests: `uv run --locked pytest tests/test_preview_results.py tests/test_preview_contracts.py -q`.
 
 ## PR1 contracts and compatibility
 
