@@ -7,7 +7,7 @@ Both factories require immutable evidence/envelope bytes and an independently
 reviewed expected commit. Validate exact-byte/scope/config/profile/clock binding
 before Config lookup or registration; revalidate frozen inputs after secret lookup.
 No dictionary fallback, implicit commit from evidence or automatic conversion.
-Factories do not discover Git: a future approved caller must supply clean reviewed
+Factories do not discover Git: an approved caller must supply clean reviewed
 checkout identity independently, as the CLI does. Pure accounting stays dictionary-based.
 Audit before registering any provider/component/resource; use only that graph.
 Every child has an explicit provider, parent and protect=True. Endpoints are
@@ -15,7 +15,9 @@ fixed, tokens/passwords are Pulumi secret Outputs, outputs contain identities on
 Do not expose default providers, invokes, API clients, dynamic providers or new
 resource kinds. Pure cost/structure rules belong in infra-core/services.
 
-Keep stack identities and normal program/CLI operations disabled. Mocks must
+preview_program may dispatch these factories only after explicit context/contract,
+runtime identity and SDK dry-run validation. Standalone program and CLI operations
+remain disabled; tracked preview flags stay false. Mocks must
 exercise the real generated Supabase SDK parameterization and Cloudflare SDK
 serialization. No cloud credentials, state imports, network calls or data-plane
 SQL are part of this library's verification.

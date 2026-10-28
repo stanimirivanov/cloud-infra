@@ -7,7 +7,12 @@ Do not create member lockfiles, install dependencies dynamically or edit sys.pat
 
 infra-core owns CLI, pure configuration and verification. It must not depend on
 infra-program or Pulumi. infra-program may depend on infra-core and the Pulumi SDK;
-normal program/CLI resource operations and deployment units remain disabled.
+standalone program/CLI resource operations and deployment units remain disabled.
+The in-process preview_program adapter accepts explicit reviewed service context
+only with the SDK dry-run flag and matching project/stack/organization. It is not
+an authorization boundary against arbitrary Python callers; the constrained driver
+and protected orchestration remain later M04 tasks. Never add environment-based
+admission or a non-preview branch to this adapter.
 The OCI component library may register only after its complete preflight gate;
 credential-free tests use Pulumi mocks. Backend qualification
 may write only synthetic state in an invocation-specific namespace or a temporary
