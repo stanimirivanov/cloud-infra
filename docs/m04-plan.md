@@ -21,16 +21,22 @@ and cutover remain disabled throughout M04.
 | M04-PR10 | Independent network stack | PR2, PR9 |
 | M04-PR11 | OKE reference and dependency validation | PR10 |
 | M04-PR12 | Preview result and policy evidence contract | PR1 |
-| M04-PR13 | Constrained Automation API driver | PR8, PR11, PR12 |
-| M04-PR14 | Enforced CLI preview orchestration | PR4, PR5, PR6, PR13 |
+| M04-PR13a | Verified runtime and bounded SDK command/event transport | PR8, PR11, PR12 |
+| M04-PR13b | Constrained executor admission and owned bootstrap | PR13a |
+| M04-PR14 | Enforced CLI preview orchestration | PR4, PR5, PR6, PR13b |
 | M04-PR15 | Protected service preview workflows | PR14 |
 | M04-PR16 | Protected OCI preview workflow | PR15 |
-| M04-PR17 | Synthetic integration and engineering closeout | PR16 |
+| M04-PR17 | Synthetic integration and engineering closeout | PR16, PR13a |
 
 All tasks are in scope; there are no cross-milestone stubs. Tests accompany each
 implementation. Apply/import, foreign-state adoption, monitoring and production
 recovery belong to M05. Reassess PR boundaries explicitly if a slice exceeds the
 agreed review size; do not silently extend milestone closeout.
+
+PR13 is explicitly split into **two** finite slices with owner approval: PR13a's
+runtime foundation is consumed by PR13b's executor and PR17's SDK integration
+harness. PR13 remains incomplete until both slices are merged; this adds one PR
+to the fixed sequence and does not expand milestone scope.
 
 ## Implementation record
 
@@ -88,6 +94,42 @@ agreed review size; do not silently extend milestone closeout.
   one successful preview summary and terminal completion with zero exit status.
   Exact input/contract digests, counts and clocks are retained; private event
   content is discarded. No executor, CLI activation or operational authority added.
+- M04-PR13a: issue #105 adds archive-verified CLI companions, fresh reverified
+  provider homes, exact select/preview command gates and bounded private raw gRPC
+  event capture. No executor or bootstrap is exposed. PR13b still owns clean-commit,
+  backend/contract/input admission, ciphertext configuration, dependency binding,
+  source rechecks, workspace cleanup and PR12 receipt production.
+
+## PR13a runtime foundation
+
+`cli_runtime` verifies the pinned original CLI archive before materialization and
+again afterward, then returns a guarded `CliRuntime` inventory. CLI and companion
+files are rehashed before/after every command; links, extra files and altered bytes
+fail. Archives must be local: no installer download, SDK install or PATH lookup.
+`materialize_home` revalidates provider archives/binaries and populates a fresh
+invocation home, including the fixed Supabase cache when requested.
+
+`Command` accepts only exact fully scoped stack selection and the fixed preview
+argument vector, the checked-out local policy pack, an explicit configuration path,
+one-way refresh=false and no output callbacks. It enforces a closed environment,
+private HOME/temp/Pulumi paths, verified CLI/venv PATH, no proxy/debug/reattach
+injection and plugin acquisition restrictions. Unknown commands/options fail.
+Command failures are static PREVIEW005 errors; stdout/stderr go to the null device.
+The shared command deadline is 300 seconds, followed by bounded process-tree kill
+and wait attempts. OS permissions still govern descendant cleanup; this is not an
+OS sandbox and does not constrain arbitrary Python callers.
+
+The pinned SDK uses gRPC event transport. The adapter retains original JSON within
+PR12 byte/count limits and forwards summaries without the SDK's raw-event warning
+path. `Stack.select` preserves this hook instead of constructing the SDK base class.
+These bounded raw records remain private; PR13b must invoke PR12 validation before
+publishing any receipt, clean its owned workspace and establish operational admission.
+This foundation alone grants no preview authority. Tracked preview flags, standalone
+program/CLI operations, deployment and cutover remain disabled.
+The privileged primitives do not attest caller-created programs, provider homes,
+backend identity or clean source; PR13b must combine their verification and admission.
+
+Focused tests: `uv run --locked pytest tests/test_preview_runtime.py tests/test_provider_tools.py tests/test_supabase_provider_cache.py -q -m "not provider_integration"`.
 
 ## PR12 result and policy evidence
 
