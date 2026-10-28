@@ -10,6 +10,11 @@ qualification. The manual service-preview workflow uses per-service protected
 environments, a matching explicit main dispatch SHA and a credential-free enabled
 contract check before its secret-bearing CLI handoff. Signing material is ephemeral;
 only the sanitized CLI receipt may be uploaded. Tracked flags stay false. Never
+broaden service admission to OCI implicitly: the OCI workflow uses explicit --oci
+mode, separate per-unit environments and distinct backend/resource signing inputs.
+OKE must supply captured committed network outputs; never bootstrap/apply network
+state to make a preview pass. Both modes retain the same credential-free gate,
+sanitized receipt and owned cleanup requirements. Never
 expose operational credentials to PR validation. Configuration of required
 reviewers/main-only environment branches is an administrator prerequisite.
 

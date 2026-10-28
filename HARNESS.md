@@ -142,6 +142,10 @@ separate protected service handoffs after verification and a credential-free
 enabled-contract gate. Current flags deny that gate. See [PR15's input and admin
 contract](docs/m04-plan.md#pr15-protected-service-preview-workflow); no live
 activation or environment protection is established by this YAML.
+The [OCI preview workflow](.github/workflows/oci-preview.yml) reuses the handoff in
+explicit OCI mode, with separate backend/resource signing inputs and required
+committed network evidence for OKE. [PR16's contract](docs/m04-plan.md#pr16-protected-oci-preview-workflow)
+lists the administrator prerequisites; tracked flags still block credential admission.
 
 Required status checks, reviewer rules, main-only environment branches, effective
 IAM scope and bucket retention must be verified outside this YAML. Inspection for
