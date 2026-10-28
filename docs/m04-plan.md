@@ -109,6 +109,68 @@ to the fixed sequence and does not expand milestone scope.
   provider collection, frozen-input rechecks and private sanitized receipt output.
   Tracked preview flags and deployment/cutover remain false; protected workflow
   wiring remains PR15/16 and live acceptance remains administrator-owned.
+- M04-PR15: issue #111 adds manual protected service workflow wiring, guarded
+  private handoff/cleanup and workflow capability regression sensors. Current
+  flags deny credential admission; live acceptance remains separately blocked.
+
+## PR15 protected service preview workflow
+
+Issue #111 adds a manual service-only workflow. It requires main, the repository
+owner actor, an explicit full commit matching the dispatch SHA and successful
+reusable credential-free verification. Checkout pins that SHA with full history
+and no persisted token. Each unit uses its own pulumi-preview-UNIT environment and
+concurrency group (no cancellation); the hosted Ubuntu job has a 25-minute timeout.
+Reviewed Action pins and existing verified tool/provider installers are reused.
+
+Before any step receives secrets, the adapter's credential-free --check mode
+requires a clean exact commit and enabled tracked preview contract. The actual
+handoff repeats this gate, calls PR14's CLI with owned private files, and rechecks
+the gate after completion. All checked-in flags remain false, so the workflow
+cannot reach the credential step with the current configuration. OCI resource
+preview workflows remain PR16; this change neither dispatches nor activates previews.
+
+Administrators must separately provision and protect **both** environments:
+pulumi-preview-cloudflare-edge and pulumi-preview-supabase-database. Require
+main-only branches, independent reviewers and appropriate bypass restrictions.
+Keep SERVICE_PREVIEW_INPUTS, SERVICE_API_TOKEN, OCI_BACKEND_AUDIT_CREDENTIALS,
+OCI_S3_ACCESS_KEY, OCI_S3_SECRET_KEY and PULUMI_CONFIG_PASSPHRASE as environment-scoped
+secrets, with BACKEND_POSTURE_ACCOUNT_ID as an environment variable. Do not fall
+back to repository-wide operational credentials. The token is mapped only to the
+chosen provider. The current administration sensor covers qualification settings;
+it does not prove these new environment settings, IAM scope or reviewer custody.
+
+SERVICE_PREVIEW_INPUTS is a closed JSON object: schema_version (integer 1), unit,
+configuration, encrypted_configuration, qualification, and review (Cloudflare) or
+supplement plus organizations (Supabase). Document fields are **JSON strings of
+the original documents**, preserving their bytes/clocks; organizations is an array
+of slugs. Follow PR14's input contracts. GitHub's secret-size limit also applies;
+oversized evidence requires a separately reviewed transport, not relaxed limits.
+OCI_BACKEND_AUDIT_CREDENTIALS uses the existing tenancy/user/fingerprint/key_content
+object and optional pass_phrase. No paths, executable code, stack initialization
+or caller-selected workflows can be supplied in these bundles.
+
+The adapter discovers the single retained Linux CLI release archive from the
+verified installer; PR13b re-verifies it and the provider cache before execution.
+Signing keys/config and inputs use exclusive mode-0600 files in an owned temporary
+directory; CLI output is bounded to 64 KiB. Logs suppress raw SDK/CLI diagnostics.
+The credential step runs the already prepared venv interpreter directly, without
+dependency synchronization or runtime installation.
+Only a new successful sanitized orchestration receipt is copied to the fixed
+.infra/service-preview.json artifact (one-day retention). Normal failures clean
+private files; the publication adapter trusts PR14/PR12's receipt sanitization and
+checks its size/kind/false authorization flags rather than re-proving its inputs.
+Always-run stdlib-only cleanup removes receipts and owned leftover
+directories even if dependency setup fails. Runner termination can prevent cleanup;
+use only disposable hosted runners and treat their disposal as the final boundary.
+
+Engineering tests use synthetic CLI results and workflow mutation checks. No live
+preview or settings changes are performed. Before any future activation, reissue
+qualification for the enabled configuration and independently satisfy source
+review, backend/account coverage, credentials/custody and protected-environment
+prerequisites. Successful YAML/tests do not establish these controls. Deployment
+and cutover remain false. Reverting the workflow/adapter changes no cloud state.
+
+Focused gate: `uv run --locked pytest tests/test_service_preview_workflow.py tests/test_backend_audit_workflow.py -q`.
 
 ## PR14 CLI orchestration
 
