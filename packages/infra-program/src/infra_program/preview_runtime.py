@@ -288,17 +288,23 @@ class Command(auto.PulumiCommand):
             require(process.wait(timeout=remaining) == 0)
         finally:
             if process.poll() is None:
-                if sys.platform == "win32":
-                    killer = Path(self.env["SystemRoot"]) / "System32/taskkill.exe"
-                    subprocess.run(
-                        [str(killer), "/PID", str(process.pid), "/T", "/F"],
-                        capture_output=True,
-                        timeout=10,
-                        check=False,
-                    )
-                else:
-                    os.killpg(process.pid, signal.SIGKILL)
-                process.wait(timeout=5)
+                try:
+                    if sys.platform == "win32":
+                        killer = Path(self.env["SystemRoot"]) / "System32/taskkill.exe"
+                        subprocess.run(
+                            [str(killer), "/PID", str(process.pid), "/T", "/F"],
+                            capture_output=True,
+                            timeout=10,
+                            check=False,
+                        )
+                    else:
+                        os.killpg(process.pid, signal.SIGKILL)
+                finally:
+                    # A denied/failed tree-kill must still reap the owned process
+                    # through its existing handle. Descendants remain OS-governed.
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=5)
         self.runtime.verify()
         return auto.CommandResult("", "", 0)
 

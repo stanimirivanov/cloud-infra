@@ -43,6 +43,7 @@ addopts = "--strict-config --strict-markers -ra"
 markers = [
     "backend_integration: real local Pulumi backend/policy host (explicit opt-in; no cloud)",
     "provider_integration: real provider release assets (explicit opt-in; verification only)",
+    "preview_integration: synthetic SDK subprocess/loopback RPC (explicit CI opt-in; no cloud)",
 ]
 
 [tool.mypy]
