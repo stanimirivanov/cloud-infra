@@ -151,6 +151,16 @@ def test_real_encrypted_pair_rehearsal(bundle, monkeypatch):
     backend.mkdir()
     key = "synthetic-recovery-passphrase"
     env = {
+        # Checkout-local CI scratch inherits the parent uv workspace discovery.
+        # Pulumi needs uv for package inspection even with an explicit virtualenv.
+        "PATH": os.pathsep.join(
+            (str(ROOT / ".infra/tools/uv"), str(Path(sys.executable).parent), str(cli.parent))
+        ),
+        "HOME": str(source),
+        "UV_CACHE_DIR": str(source / "uv-cache"),
+        "UV_OFFLINE": "1",
+        "PIP_NO_INDEX": "1",
+        "PULUMI_IGNORE_AMBIENT_PLUGINS": "true",
         "PULUMI_PYTHON_CMD": sys.executable,
         "PULUMI_HOME": str(source / "home"),
         "PULUMI_CONFIG_PASSPHRASE": key,
