@@ -52,3 +52,11 @@ contract, while sharing OCI apply concurrency and durable local locks. Keep clou
 credentials out of import preflight and all PR jobs. Only the admitted import step
 receives the reviewed OCI/backend credentials. No generated code, raw checkpoint,
 source state or private engine stream may be uploaded.
+
+Scheduled monitoring is a separate default-disabled main entry point. Preserve
+fresh action-specific drift approval; never forge workflow_dispatch context or mint
+signatures to make a cron run pass. Only the admitted drift step receives provider
+credentials. Cost/health collection and the hosted watchdog stay credential-free
+apart from scoped GitHub read access; notification tokens belong to delivery steps.
+Keep the local incident outbox, host enrollment, explicit initialization and original
+heartbeat watermark intact. Missing state/steps are unknown, never a fresh baseline.
