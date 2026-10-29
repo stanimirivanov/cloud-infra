@@ -53,3 +53,10 @@ services/ owns independent Cloudflare DNS and Supabase project proposal prefligh
 The infra-program/services adapter may register only after this complete audit;
 normal deployment remains disabled. sdks/supabase is a pinned generated workspace
 dependency. Do not introduce runtime generation, API calls or state coupling.
+
+M05 service apply is a separate, default-disabled adapter and owned program entry
+point. It requires schema-2 execution approvals, the tracked service-apply gate and
+the existing service preview/evidence contracts. Only Cloudflare/Supabase apply is
+supported. Keep preview dispatch dry-run-only, standalone deployment denied, saved
+plans enforced and mandatory policies attached. Never automatically retry or roll
+back a launched update; unresolved results remain indeterminate in the durable journal.
