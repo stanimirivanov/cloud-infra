@@ -40,6 +40,10 @@ jobs:
         env:
           RUN_SYNTHETIC_PREVIEW_INTEGRATION: '1'
         run: uv run --locked pytest -q -m preview_integration --basetemp .infra/pytest-preview -o cache_dir=.infra/pytest-cache
+      - name: Verify operation protocols with disposable local state (no cloud)
+        env:
+          RUN_OPERATION_INTEGRATION: '1'
+        run: uv run --locked pytest -q -m operation_integration --basetemp .infra/pytest-operations -o cache_dir=.infra/pytest-cache
       - name: Verify native provider release assets (no credentials or execution)
         shell: bash
         env:

@@ -263,3 +263,29 @@ OPS002: inspect the journal before deciding whether to retry. Lost acknowledgeme
 must not trigger automatic operation replay. The journal has a 1 MiB bound and no
 automatic rotation or deletion; full journals require a reviewed retention procedure.
 No executor, credential admission or signing service is introduced by this slice.
+
+## Mutation protocol compatibility (M05-PR2)
+
+The explicit local gate is
+`RUN_OPERATION_INTEGRATION=1 uv run --locked pytest -q -m operation_integration`.
+CI requires it after shared verification, with no cloud credentials. Normal tests
+check its workflow wiring and skip these opt-in subprocess/engine cases.
+
+The synthetic operation worker exercises the installed SDK's saved-plan/update
+argument shapes, loopback event transport, protected resource-import mapping and
+failure/timeout cleanup. Synthetic success is transport evidence only. The real
+pinned CLI test creates a disposable filesystem backend and a component-only stack:
+it saves/applies a plan, observes events, round-trips a checkpoint and rejects an
+additional unplanned component. No resource provider plugin or cloud resource is used.
+The SDK omits an explicit --refresh=false argument when passed refresh=False;
+future admission wrappers must enforce their own CLI flag policy.
+SDK summary events omit isPreview; callbacks alone cannot establish preview/update
+admission. The existing preview-only runtime is unchanged.
+
+The installed SDK export_stack API forces --show-secrets. The real test uses only
+synthetic secret data and contrasts SDK plaintext export with encrypted CLI export.
+Future backup code must deliberately select encrypted export instead of blindly
+reusing this SDK method. All checkpoint/plan files remain in disposable test storage.
+Resource-import engine/provider behavior, production secret custody, cloud IAM,
+crash recovery and distributed writer exclusion remain live acceptance gaps.
+The bounded launch helper is test-only and does not constitute an operational executor.
