@@ -46,3 +46,8 @@ ownership.example.json remains an incomplete read-only preparation index. Actual
 source/target checkpoints, mappings, freeze observations and backend locator digests
 belong under ignored .infra. Never commit source state or make this example claim
 writer exclusion, operational admission or ownership transfer.
+
+resource-import.json stays disabled. Import activation is separate from OCI apply
+and requires reviewed existing target metadata, original ownership/freeze inputs,
+backup and operation-specific signatures. Do not change this flag or enroll keys as
+part of routine verification.

@@ -244,22 +244,57 @@ def _mapping(
     return imports
 
 
-def prepare(root: Path, document: object, *, now: datetime | None = None) -> dict[str, object]:
+def prepare(
+    root: Path,
+    document: object,
+    *,
+    now: datetime | None = None,
+    prepared_journal: bytes | None = None,
+) -> dict[str, object]:
     """Check recorded checkpoint consistency; external freezes remain attestations."""
     try:
         return _prepare(
-            root.resolve(), _json(operations.encoded(document)), now or datetime.now(UTC)
+            root.resolve(),
+            _json(operations.encoded(document)),
+            now or datetime.now(UTC),
+            prepared_journal,
         )
     except Exception:
         raise ValueError(MESSAGE) from None
 
 
-def _prepare(root: Path, document: object, now: datetime) -> dict[str, object]:
+def _prepare(
+    root: Path, document: object, now: datetime, prepared_journal: bytes | None = None
+) -> dict[str, object]:
     _require(now.utcoffset() == timedelta(0))
     data = _fields(document, {"schema_version", "source", "target_stack", "entries", "artifacts"})
     _require(type(data["schema_version"]) is int and data["schema_version"] == 1)
     references = _fields(data["artifacts"], ARTIFACTS)
-    captured = {name: _read(root, ref) for name, ref in references.items()}
+    captured = {
+        name: _read(root, ref)
+        for name, ref in references.items()
+        if name != "journal" or prepared_journal is None
+    }
+    continuation: tuple[Path, bytes] | None = None
+    if prepared_journal is not None:
+        ref = _fields(references["journal"], {"path", "sha256"})
+        path = root / _text(ref["path"])
+        _require(path.is_relative_to(root / ".infra") and path != root / ".infra")
+        _require(not any(p.is_symlink() for p in (path, *path.parents)))
+        _require(path.resolve().is_relative_to(root / ".infra"))
+        with path.open("rb") as stream:
+            current = stream.read(operations.MAX_BYTES + 1)
+        # Validate path ancestry as usual, while independently pinning its current bytes.
+        continuation = _read(root, {"path": str(path), "sha256": _hash(current)})
+        _require(_hash(prepared_journal) == ref["sha256"])
+        original_entries = operations._validate(_json(prepared_journal))
+        actual_entries = operations._validate(_json(current))
+        _require(
+            bool(original_entries) and actual_entries[: len(original_entries)] == original_entries
+        )
+        suffix = actual_entries[len(original_entries) :]
+        _require([e["state"] for e in suffix] in ([], ["admitted"], ["admitted", "running"]))
+        captured["journal"] = (continuation[0], prepared_journal)
     _require(len({path for path, _ in captured.values()}) == len(captured))
     raw = {name: content for name, (_, content) in captured.items()}
     _require(sum(map(len, raw.values())) <= 4 * operations.MAX_BYTES)
@@ -370,7 +405,12 @@ def _prepare(root: Path, document: object, now: datetime) -> dict[str, object]:
         observed_writers.add((writer["engine"], writer["identity_sha256"]))
     _require(observed_writers == expected_writers)
     for name, (path, content) in captured.items():
-        _require(_read(root, references[name]) == (path, content))
+        if name == "journal" and continuation is not None:
+            _require(
+                _read(root, {"path": str(path), "sha256": _hash(continuation[1])}) == continuation
+            )
+        else:
+            _require(_read(root, references[name]) == (path, content))
     _require(repository_state(root) == (request["commit"], True))
     return {
         "schema_version": 1,

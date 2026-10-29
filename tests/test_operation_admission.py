@@ -322,3 +322,23 @@ def test_execution_approval_requires_exact_extended_binding(admission):
             a.admit(root, **args, execution_inputs=changed)
     with pytest.raises(ValueError, match="ADMIT001"):
         a.admit(root, **inputs(), execution_inputs=b"frozen-service-inputs")
+
+
+def test_import_approval_is_execution_bound_and_not_an_apply_permit(admission):
+    root, inputs, policy, environment, entry, context, manifest = admission
+    entry["request"]["operation"] = "import"
+    context["environment"] = "oci-network-import"
+    context["journal_head"] = op.digest(entry)
+    policy["environments"] = {"import/oci-network": "oci-network-import"}
+    environment["responses"]["environment"]["name"] = "oci-network-import"
+    environment["responses"]["environment"]["url"] = (
+        "https://api.github.com/repos/example/infra/environments/oci-network-import"
+    )
+    manifest["request_sha256"] = op.digest(entry["request"])
+    binding = b'{"adapter":"oci-import-v1","mapping":"reviewed"}'
+    args = inputs(binding)
+    args["execution_inputs"] = binding
+    assert a.admit(root, **args)["admission_verified"] is True
+    args["execution_inputs"] += b"changed"
+    with pytest.raises(ValueError):
+        a.admit(root, **args)

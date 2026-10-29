@@ -63,9 +63,16 @@ def _hash(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _enabled(root: Path, oci: bool = False) -> None:
+def _enabled(root: Path, oci: bool = False, importing: bool = False) -> None:
     value = operations.read_json(
-        root / ("config/oci-apply.json" if oci else "config/service-apply.json")
+        root
+        / (
+            "config/resource-import.json"
+            if importing
+            else "config/oci-apply.json"
+            if oci
+            else "config/service-apply.json"
+        )
     )
     require(
         value == {"schema_version": 1, "enabled": True}
@@ -123,9 +130,14 @@ def _admit(
     raw: dict[str, bytes],
     journal: bytes,
     oci: bool = False,
+    importing: bool = False,
 ) -> tuple[preview.Context, dict[str, str]]:
     context: preview.Context
-    if oci:
+    if importing:
+        from infra_program.import_driver import prepare as prepare_import
+
+        context, inputs = prepare_import(root, args.unit, args.commit, raw, journal)
+    elif oci:
         from infra_program.oci_apply import prepare
 
         context, inputs = prepare(root, args.unit, args.commit, raw)
@@ -140,7 +152,7 @@ def _admit(
     )
     value = operations.request(preview._json(raw["operation"], operations.MAX_BYTES))
     require(
-        value["operation"] == "apply"
+        value["operation"] == ("import" if importing else "apply")
         and value["unit"] == args.unit
         and value["commit"] == args.commit
     )
@@ -173,7 +185,11 @@ def _admit(
     return context, expected
 
 
-def _names(oci: bool, unit: str) -> set[str]:
+def _names(oci: bool, unit: str, importing: bool = False) -> set[str]:
+    if importing:
+        from infra_program.import_driver import names
+
+        return names(unit)
     if oci:
         from infra_program.oci_apply import names
 
@@ -183,10 +199,10 @@ def _names(oci: bool, unit: str) -> set[str]:
 
 
 def _load(
-    root: Path, args: argparse.Namespace, oci: bool = False
+    root: Path, args: argparse.Namespace, oci: bool = False, importing: bool = False
 ) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
-    _enabled(root, oci)
-    names = _names(oci, args.unit)
+    _enabled(root, oci, importing)
+    names = _names(oci, args.unit, importing)
     require(_private(root, args.journal) == root / ".infra/operations" / (args.unit + ".json"))
     bundle = operations.read_json(_private(root, args.bundle))
     require(
@@ -231,14 +247,15 @@ def _current_environment(root: Path, args: argparse.Namespace, raw: dict[str, by
 
 
 def check(
-    root: Path, args: argparse.Namespace, oci: bool = False
+    root: Path, args: argparse.Namespace, oci: bool = False, importing: bool = False
 ) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
     """Credential-free preflight; returned frozen inputs are not an execution permit."""
     try:
         root = root.resolve()
+        require(not importing or oci)
         preview._checkout(root)
-        bundle, raw, journal = _load(root, args, oci)
-        _admit(root, args, bundle, raw, journal, oci)
+        bundle, raw, journal = _load(root, args, oci, importing)
+        _admit(root, args, bundle, raw, journal, oci, importing)
         _current_environment(root, args, raw)
         return bundle, raw, journal
     except Exception:
@@ -250,11 +267,12 @@ def execute(
     args: argparse.Namespace,
     credentials: Callable[[], dict[str, str]],
     oci: bool = False,
+    importing: bool = False,
 ) -> None:
     """Trusted caller establishes protected execution and durable journal custody first."""
     try:
         root = root.resolve()
-        bundle, raw, journal = check(root, args, oci)
+        bundle, raw, journal = check(root, args, oci, importing)
         if args.check:
             return
         require(args.allow_resource_writes)
@@ -263,7 +281,7 @@ def execute(
         with os.fdopen(os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), "a") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             require(preview._read(path, operations.MAX_BYTES) == journal)
-            _run(root, args, bundle, raw, journal, credentials, oci)
+            _run(root, args, bundle, raw, journal, credentials, oci, importing)
     except Exception:
         raise ValueError(MESSAGE) from None
 
@@ -276,8 +294,9 @@ def _run(
     journal: bytes,
     credentials: Callable[[], dict[str, str]],
     oci: bool = False,
+    importing: bool = False,
 ) -> None:
-    context, expected = _admit(root, args, bundle, raw, journal, oci)
+    context, expected = _admit(root, args, bundle, raw, journal, oci, importing)
     value = operations.request(preview._json(raw["operation"], operations.MAX_BYTES))
     path = _private(root, args.journal)
     _current_environment(root, args, raw)
@@ -357,13 +376,27 @@ def _run(
                 (work / name).write_bytes(content)
             if oci:
                 owned["oci-key.pem"] = key_bytes
-            runtime = Runtime(cli, work, env, context.contract.stack_identity, root / "policies")
+            if importing:
+                from infra_program.import_driver import ImportRuntime, import_file
+
+                owned["import.json"] = import_file(raw)
+                (work / "import.json").write_bytes(owned["import.json"])
+                runtime: Runtime = ImportRuntime(
+                    cli, work, env, context.contract.stack_identity, root / "policies", context, raw
+                )
+            else:
+                runtime = Runtime(
+                    cli, work, env, context.contract.stack_identity, root / "policies"
+                )
 
             def dependency() -> None:
                 if oci and args.unit == "oci-oke":
                     from infra_program.oci_apply import confirm_dependency
 
-                    confirm_dependency(runtime, context, raw)
+                    if importing:
+                        confirm_dependency(runtime, context, raw, True)
+                    else:
+                        confirm_dependency(runtime, context, raw)
 
             def confirm() -> None:
                 require(operations.inspect_journal(path)["head"] == head)
@@ -374,7 +407,7 @@ def _run(
                     )
                 )
                 require(all((work / n).read_bytes() == v for n, v in owned.items()))
-                _admit(root, args, bundle, raw, journal, oci)
+                _admit(root, args, bundle, raw, journal, oci, importing)
                 dependency()
                 cli.verify()
                 require(_hash((uv_dir / "uv").read_bytes()) == uv_hash)
@@ -388,6 +421,7 @@ def _run(
                 owned["apply.json"] = preview._encoded(
                     dict(
                         oci=oci,
+                        importing=importing,
                         root=str(root),
                         unit=args.unit,
                         commit=args.commit,
@@ -421,6 +455,8 @@ def _run(
                 from infra_program.oci_apply import network_result
 
                 extra = network_result(runtime, context)
+            if importing:
+                extra["post_import_equivalent"] = True
             head = operations.journal(root, path, value, "succeeded", predecessor=head)
             finished = True
             output = _private(root, bundle["output"])
@@ -459,9 +495,10 @@ def program_from_request() -> None:
         preview._checkout(root)
         raw = {n: bytes.fromhex(v) for n, v in data["raw"].items()}
         oci = data.get("oci", False)
-        require(type(oci) is bool)
+        importing = data.get("importing", False)
+        require(type(oci) is bool and type(importing) is bool and (not importing or oci))
         require(
-            set(raw) == _names(oci, data["unit"])
+            set(raw) == _names(oci, data["unit"], importing)
             and operations.inspect_journal(Path(data["journal"]))["head"] == data["journal_head"]
         )
         require(
@@ -475,16 +512,19 @@ def program_from_request() -> None:
             environment=data["environment"],
         )
         context, _ = _admit(
-            root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"]), oci
+            root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"]), oci, importing
         )
         require(Path(data["journal"]) == root / ".infra/operations" / (args.unit + ".json"))
         identity = f"{pulumi.get_organization()}/{pulumi.get_project()}/{pulumi.get_stack()}"
         dry_run = pulumi.runtime.is_dry_run()
         require(identity == context.contract.stack_identity and type(dry_run) is bool)
-        require(
-            operations.inspect_journal(Path(data["journal"]))["state"]
-            == ("admitted" if dry_run else "running")
-        )
+        stage = operations.inspect_journal(Path(data["journal"]))["state"]
+        if importing:
+            # The import command never runs a resource program. Its before/after
+            # policy previews are the only admitted child executions.
+            require(dry_run is True and stage in {"admitted", "running"})
+        else:
+            require(stage == ("admitted" if dry_run else "running"))
         if oci:
             from infra_program.oci_apply import register
 

@@ -78,7 +78,9 @@ def validate_plan(raw: bytes, stack: str, version: str) -> None:
             )
 
 
-def validate_events(records: list[bytes], *, preview: bool, policy: Path) -> dict[str, int]:
+def validate_events(
+    records: list[bytes], *, preview: bool, policy: Path, importing: bool = False
+) -> dict[str, int]:
     require(0 < len(records) <= MAX_EVENTS)
     previous, checks, terminal = -1, 0, False
     summary: dict[str, int] | None = None
@@ -105,13 +107,16 @@ def validate_events(records: list[bytes], *, preview: bool, policy: Path) -> dic
                 and body.get("result") == "succeeded"
                 and body.get("maybeCorrupt") is False
             )
-            require(set(body["PolicyPacks"]) == {PACK + "|local|" + str(policy)})
+            require(
+                set(body["PolicyPacks"])
+                == (set() if importing else {PACK + "|local|" + str(policy)})
+            )
             require(all(type(v) is str and 0 < len(v) <= 128 for v in body["PolicyPacks"].values()))
             counts = body["resourceChanges"]
             require(
                 type(counts) is dict
                 and bool(counts)
-                and set(counts) <= ALLOWED
+                and set(counts) <= (ALLOWED | {"import"} if importing else ALLOWED)
                 and all(type(v) is int and v >= 0 for v in counts.values())
                 and sum(counts.values()) > 0
             )
@@ -119,7 +124,7 @@ def validate_events(records: list[bytes], *, preview: bool, policy: Path) -> dic
         elif kind == "cancelEvent":
             require(summary is not None and body == {})
             terminal = True
-    require(terminal and summary is not None and checks > 0)
+    require(terminal and summary is not None and (checks > 0 or importing))
     assert summary is not None
     return summary
 
@@ -198,14 +203,6 @@ class Runtime:
         return hashlib.sha256(raw).hexdigest(), outputs
 
     def operation(self, *, preview: bool) -> dict[str, int]:
-        server = _grpc.server(
-            _futures.ThreadPoolExecutor(max_workers=1),
-            options=[("grpc.max_receive_message_length", MAX_EVENT_BYTES + 256)],
-        )
-        wire = Wire(lambda event: None)
-        _events.add_EventsServicer_to_server(wire, server)
-        port = server.add_insecure_port("127.0.0.1:0")
-        server.start()
         args = (
             ["preview"]
             if preview
@@ -222,12 +219,22 @@ class Runtime:
             "--suppress-progress",
             "--config-file",
             str(self.work / "stack.yaml"),
-            "--event-log",
-            f"tcp://127.0.0.1:{port}",
             "--refresh=false",
         ]
+        return validate_events(self._capture(args), preview=preview, policy=self.policy)
+
+    def _capture(self, args: list[str]) -> list[bytes]:
+        server = _grpc.server(
+            _futures.ThreadPoolExecutor(max_workers=1),
+            options=[("grpc.max_receive_message_length", MAX_EVENT_BYTES + 256)],
+        )
+        wire = Wire(lambda event: None)
+        _events.add_EventsServicer_to_server(wire, server)
+        port = server.add_insecure_port("127.0.0.1:0")
+        server.start()
+        args = [*args, "--event-log", f"tcp://127.0.0.1:{port}"]
         try:
             self._run(args)
-            return validate_events(wire.records, preview=preview, policy=self.policy)
+            return wire.records
         finally:
             server.stop(0).wait()

@@ -46,3 +46,9 @@ serialize network/OKE. Both require separate unit environments/approvals and a
 dedicated service-operations runner. OCI key paths refer only to reviewed private
 runner material under .infra; cloud secrets are absent from preflight. Preserve the
 journal during checkout and never run this workflow from PR validation.
+
+Manual resource-import uses separate unit-import environments and its own disabled
+contract, while sharing OCI apply concurrency and durable local locks. Keep cloud
+credentials out of import preflight and all PR jobs. Only the admitted import step
+receives the reviewed OCI/backend credentials. No generated code, raw checkpoint,
+source state or private engine stream may be uploaded.

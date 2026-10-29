@@ -543,3 +543,121 @@ do not remove a state record to make this check pass. Cryptographic operational
 approval, backup/recovery readiness, live identity/security checks and actual
 external source release are later independent gates, not established by this
 read-only checklist.
+
+## Protected resource import (M05-PR9)
+
+The explicit resource-import adapter adopts the reviewed existing OCI network or
+OKE graph into an existing target stack. It consumes the ownership preparation
+above, schema-2 operational approval, encrypted backup pair and fresh environment
+controls. config/resource-import.json ships disabled. The OCI preview flag and
+operation trust policy are also required; the separate OCI apply flag need not be
+enabled. Existing apply behavior and preview dispatch retain their original gates.
+No service-resource import, arbitrary bulk-import engine, generated configuration
+acceptance, source-state editing, deletion, replacement or implicit stack creation
+is provided by this path.
+
+### Existing-target prerequisites
+
+The existing conservative account-capacity audit is retained: it can reserve
+creation headroom even during adoption. This adapter does not grant accounting
+credits or infer unit ownership from a source mapping. Insufficient independently
+evidenced headroom blocks admission and needs separate governance review.
+
+The target must already contain its exact protected component parent and explicit
+OCI provider record, with the reviewed region and known provider ID. OKE also needs
+its existing fixed network StackReference and built-in provider. These are checked
+against the captured target checkpoint before credentials. This operation does not
+bootstrap missing parent/provider metadata. A root-only target is rejected; any
+metadata setup is a separate explicitly reviewed operation, never a fallback here.
+For network import, the target root must already carry the reviewed committed
+network interface with the exact source IDs. The driver does not synthesize or
+write root outputs to make admission pass.
+
+A single operation covers one bounded existing unit graph: import entries adopt
+only the named source IDs; same entries retain already owned target resources.
+At least one entry must import. Every logical key is covered once, with distinct
+IDs and source addresses, the exact existing factory names and parent/provider
+bindings. Separate network and OKE requests/journals preserve dependency order.
+OKE import accepts a succeeded network apply or an import receipt explicitly
+recording post_import_equivalent=true, with the matching current network journal
+and exact checkpoint/output digests. It never imports or applies network implicitly.
+This acceptance is specific to import; it does not enable OCI apply after handoff.
+
+### Frozen inputs and approval
+
+Use the existing apply bundle encoding (schema_version, paths, backend_account_id,
+cli_archive, provider_home, output). The paths map contains all OCI apply input names
+for the selected unit, plus ownership and target_checkpoint. ownership is the exact
+private PR8 index; target_checkpoint duplicates its captured encrypted target export
+so post-import ID/provider checks use independently frozen original bytes. The
+operation file is an import request and must be byte-identical to the index request;
+proposal and encrypted_configuration must also match its configuration references.
+The index's journal reference must bind the original prepared per-unit journal.
+
+The import adapter rechecks all index artifact hashes, including source checkpoint,
+freeze and original target checkpoint. The ownership continuation API accepts the
+original prepared_journal bytes only if the current journal has that exact prefix
+followed by this same request's admitted/running transitions. It cannot advance a
+journal or accept another request, replay, terminal result or altered prefix. The
+normal ownership prepare CLI still requires the actual journal to be prepared.
+
+The inner execution profile is canonical JSON with adapter=oci-import-v1, all
+non-approval input hashes, ownership binding, deterministic import-file hash,
+profile hash and foundation digest. The existing outer service/backend_account_id
+binding is preserved by the shared driver. Approval binds the import action and
+unit-specific import environment; an apply approval cannot be reused. The deterministic
+import file contains only exact reviewed type/name/ID entries and two nameTable
+references to the already existing parent/provider URNs. No caller-supplied import
+file, converter, generated program or additional resource type is accepted.
+
+### Execution and equivalence
+
+The pinned CLI's import command supports protect=true and generate-code=false,
+but not saved-plan or local policy-pack options. The driver therefore uses the
+approved pre-import desired-program plan as review evidence, not as an import
+execution constraint. The signed import-file hash constrains which identities can
+be adopted. A mandatory-policy preview of the existing audited factories must show
+only same/read plus exactly the expected number of creates for missing import
+entries; existing metadata/native resources must not require updates. No resource
+program runs during the CLI import itself.
+
+After checking the live target checkpoint still matches approval, the driver marks
+the journal running and launches only the closed verified import command with
+explicit existing stack, file, protection, no code generation and parallelism=1.
+Raw stdout/stderr are discarded; bounded private engine events must prove complete
+success with exactly the expected import count and no creates/updates/deletes or
+replacements. The resulting checkpoint must contain every exact mapped ID, original
+provider ID, protected native resource and parent/provider binding. It then runs a
+mandatory-policy preview with the original audited factories, requiring only
+same/read, and verifies that the preview did not alter the checkpoint. Import-mode
+child programs admit dry-run only, both before and after the import.
+
+Any non-no-op post-preview, changed source/inputs, missing resource, wrong ID,
+interruption or incomplete acknowledgement after launch leaves the operation
+indeterminate. No success receipt, automatic retry, rollback, target-state removal,
+source release or writer release follows. A passing receipt adds
+post_import_equivalent=true to the normal operation receipt; network receipts also
+bind committed network checkpoint/output digests. Receipt persistence failure after
+a succeeded journal requires reconciliation. Source ownership remains recorded as
+Terraform until the separately reviewed PR10 handoff; import is not source release.
+
+### Protected workflow and verification limits
+
+The manual Protected OCI resource import workflow requires owner/main/exact dispatch
+SHA, shared verification and per-unit environments oci-network-import/oci-oke-import.
+Use protected variables RESOURCE_IMPORT_BUNDLE and RESOURCE_IMPORT_JOURNAL. Cloud
+credentials are absent from the check step; only the read-only operation-observation
+token is present. After admission, the shared driver isolates the explicitly supplied
+OCI key and backend credentials, verifies tools/providers and uses the same durable
+unit journal, local dependency lock and workflow concurrency group as OCI apply.
+Provision the dedicated service-operations runner, durable custody and effective
+external writer exclusion before activation. Workflow YAML and local locks do not
+fence an administrator or unrelated writer.
+
+The shared command deadline remains 300 seconds, including import and both previews;
+timeout requires reconciliation. Verification uses synthetic import subprocess/RPC
+transport, SDK mocks and the existing disposable local engine tests. The built-in
+StackReference provider rejects import, so it cannot stand in for a successful
+native OCI import rehearsal. Native OCI read/import semantics, property equivalence,
+protected metadata setup and live custody remain explicit acceptance prerequisites.
+No cloud import or workflow dispatch was performed during implementation.
