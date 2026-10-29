@@ -379,3 +379,19 @@ for input formats, sequencing, custody and limitations. Focused offline tests us
 The existing opt-in operation integration gate also exercises real local network
 checkpoint exports and StackReference saved-plan behavior, without OCI providers
 or cloud resources. Run the complete shared gate before delivery.
+
+## Ownership preparation (M05-PR8)
+
+The offline ownership adapter validates one complete OCI unit mapping against
+captured Terraform state-v4 instance IDs and an existing encrypted Pulumi checkpoint.
+A prepared import journal, matching configuration/checkpoint hashes and a fresh
+complete two-writer freeze attestation are mandatory. No state/journal writes,
+source release, imports, or writer authorization occur. Existing cutover diagnostics
+remain unchanged. The public config/ownership.example.json stays incomplete.
+See [the ownership preparation contract](docs/runbooks/kubernetes-cutover.md#ownership-preparation-checkpoints-m05-pr8).
+
+Use `uv run --locked infra ownership prepare --evidence .infra/ownership/index.json`.
+Focused regression tests run with
+`uv run --locked pytest -q tests/test_ownership.py tests/test_operations.py tests/test_cutover.py`.
+The complete gate remains `uv run --locked infra verify`; no new integration marker,
+executable or dependency is required for this read-only feature.

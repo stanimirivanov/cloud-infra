@@ -433,3 +433,113 @@ valid inputs and rejecting LoadBalancer at mandatory enforcement. A separate loc
 CLI preview proves enforcement of the pack on an unreviewed component. No provider
 plugin or Kubernetes connection is used. These are policy/consistency tests, not
 live admission, scheduling, image or operational readiness tests.
+
+## Ownership preparation checkpoints (M05-PR8)
+
+`uv run --locked infra ownership prepare --evidence .infra/ownership/index.json`
+checks one OCI unit before import review. It reads private files and prints a
+redacted checklist; it never writes a receipt, changes a journal, edits source
+state, imports resources, releases a writer or authorizes ownership transfer.
+The existing cutover evidence check and its always-false authorization result are
+unchanged. Operational flags and reviewer enrollment remain disabled.
+
+The public [ownership example](../../config/ownership.example.json) is deliberately
+incomplete and unusable. Prepare a private schema-1 index with source, target_stack,
+entries and artifacts. All artifact references have exactly path and sha256;
+paths must be distinct regular files under this checkout's ignored .infra, without
+symlink ancestors. Each file/index is bounded to 1 MiB; all artifacts together are
+bounded to 4 MiB. The checker rereads every artifact and the index after validation.
+No state payloads, IDs, addresses, credentials or backend locators appear in output
+or diagnostics. Source state can contain secrets; supply it only through reviewed
+private runner custody, never a tracked file or workflow artifact.
+
+### Input contract and review subject
+
+| Artifact | Required contents |
+| --- | --- |
+| request | Existing schema-1 operation request: import, one of oci-network/oci-oke, exact clean commit, encrypted target-configuration digest, current target-checkpoint digest, expiry and predecessor |
+| configuration | Captured OCI configuration JSON with foundation and image objects using the same schema as the OCI apply adapter; existing graph/security/image checks apply |
+| encrypted_configuration | Existing OCI encrypted stack configuration encoding: encryptionsalt beginning v1: and an empty config object |
+| source_checkpoint | Current Terraform state-v4 JSON with matching lineage/serial and known managed instance IDs; only read locally |
+| target_checkpoint | Existing Pulumi encrypted CLI checkpoint export, version 3, with the exact reserved stack root and no pending operations |
+| journal | Current fixed .infra/operations/UNIT.json, latest entry prepared for this exact request |
+| freeze | Fresh externally reviewed writer-freeze observation over the canonical preparation binding |
+
+Source identity contains engine=terraform, backend_sha256, workspace, lineage and
+serial. backend_sha256 is the separately reviewed source-backend locator digest;
+workspace/lineage/serial identify the captured source scope. Lineage must be a
+canonical UUID, and serial must match the captured state. The checker cannot infer
+workspace/backend identity or effective writer exclusion from a state file; those
+remain explicit reviewer attestations. It checks metadata consistency, not the
+truth of an administrator's claim.
+
+Entries use the existing cutover ownership fields: logical_key, id, unit,
+pulumi_name, pulumi_parent, provider_region, owner, terraform_address, operation.
+They must cover exactly the selected unit's existing graph. Names/parents/region
+must match the reviewed OCI configuration. Imports require owner=terraform, one
+distinct managed source address of the matching OCI resource type/ID and no target
+ownership of that ID. Same entries require owner=pulumi, terraform_address=null,
+and a matching protected target resource with the actual configured provider and
+component parent. Source and target cannot both record ownership of a same entry.
+Mixed units, duplicate IDs/addresses/keys, unknown owners, extra target resources,
+unprotected/dangling target bindings and partial mappings are rejected.
+
+The source reader supports managed state-v4 resources with attributes.id,
+optional module addresses and integer/string index_key values. Data resources are
+not ownership. Tainted/deposed instances, flat legacy attributes, other state
+versions and unknown IDs are rejected. This is a narrow independent reader of the
+[Terraform state-v4 representation](https://github.com/hashicorp/terraform/blob/main/internal/states/statefile/version4.go),
+not a Terraform state editor or full state validator. It adds no dependency and
+copies no upstream code. Keep source-engine/version/provider compatibility review
+separate from passing this metadata check. Remote state retrieval/decryption is
+outside this command.
+
+The pure ownership.preparation_binding helper constructs the canonical review
+subject from the index, request and captured artifact bytes, plus the independently
+expected foundation digest and prepared journal head. Its payload includes the
+request digest, source identity, target stack, complete ordered mapping,
+configuration/foundation digests, source/target checkpoint digests and journal head.
+The encrypted configuration is bound through the request. Do not treat computing a
+binding as a successful preparation or permission to execute.
+
+The freeze document has exactly schema_version=1, phase=writers-frozen,
+binding_sha256, complete=true, other_writers_reviewed=true, active_operations=0,
+frozen_at, checkpointed_at, observed_at, expires_at, reviewed_by and writers. Its
+writers array contains exactly the source Terraform identity digest and target
+Pulumi stack-identity digest, each with frozen=true and active_operations=0. Compute
+those identity digests with operations.digest(source) and
+operations.digest(target_stack), respectively. Unknown, duplicate or missing
+writers fail closed. All clocks require explicit UTC: prepared journal time <=
+frozen_at <= checkpointed_at <= observed_at <= now < expires_at <= request expiry.
+The complete freeze interval must be no older than 15 minutes. This is the existing
+cutover freshness convention, not an asserted operational SLO.
+
+### Preparation sequence and next transitions
+
+1. Review source-backend/workspace identity and exclusive-writer custody. Prepare
+   an immutable import request and its prepared per-unit journal using the existing
+   operation contract; recording prepared never grants execution authority.
+2. Freeze both known writers and review all other automation/administrative writers.
+   Capture source and target checkpoints after the freeze. Record source ownership
+   honestly: an import does not itself remove Terraform ownership.
+3. Construct the exact unit mapping and review the canonical binding. Record the
+   externally observed freeze, active-operation count, reviewer and clocks. The
+   command independently checks source records, target identities and collisions.
+4. Run ownership prepare against the exact clean checkout. A passing result has
+   phase=checkpointed, hashes/counts and next_transition=import-review, or
+   post-import-equivalence-review if every entry is already same. Execution,
+   ownership transfer and writer release authorization are all false. Re-running
+   preparation is diagnostic, not replayable operational approval.
+5. Retain private artifacts under the reviewed custody procedure. M05-PR9 supplies
+   separately admitted import execution; M05-PR10 handles post-import equivalence,
+   source release and handoff. Advancing the journal or changing any input requires
+   new preparation evidence. This command rejects admitted/running/terminal journals
+   rather than resetting them. It never automatically compensates or retries.
+
+Network preparation does not prepare OKE. Use separate requests/checkpoints and
+network-before-OKE operational sequencing. If an ownership conflict or uncertain
+operation exists, preserve both recorded owners and the freeze for reconciliation;
+do not remove a state record to make this check pass. Cryptographic operational
+approval, backup/recovery readiness, live identity/security checks and actual
+external source release are later independent gates, not established by this
+read-only checklist.

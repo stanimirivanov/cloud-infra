@@ -66,3 +66,9 @@ config/oci-apply.json. OCI uses the existing network/OKE factories; separate sig
 operations and journals enforce dependency order. No graph expansion, stack creation,
 imports, deletes or replacements are admitted. Keep service defaults and preview-only
 admission unchanged.
+
+ownership.py is a read-only preparation adapter for the existing OCI graph. It may
+inspect bounded private source/target checkpoints, exact mappings and external
+writer-freeze observations, but never edits state, advances journals or grants
+import/transfer/writer-release authority. Preserve cutover.check diagnostics.
+A source identity/freeze claim is an external attestation, not discovered authority.
