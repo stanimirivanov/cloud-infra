@@ -113,6 +113,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for name in ("config", "inventory", "resources"):
         kube_audit.add_argument("--" + name, type=Path, required=True)
+    backup = commands.add_parser(
+        "backup", help="explicit encrypted pair backup; no resource operations"
+    )
+    backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+    backup_capture = backup_commands.add_parser(
+        "capture", help="write to an existing local repository"
+    )
+    for name in ("request", "checkpoint", "config", "repository", "password-file"):
+        backup_capture.add_argument("--" + name, type=Path, required=True)
+    backup_capture.add_argument("--repository-id", required=True)
+    backup_capture.add_argument("--exported-at", required=True)
+    backup_capture.add_argument("--allow-backup-write", action="store_true", required=True)
     operations = commands.add_parser("operations", help="offline operation request inspection")
     operation_commands = operations.add_subparsers(dest="operations_command", required=True)
     operation_inspect = operation_commands.add_parser(
@@ -203,6 +215,20 @@ def main(
             if reviewed_commit(root) != commit:
                 raise ValueError("EXT023: checkout changed during service audit")
             print(json.dumps(result, indent=2))
+        elif args.command == "backup":
+            from infra_core.backup import capture
+
+            capture(
+                root,
+                root / args.request,
+                root / args.checkpoint,
+                root / args.config,
+                args.repository,
+                args.repository_id,
+                root / args.password_file,
+                args.exported_at,
+            )
+            print("PASS: encrypted pair snapshot stored; no resource operation authorized")
         elif args.command == "operations":
             from infra_core.operations import inspect, inspect_journal
 

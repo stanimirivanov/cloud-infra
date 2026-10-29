@@ -331,3 +331,45 @@ dependency. The opt-in local integration (also run in CI) exercises both incorre
 and matching keys; ordinary offline mocks cannot prove that a real cipher rejected
 an incorrect key. Same-host synthetic acceptance does not verify off-host backups,
 independent human custody, live principal access, credential rotation or production DR.
+
+## Local encrypted-pair capture (M05-PR3)
+
+`uv run --locked infra backup capture --help` describes the explicit backup-write
+command. It accepts a schema-1 operation request, --checkpoint and --config paths
+under ignored .infra, an absolute --repository outside this checkout, its exact
+--repository-id, a private --password-file (mode 0600), and --exported-at with an
+explicit timezone. --allow-backup-write is required. The destination must already
+be initialized; capture never initializes, restores, prunes or deletes snapshots.
+Only local/mounted repositories are supported; production storage is unconfigured.
+
+Supply a frozen encrypted checkpoint export without --show-secrets, and the matching
+stack configuration in JSON-formatted YAML (a valid Pulumi YAML subset). Standard
+YAML syntax and plaintext config entries are deliberately rejected rather than
+introducing another runtime parser. Every config entry must be a secure v1 value;
+passphrase salt must match the checkpoint. Plaintext Pulumi secret wrappers are
+rejected. Unmarked sensitive values cannot be detected; ciphertext validity and
+recoverability require the later recovery rehearsal. The operation's configuration
+hash binds this exact stack-config file, and its checkpoint hash binds the export.
+The source export clock is supplied by the operator, must be within one hour and is
+not refreshed by packing. This command does not export live state, freeze writers,
+authenticate provenance or establish that the supplied pair is current production state.
+
+The verified restic 0.19.1 executable backs up exactly checkpoint.json,
+stack-config.json and manifest.json. The manifest binds stack/unit/commit, request
+hash, file hashes, source/capture clocks and destination repository identity.
+A successful complete snapshot produces a local receipt with the snapshot ID and
+manifest hash. Exit 3 (partial snapshot), malformed summary, wrong repository,
+timeout or persistence error is never reported as success. The UUID capture directory
+is reserved and retained on uncertainty: reconcile snapshots before retrying with
+a separately reviewed request. Credentials and raw tool diagnostics are never
+included in receipts. No cloud credentials or ambient restic configuration are inherited.
+
+The restic binary is BSD-2-Clause licensed; its official v0.19.1 archive digest was
+checked against GitHub release metadata, and its decompressed executable hash is
+pinned in config/toolchain.json. No Python dependency is added. The opt-in existing
+operation_integration gate initializes only a disposable test repository and restores
+the captured synthetic files for hash comparison. This is not off-host recovery,
+a production retention policy or proof of independent storage/key custody. Those
+remain separately reviewed work. A mounted directory may share the production
+failure domain despite being outside the checkout. Keep the restic password and
+Pulumi passphrase under separate custody; neither is part of the backup set.

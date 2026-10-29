@@ -94,7 +94,7 @@ def test_missing_scanner_fails_closed(tmp_path):
         secret_scanning.scanner(tmp_path)
 
 
-@pytest.mark.parametrize("tool", ["gitleaks", "actionlint"])
+@pytest.mark.parametrize("tool", ["gitleaks", "actionlint", "restic"])
 def test_altered_archive_fails_before_extraction(tmp_path, tool):
     archive = tmp_path / "altered.zip"
     archive.write_bytes(b"not the pinned release archive")

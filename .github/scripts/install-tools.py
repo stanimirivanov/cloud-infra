@@ -2,6 +2,7 @@
 """Install reviewed Linux x64 tools, verifying archives before extraction."""
 
 import argparse
+import bz2
 import hashlib
 import json
 import os
@@ -39,8 +40,16 @@ def install(root: Path, tools: list[str], archive: Path | None) -> None:
                     f"TOOL001: {name} archive checksum mismatch; nothing extracted or executed"
                 )
             unpacked = Path(directory) / "unpacked"
-            with tarfile.open(package, "r:gz") as release:
-                release.extractall(unpacked, filter="data")
+            if asset["url"].endswith(".bz2"):
+                unpacked.mkdir()
+                with (
+                    bz2.open(package, "rb") as source,
+                    (unpacked / asset["binary"]).open("wb") as target,
+                ):
+                    shutil.copyfileobj(source, target)
+            else:
+                with tarfile.open(package, "r:gz") as release:
+                    release.extractall(unpacked, filter="data")
             binary = unpacked / asset["binary"]
             with binary.open("rb") as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -62,8 +71,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tool",
         nargs="+",
-        choices=["uv", "pulumi", "gitleaks", "actionlint"],
-        default=["uv", "pulumi", "gitleaks", "actionlint"],
+        choices=["uv", "pulumi", "gitleaks", "actionlint", "restic"],
+        default=["uv", "pulumi", "gitleaks", "actionlint", "restic"],
     )
     parser.add_argument("--archive", type=Path)
     args = parser.parse_args()
