@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "timeout_seconds": null,
+  "max_run_seconds": null,
+  "max_response_bytes": null,
+  "max_evidence_age_seconds": null,
+  "min_tls_validity_seconds": null,
+  "expected_oke_nodes": null,
+  "targets": []
+}
