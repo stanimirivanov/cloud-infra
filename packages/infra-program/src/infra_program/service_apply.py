@@ -1,21 +1,35 @@
 """Explicit, disabled-by-default service apply; owned inputs and no automatic retries."""
 
 import argparse
+import fcntl
 import hashlib
+import os
+import shutil
+import sys
+import tempfile
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pulumi
 from infra_core import administration, operation_admission, operations
 from infra_core.backend import validate_receipt
 from infra_core.backend_posture import validate_posture_evidence
 from infra_core.foundation import load_foundation
 from infra_core.preview_contracts import describe_preview
+from infra_core.provider_tools import (
+    materialize_home,
+    verified_environment,
+    verified_supabase_environment,
+)
 
 from infra_program import preview_driver as preview
-from infra_program.operation_runtime import MESSAGE, require, validate_plan
+from infra_program.operation_runtime import MESSAGE, Runtime, require, validate_plan
 from infra_program.preview_orchestration import _private
 from infra_program.preview_program import ServicePreviewContext
+from infra_program.preview_runtime import cli_runtime
+from infra_program.services.configuration import register_services_from_config
 
 NAMES = {
     "operation",
@@ -205,5 +219,225 @@ def check(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[st
         _admit(root, args, bundle, raw, journal)
         _current_environment(root, args, raw)
         return bundle, raw, journal
+    except Exception:
+        raise ValueError(MESSAGE) from None
+
+
+def execute(
+    root: Path, args: argparse.Namespace, credentials: Callable[[], dict[str, str]]
+) -> None:
+    """Trusted caller establishes protected execution and durable journal custody first."""
+    try:
+        root = root.resolve()
+        bundle, raw, journal = check(root, args)
+        if args.check:
+            return
+        require(args.allow_resource_writes)
+        path = _private(root, args.journal)
+        lock = path.with_name(path.name + ".apply.lock")
+        with os.fdopen(os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), "a") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            require(preview._read(path, operations.MAX_BYTES) == journal)
+            _run(root, args, bundle, raw, journal, credentials)
+    except Exception:
+        raise ValueError(MESSAGE) from None
+
+
+def _run(
+    root: Path,
+    args: argparse.Namespace,
+    bundle: dict[str, Any],
+    raw: dict[str, bytes],
+    journal: bytes,
+    credentials: Callable[[], dict[str, str]],
+) -> None:
+    context, expected = _admit(root, args, bundle, raw, journal)
+    value = operations.request(preview._json(raw["operation"], operations.MAX_BYTES))
+    path = _private(root, args.journal)
+    _current_environment(root, args, raw)
+    head = operations.journal(root, path, value, "admitted", predecessor=expected["journal_head"])
+    started, finished = False, False
+    try:
+        with tempfile.TemporaryDirectory(prefix="apply-", dir=root / ".infra") as directory:
+            work = Path(directory)
+            cli = cli_runtime(root, _private(root, bundle["cli_archive"]), work / "bin")
+            env = materialize_home(
+                root,
+                _private(root, bundle["provider_home"]),
+                work / "home",
+                supabase=args.unit == "supabase-database",
+            )
+            uv_source = _private(root, ".infra/tools/uv/uv")
+            uv_hash = operations.read_json(root / "config/toolchain.json")["tools"]["uv"]["assets"][
+                "linux-x64"
+            ]["binary_sha256"]
+            require(_hash(uv_source.read_bytes()) == uv_hash)
+            uv_dir = work / "uv-bin"
+            uv_dir.mkdir()
+            shutil.copyfile(uv_source, uv_dir / "uv")
+            (uv_dir / "uv").chmod(0o755)
+            require(_hash((uv_dir / "uv").read_bytes()) == uv_hash)
+            private = credentials()
+            required = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "PULUMI_CONFIG_PASSPHRASE"}
+            require(
+                required <= set(private) <= required | {"AWS_SESSION_TOKEN"}
+                and all(type(v) is str and bool(v) for v in private.values())
+                and len(private["PULUMI_CONFIG_PASSPHRASE"]) >= 20
+            )
+            env.update(private)
+            env.update(
+                HOME=str(work),
+                TMP=str(work),
+                TEMP=str(work),
+                TMPDIR=str(work),
+                PATH=os.pathsep.join(
+                    (
+                        str(Path(sys.executable).parent),
+                        str(work / "bin"),
+                        str(uv_dir),
+                    )
+                ),
+                PULUMI_BACKEND_URL=context.foundation.backend.url(),
+                PULUMI_DEBUG_COMMANDS="true",
+                PULUMI_SKIP_UPDATE_CHECK="true",
+                AWS_EC2_METADATA_DISABLED="true",
+                UV_OFFLINE="1",
+                PIP_NO_INDEX="1",
+                UV_CACHE_DIR=str(work / "uv-cache"),
+            )
+            owned = {
+                "stack.yaml": raw["encrypted_configuration"],
+                "plan.json": raw["plan"],
+                "Pulumi.yaml": preview._encoded(
+                    {
+                        "name": context.foundation.project,
+                        "runtime": {"name": "python", "options": {"virtualenv": sys.prefix}},
+                    }
+                ),
+                "__main__.py": (
+                    b"from infra_program.service_apply import program_from_request\n"
+                    b"program_from_request()\n"
+                ),
+            }
+            for name, content in owned.items():
+                (work / name).write_bytes(content)
+            runtime = Runtime(cli, work, env, context.contract.stack_identity, root / "policies")
+
+            def confirm() -> None:
+                require(operations.inspect_journal(path)["head"] == head)
+                require(
+                    all(
+                        preview._read(_private(root, bundle["paths"][n]), operations.MAX_BYTES) == v
+                        for n, v in raw.items()
+                    )
+                )
+                require(all((work / n).read_bytes() == v for n, v in owned.items()))
+                _admit(root, args, bundle, raw, journal)
+                cli.verify()
+                require(_hash((uv_dir / "uv").read_bytes()) == uv_hash)
+                (
+                    verified_supabase_environment
+                    if args.unit == "supabase-database"
+                    else verified_environment
+                )(root, work / "home")
+
+            def bootstrap() -> None:
+                owned["apply.json"] = preview._encoded(
+                    dict(
+                        root=str(root),
+                        unit=args.unit,
+                        commit=args.commit,
+                        actor=args.actor,
+                        environment=args.environment,
+                        journal=str(path),
+                        journal_head=head,
+                        journal_snapshot=journal.hex(),
+                        bundle=bundle,
+                        raw={n: v.hex() for n, v in raw.items()},
+                    )
+                )
+                (work / "apply.json").write_bytes(owned["apply.json"])
+
+            runtime.select()
+            require(runtime.checkpoint() == expected["checkpoint_sha256"])
+            bootstrap()
+            runtime.operation(preview=True)
+            confirm()
+            _current_environment(root, args, raw)
+            require(runtime.checkpoint() == expected["checkpoint_sha256"])
+            head = operations.journal(root, path, value, "running", predecessor=head)
+            bootstrap()
+            confirm()
+            started = True
+            changes = runtime.operation(preview=False)
+            confirm()
+            head = operations.journal(root, path, value, "succeeded", predecessor=head)
+            finished = True
+            output = _private(root, bundle["output"])
+            with os.fdopen(
+                os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "wb"
+            ) as stream:
+                stream.write(
+                    preview._encoded(
+                        dict(
+                            schema_version=1,
+                            operation_id=value["operation_id"],
+                            status="succeeded",
+                            resource_changes=changes,
+                            journal_head=head,
+                            approval_sha256=_hash(raw["approval"]),
+                            plan_sha256=_hash(raw["plan"]),
+                        )
+                    )
+                )
+    except Exception:
+        # A launched update can partially mutate state even when its diagnostics look benign.
+        if not finished:
+            operations.journal(
+                root, path, value, "indeterminate" if started else "failed", predecessor=head
+            )
+        raise
+
+
+def program_from_request() -> None:
+    try:
+        data = preview._json(
+            preview._read(Path("apply.json"), preview.REQUEST_LIMIT), preview.REQUEST_LIMIT
+        )
+        root = Path(data["root"])
+        preview._checkout(root)
+        raw = {n: bytes.fromhex(v) for n, v in data["raw"].items()}
+        require(
+            set(raw) == NAMES
+            and operations.inspect_journal(Path(data["journal"]))["head"] == data["journal_head"]
+        )
+        require(
+            Path("plan.json").read_bytes() == raw["plan"]
+            and Path("stack.yaml").read_bytes() == raw["encrypted_configuration"]
+        )
+        args = argparse.Namespace(
+            unit=data["unit"],
+            commit=data["commit"],
+            actor=data["actor"],
+            environment=data["environment"],
+        )
+        context, _ = _admit(
+            root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"])
+        )
+        require(Path(data["journal"]) == root / ".infra/operations" / (args.unit + ".json"))
+        identity = f"{pulumi.get_organization()}/{pulumi.get_project()}/{pulumi.get_stack()}"
+        dry_run = pulumi.runtime.is_dry_run()
+        require(identity == context.contract.stack_identity and type(dry_run) is bool)
+        require(
+            operations.inspect_journal(Path(data["journal"]))["state"]
+            == ("admitted" if dry_run else "running")
+        )
+        register_services_from_config(
+            context.proposal,
+            context.evidence,
+            context.profile,
+            envelope=context.envelope,
+            commit=context.expected_commit,
+        )
     except Exception:
         raise ValueError(MESSAGE) from None
