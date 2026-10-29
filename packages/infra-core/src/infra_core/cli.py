@@ -188,6 +188,19 @@ def build_parser() -> argparse.ArgumentParser:
     import_mode = resource_import.add_mutually_exclusive_group(required=True)
     import_mode.add_argument("--check", action="store_true")
     import_mode.add_argument("--allow-resource-writes", action="store_true")
+    drift = commands.add_parser("drift", help="isolated read-only observation; no remediation")
+    drift.add_argument(
+        "--unit",
+        choices=["oci-network", "oci-oke", "cloudflare-edge", "supabase-database"],
+        required=True,
+    )
+    for name in ("commit", "actor", "environment"):
+        drift.add_argument("--" + name, required=True)
+    for name in ("bundle", "journal"):
+        drift.add_argument("--" + name, type=Path, required=True)
+    drift_mode = drift.add_mutually_exclusive_group(required=True)
+    drift_mode.add_argument("--check", action="store_true")
+    drift_mode.add_argument("--allow-local-writes", action="store_true")
     return parser
 
 
@@ -209,6 +222,7 @@ def main(
     preview: Callable[[Path, argparse.Namespace], None] | None = None,
     apply: Callable[[Path, argparse.Namespace], None] | None = None,
     resource_import: Callable[[Path, argparse.Namespace], None] | None = None,
+    drift: Callable[[Path, argparse.Namespace], None] | None = None,
 ) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -510,6 +524,10 @@ def main(
                     config, json.loads((root / args.receipt).read_text(encoding="utf-8"))
                 )
                 print("PASS: OCI receipt binding/freshness only; deployment remains disabled")
+        elif args.command == "drift":
+            if drift is None:
+                raise ValueError("DRIFT001: explicit observation composition required")
+            drift(root, args)
         elif args.command == "resource-import":
             if resource_import is None:
                 raise ValueError("IMPORT001: explicit resource import composition is required")
