@@ -1,4 +1,4 @@
-"""Safe repository CLI. No provisioning or state mutation commands are exposed."""
+"""Repository CLI; explicit protected adapters own any resource execution."""
 
 import argparse
 import json
@@ -152,6 +152,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
+    service_apply = commands.add_parser("apply", help="explicit protected single-service update")
+    service_apply.add_argument(
+        "--unit", choices=["cloudflare-edge", "supabase-database"], required=True
+    )
+    for name in ("commit", "actor", "environment"):
+        service_apply.add_argument("--" + name, required=True)
+    for name in ("bundle", "journal"):
+        service_apply.add_argument("--" + name, type=Path, required=True)
+    mode = service_apply.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check", action="store_true")
+    mode.add_argument("--allow-resource-writes", action="store_true")
     return parser
 
 
@@ -171,6 +182,7 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     preview: Callable[[Path, argparse.Namespace], None] | None = None,
+    apply: Callable[[Path, argparse.Namespace], None] | None = None,
 ) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -455,6 +467,10 @@ def main(
                     config, json.loads((root / args.receipt).read_text(encoding="utf-8"))
                 )
                 print("PASS: OCI receipt binding/freshness only; deployment remains disabled")
+        elif args.command == "apply":
+            if apply is None:
+                raise ValueError("APPLY001: explicit service apply composition is required")
+            apply(root, args)
         elif args.command == "preview" and preview is not None:
             preview(root, args)
         elif args.command in ("preview", "deploy"):

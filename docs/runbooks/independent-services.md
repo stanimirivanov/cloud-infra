@@ -430,3 +430,73 @@ eligibility, secret-provider encryption, ownership and rollback, admission/secur
 for any application data, monitoring and backend/environment controls. Supabase RLS,
 schema migrations, backup/restore and application credentials require a subsequent
 data-plane design. Workers and other paid/metered products remain forbidden.
+
+## Controlled single-service apply (M05-PR6)
+
+`uv run --locked infra apply --help` describes the explicit adapter. It requires
+unit, commit, actor, environment, bundle and journal, and exactly one of --check or
+--allow-resource-writes. The composed CLI admits only owner/main workflow_dispatch
+with the exact main commit and unit-apply environment. Core-only callers cannot
+execute updates. Normal deploy and preview dispatch keep their existing boundaries.
+
+config/service-apply.json ships disabled. Activation requires a separately reviewed
+tracked change to that switch, the service's existing preview flag and enrolled
+operations-policy.json. No flag, key or GitHub setting is enabled by this PR.
+
+The private schema-1 bundle has paths, backend_account_id, cli_archive,
+provider_home and output fields. paths must contain operation, approval, operator,
+approver, backup_receipt, backup_manifest, environment, plan, encrypted_configuration,
+proposal, evidence, envelope, qualification, posture and posture_envelope. Each is
+an existing bounded .infra file. The CLI archive and provider_home are explicitly
+prepared, checksum-pinned inputs; the output must be new in an existing private
+directory. Supply the original encrypted stack configuration bytes and the exact
+unchanged CLI checkpoint export used by capture; reformatting changes their hashes.
+
+Execution uses schema-2 operation approvals: the schema-1 fields plus
+execution_inputs_sha256. This binds the frozen proposal, service evidence, profile,
+qualification, backend posture, encrypted configuration, plan and backend account
+scope. Signature roles/type and exact-byte bindings remain unchanged. Schema-1
+preflight is still supported by the core API but cannot admit this executor. Callers
+must supply a saved plan produced from the same reviewed factories, pinned toolchain
+and inputs. No plan-authoring CLI is added; the existing preview command does not
+save this artifact. Saved plans constrain known values/operations, not every unknown
+provider value. Reapprove any changed plan or input; do not edit signed artifacts.
+
+The durable journal path is fixed to .infra/operations/UNIT.json. Protect and retain
+it across runner jobs; never restore an old prepared journal to retry an operation.
+Preflight checks signatures, current clean commit, fresh observations and required
+policies before the credential callback. It recollects current environment controls,
+then uses local serialization and journal compare-and-swap to record admission.
+Only then are explicit backend credentials/passphrase loaded into an isolated home
+with verified CLI/providers/uv. Service tokens remain encrypted Pulumi config values.
+
+The adapter selects an existing qualified stack, compares its encrypted checkpoint,
+runs a fresh mandatory-policy preview, rechecks frozen inputs/current controls/state,
+then records running and performs the exact saved-plan update. It accepts only
+same/create/update/read operations; deletes/replacements, unknown types, unprotected
+children and missing explicit provider/parent bindings are rejected. The owned child
+checks runtime identity, signatures, frozen files and admitted/running dry-run mode
+before using the existing secret-backed factory. Preview APIs are not widened.
+
+A failure before update launch records failed; a launched update with incomplete,
+failed or inconsistent evidence records indeterminate. Never retry or automatically
+roll back that operation. Inspect live ownership/checkpoints under a separate
+operational instruction. A receipt-write error after known success leaves the
+journal succeeded and still requires reconciliation, not replay.
+
+The manual service-apply workflow requires the protected unit-apply environment and
+a dedicated service-operations runner group. Administrators must provide durable
+journals and frozen encrypted inputs, pinned archives/provider caches, main-only
+reviews, independent signing custody, least-privilege backend/provider credentials,
+and a read-only OPERATION_OBSERVATION_TOKEN able to inspect environment settings.
+SERVICE_APPLY_BUNDLE and SERVICE_APPLY_JOURNAL locate the prepared files. Checkout
+clean is disabled to preserve ignored journals; the runner must be dedicated/trusted
+and its sources/dependency environment independently controlled. No PR job runs on
+that runner. Provider reads/updates and independent writer exclusion still require
+live acceptance; tests exercise synthetic transport and a provider-free local engine.
+
+GitHub serializes this workflow per unit; local locking is not distributed fencing.
+All external writers/recovery/import workflows must share reviewed exclusion rules.
+No raw events, decrypted values or state are uploaded. Normal cleanup deletes only
+the owned temporary workspace; force-killed runners require secure cleanup while
+preserving the durable journal. No live apply was run as routine verification.

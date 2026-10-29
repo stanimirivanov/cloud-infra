@@ -1,0 +1,62 @@
+name: Protected service apply
+on:
+  workflow_dispatch:
+    inputs:
+      unit:
+        description: Reviewed independent service unit
+        type: choice
+        required: true
+        options: [cloudflare-edge, supabase-database]
+      commit:
+        description: Signed main commit, equal to this dispatch commit
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: pulumi-operation-${{ github.repository }}-${{ inputs.unit }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    uses: ./.github/workflows/verify.yml
+  apply:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    runs-on:
+      group: service-operations
+      labels: [self-hosted, linux, x64]
+    environment: ${{ inputs.unit }}-apply
+    timeout-minutes: 20
+    env:
+      APPLY_UNIT: ${{ inputs.unit }}
+      APPLY_COMMIT: ${{ inputs.commit }}
+      APPLY_ENVIRONMENT: ${{ inputs.unit }}-apply
+      APPLY_BUNDLE: ${{ vars.SERVICE_APPLY_BUNDLE }}
+      APPLY_JOURNAL: ${{ vars.SERVICE_APPLY_JOURNAL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          clean: false # Durable ignored journal must not be removed by checkout clean.
+      - run: python3 .github/scripts/install-tools.py
+      - run: uv sync --locked --all-groups
+      - name: Check signed inputs and fresh environment controls before cloud credentials
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: >-
+          uv run --locked infra apply --check --unit "$APPLY_UNIT" --commit "$APPLY_COMMIT"
+          --actor "$GITHUB_ACTOR" --environment "$APPLY_ENVIRONMENT"
+          --bundle "$APPLY_BUNDLE" --journal "$APPLY_JOURNAL"
+      - name: Execute the approved single-unit plan
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: >-
+          uv run --locked infra apply --allow-resource-writes --unit "$APPLY_UNIT" --commit "$APPLY_COMMIT"
+          --actor "$GITHUB_ACTOR" --environment "$APPLY_ENVIRONMENT"
+          --bundle "$APPLY_BUNDLE" --journal "$APPLY_JOURNAL"
