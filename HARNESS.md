@@ -333,3 +333,9 @@ reject replay. Future executors must recheck freshness and atomically transition
 the observed journal before admitting credentials; this result is not a bearer token
 or distributed lock. A monitor request currently requires the same backup bindings;
 separate read-only monitoring admission policy remains a later scoped decision.
+
+M05-PR6a adds a closed service operation runtime and exact saved-plan/event validators.
+It is a transport foundation, not operational admission. The existing opt-in
+operation_integration gate exercises synthetic timeout/failure handling and a
+mandatory-policy saved-plan update against disposable provider-free local state.
+The separate preflight, executor and operator handoff follow as stacked PR6b–PR6d.
