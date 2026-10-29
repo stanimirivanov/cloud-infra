@@ -373,3 +373,49 @@ a production retention policy or proof of independent storage/key custody. Those
 remain separately reviewed work. A mounted directory may share the production
 failure domain despite being outside the checkout. Keep the restic password and
 Pulumi passphrase under separate custody; neither is part of the backup set.
+
+## Isolated restore rehearsal (M05-PR4)
+
+`uv run --locked infra backup rehearse --help` describes the opt-in local-write
+command. Supply --policy, --receipt, --repository, --password-file,
+--passphrase-file and a new --output path under .infra. --allow-local-writes is
+required. Password/passphrase files must be distinct, private (0600) files.
+Use config/recovery.example.json as an incomplete template: both numeric objectives
+must be explicitly supplied. No production RPO/RTO is implied by test values.
+
+New captures use manifest schema 2, adding source_host_id: SHA-256 of the source
+machine ID. Rehearsal compares the current host fingerprint, never its raw ID.
+Schema-1 backups remain stored but must be recaptured for this gate; do not edit or
+restamp their old manifests. require_independent_host=true rejects same-host
+rehearsals. False is for explicitly limited local tests, reported as same-host.
+Different machine IDs are host evidence, not hardware/custody attestation; containers,
+cloned images and dishonest hosts limit this sensor.
+
+The receipt pins repository/snapshot/manifest identity. Rehearsal retrieves only the
+three expected bounded files using restic --no-lock, checks their hashes and stack identity, and creates
+new temporary backend, project and isolated Pulumi HOME directories. It imports
+only into that disposable local backend; no program, preview, resource provider,
+production stack or source writer is run. Independent wrong-key HOMEs must yield
+the pinned CLI's recognized incorrect-passphrase error for configuration and
+checkpoint reads before matching-key reads succeed. Raw decrypted data is discarded.
+The sanitized report binds the policy digest, snapshot and manifest, source export
+age and monotonic retrieval/readback duration. Exceeded objectives produce
+objectives_met=false and CLI exit 1. Other failures produce no successful report.
+Timings exclude runner provisioning and credential retrieval; they do not establish
+end-to-end production disaster-recovery guarantees. Workspaces are removed after
+normal failure/success; force-killed runners require secure disposal.
+
+The manual recovery-rehearsal workflow requires main, repository owner, shared
+verification and the protected recovery-rehearsal environment. Administrators must
+provide an isolated, disposable self-hosted Linux runner in the recovery runner group, separately mount
+the existing local repository, configure RECOVERY_REPOSITORY and RECOVERY_POLICY
+(with independence required), and separately supply RECOVERY_RECEIPT,
+RECOVERY_BACKUP_PASSWORD and RECOVERY_PASSPHRASE. No production destination or
+credentials are configured by this PR. Review secret-size limits before handoff.
+Credential files and the report are ephemeral; only sanitized CLI output is logged.
+PR validation never receives these credentials. The existing operation_integration
+gate exercises real encrypted capture/readback locally with same-host limits.
+
+Keep snapshot retention/pruning frozen during the lock-free read. Runner-group
+availability and repository access must be verified administratively before dispatch;
+this workflow does not create runner infrastructure or establish external protections.

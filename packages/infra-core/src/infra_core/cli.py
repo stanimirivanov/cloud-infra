@@ -125,6 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
     backup_capture.add_argument("--repository-id", required=True)
     backup_capture.add_argument("--exported-at", required=True)
     backup_capture.add_argument("--allow-backup-write", action="store_true", required=True)
+    rehearsal = backup_commands.add_parser(
+        "rehearse", help="isolated local restore/readback rehearsal"
+    )
+    for name in ("policy", "receipt", "repository", "password-file", "passphrase-file", "output"):
+        rehearsal.add_argument("--" + name, type=Path, required=True)
+    rehearsal.add_argument("--allow-local-writes", action="store_true", required=True)
     operations = commands.add_parser("operations", help="offline operation request inspection")
     operation_commands = operations.add_subparsers(dest="operations_command", required=True)
     operation_inspect = operation_commands.add_parser(
@@ -215,6 +221,21 @@ def main(
             if reviewed_commit(root) != commit:
                 raise ValueError("EXT023: checkout changed during service audit")
             print(json.dumps(result, indent=2))
+        elif args.command == "backup" and args.backup_command == "rehearse":
+            from infra_core.recovery_rehearsal import rehearse
+
+            result = rehearse(
+                root,
+                root / args.policy,
+                root / args.receipt,
+                args.repository,
+                root / args.password_file,
+                root / args.passphrase_file,
+                root / args.output,
+            )
+            print(json.dumps(result, indent=2))
+            if not result["objectives_met"]:
+                return 1
         elif args.command == "backup":
             from infra_core.backup import capture
 

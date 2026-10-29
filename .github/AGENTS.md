@@ -32,3 +32,10 @@ Pin tool versions, set explicit minimum token permissions and disable checkout
 credential persistence in verification. Changes to action pins require review.
 Branch protection and environment approvals are repository settings; do not
 claim YAML alone enforces them. Never print secrets or upload state as test data.
+
+Manual recovery-rehearsal runs only on the dedicated protected recovery runner,
+after main/owner and shared verification checks. Separately supplied backup and
+Pulumi recovery credentials belong only to its rehearsal step. Restore writes must
+remain in fresh disposable local state, never the mounted source or production
+backend. Keep runner isolation, source transport and credential custody explicit;
+no PR job may receive recovery credentials or run on that recovery runner.

@@ -1,0 +1,51 @@
+name: Isolated recovery rehearsal
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: recovery-rehearsal-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner
+    uses: ./.github/workflows/verify.yml
+  rehearse:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner
+    runs-on:
+      group: recovery
+      labels: [self-hosted, linux, x64]
+    environment: recovery-rehearsal
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - run: python3 .github/scripts/install-tools.py
+      - run: uv sync --locked --all-groups
+      - name: Rehearse with separately supplied recovery credentials
+        env:
+          BACKUP_PASSWORD: ${{ secrets.RECOVERY_BACKUP_PASSWORD }}
+          RECOVERY_PASSPHRASE: ${{ secrets.RECOVERY_PASSPHRASE }}
+          RECOVERY_RECEIPT: ${{ secrets.RECOVERY_RECEIPT }}
+          RECOVERY_POLICY: ${{ vars.RECOVERY_POLICY }}
+          RECOVERY_REPOSITORY: ${{ vars.RECOVERY_REPOSITORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p .infra
+          task_input=$(mktemp -d "$PWD/.infra/recovery-input-XXXXXXXX")
+          trap 'rm -rf "$task_input"' EXIT
+          printf '%s' "$BACKUP_PASSWORD" > "$task_input/password"
+          printf '%s' "$RECOVERY_PASSPHRASE" > "$task_input/passphrase"
+          printf '%s' "$RECOVERY_RECEIPT" > "$task_input/receipt.json"
+          printf '%s' "$RECOVERY_POLICY" > "$task_input/policy.json"
+          unset BACKUP_PASSWORD RECOVERY_PASSPHRASE RECOVERY_RECEIPT RECOVERY_POLICY
+          uv run --locked infra backup rehearse --allow-local-writes \
+            --policy "$task_input/policy.json" --receipt "$task_input/receipt.json" \
+            --repository "$RECOVERY_REPOSITORY" --password-file "$task_input/password" \
+            --passphrase-file "$task_input/passphrase" --output "$task_input/report.json"
