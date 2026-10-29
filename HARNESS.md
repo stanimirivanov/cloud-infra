@@ -230,3 +230,36 @@ a disabled-by-default reviewer policy. All 17 subjects use the captured bytes.
 Pure accounting APIs and synthetic recovery receipts retain their existing contracts
 by design. The closeout enumerates these boundaries; no blanket future migration is
 an unfinished M03 task. Deployment and cutover authorization remain false.
+
+## Offline operation evidence (M05-PR1)
+
+`uv run --locked infra operations inspect --request config/operations.example.json`
+validates schema-1 requests without running an operation or writing files. The
+public example is deliberately expired and uses placeholder digests. Private
+requests and journals belong under ignored .infra. To validate a journal and show
+its current head, use `uv run --locked infra operations inspect --journal .infra/operations.json`.
+Neither inspection result grants execution authority.
+
+infra_core.operations.request validates and detaches a closed request mapping:
+a canonical UUID, one of apply/import/recovery/monitor, an existing unit name,
+a 40-character Git commit, configuration/checkpoint SHA-256 digests, UTC expiry,
+and expected_predecessor (null for an empty journal, otherwise the previous head).
+Request digests use sorted compact JSON. Digests bind supplied bytes/identities;
+this stage does not establish their provenance, approvals or correspondence to live state.
+
+The library journal(root, path, request, state, predecessor=...) appends only beneath
+.infra using a local advisory lock, atomic replacement and file/directory fsync.
+The caller supplies the observed head for compare-and-swap. prepared may advance
+to admitted or failed; admitted to running or failed; running to succeeded, failed
+or indeterminate. All three outcomes are terminal. A new UUID/request bound to the
+previous head is required for the next operation. Request contents cannot change
+within a lifecycle; admission/start must precede expiry, while a late outcome may
+still be recorded. Timestamp regression, replay and malformed history fail closed.
+
+These states are caller assertions, not operational permission. Local locking is
+not distributed writer fencing; same-user tampering and hostile concurrent path
+replacement are outside this evidence mechanism. Interrupted persistence reports
+OPS002: inspect the journal before deciding whether to retry. Lost acknowledgements
+must not trigger automatic operation replay. The journal has a 1 MiB bound and no
+automatic rotation or deletion; full journals require a reviewed retention procedure.
+No executor, credential admission or signing service is introduced by this slice.

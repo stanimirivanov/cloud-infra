@@ -113,6 +113,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for name in ("config", "inventory", "resources"):
         kube_audit.add_argument("--" + name, type=Path, required=True)
+    operations = commands.add_parser("operations", help="offline operation request inspection")
+    operation_commands = operations.add_subparsers(dest="operations_command", required=True)
+    operation_inspect = operation_commands.add_parser(
+        "inspect", help="validate request; no authority"
+    )
+    operation_input = operation_inspect.add_mutually_exclusive_group(required=True)
+    operation_input.add_argument("--request", type=Path)
+    operation_input.add_argument("--journal", type=Path)
     cutover = commands.add_parser("cutover", help="offline evidence checks; never an executor")
     cutover_commands = cutover.add_subparsers(dest="cutover_command", required=True)
     cutover_check = cutover_commands.add_parser(
@@ -194,6 +202,15 @@ def main(
             )
             if reviewed_commit(root) != commit:
                 raise ValueError("EXT023: checkout changed during service audit")
+            print(json.dumps(result, indent=2))
+        elif args.command == "operations":
+            from infra_core.operations import inspect, inspect_journal
+
+            result = (
+                inspect(root / args.request)
+                if args.request is not None
+                else inspect_journal(root / args.journal)
+            )
             print(json.dumps(result, indent=2))
         elif args.command == "cutover":
             from infra_core.cutover import check
