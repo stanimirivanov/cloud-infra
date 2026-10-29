@@ -470,3 +470,18 @@ inputs, outcomes, account-wide scope, CLI exits and evidence limits. Focused che
 `uv run --locked pytest -q tests/test_operational_findings.py tests/test_governance.py tests/test_services.py`.
 The shared gate covers this entirely offline slice; scheduling/incident persistence
 and delivery remain M05-PR14. No dependency or provider integration gate is added.
+
+## Bounded infrastructure health observations (M05-PR13)
+
+The explicit `infra monitoring health --help` interface separates offline OKE
+readiness validation from allowlisted DNS/TLS/HTTP observation. Remote workers pin
+resolved destinations, verify TLS, reject redirects and bound response size/time;
+unknown failures never establish health. Operator-supplied node/API/CNI/DNS evidence
+retains original scoped clocks and cannot prove network isolation or cutover authority.
+
+`config/health.example.json` stays disabled/incomplete, preserving PR12's independent
+cost-policy schema. See [the health contract](docs/runbooks/infrastructure-health.md)
+for private inputs, check/observe modes, process cleanup and acceptance limits.
+Focused checks use `uv run --locked pytest -q tests/test_health.py tests/test_operational_findings.py`.
+The shared gate runs loopback fixtures only; no external endpoint, credential,
+Kubernetes client or new integration marker is needed. Scheduling/delivery remain PR14.

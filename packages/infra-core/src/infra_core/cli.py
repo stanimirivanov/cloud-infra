@@ -207,6 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
         "findings", help="read captured cost/capacity evidence"
     )
     findings.add_argument("--evidence", type=Path, required=True)
+    health = monitoring_commands.add_parser(
+        "health", help="bounded endpoint and recorded OKE health"
+    )
+    health.add_argument("--evidence", type=Path, required=True)
+    health_mode = health.add_mutually_exclusive_group(required=True)
+    health_mode.add_argument("--check", action="store_true")
+    health_mode.add_argument("--observe", action="store_true")
     return parser
 
 
@@ -533,6 +540,12 @@ def main(
         elif args.command == "monitoring":
             from infra_core.operational_findings import check as check_findings
 
+            if args.monitoring_command == "health":
+                from infra_core.health import check as check_health
+
+                result = check_health(root, args.evidence, network=args.observe)
+                print(json.dumps(result, sort_keys=True))
+                return 0 if result["status"] == "healthy" else 1
             result = check_findings(root, args.evidence)
             print(json.dumps(result, sort_keys=True))
             return 1 if result["status"] == "unknown" else 0
