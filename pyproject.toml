@@ -41,6 +41,7 @@ select = ["E", "F", "I", "B", "UP"]
 testpaths = ["tests"]
 addopts = "--strict-config --strict-markers -ra"
 markers = [
+    "operation_integration: pinned mutation transport and disposable component engine (opt-in; no cloud)",
     "backend_integration: real local Pulumi backend/policy host (explicit opt-in; no cloud)",
     "provider_integration: real provider release assets (explicit opt-in; verification only)",
     "preview_integration: synthetic SDK subprocess/loopback RPC (explicit CI opt-in; no cloud)",
