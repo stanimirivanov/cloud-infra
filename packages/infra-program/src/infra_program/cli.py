@@ -54,5 +54,32 @@ def _operation(root: Path, args: argparse.Namespace, importing: bool) -> None:
     execute(root, args, credentials)
 
 
+def _drift(root: Path, args: argparse.Namespace) -> None:
+    from infra_core.drift_results import require
+
+    from infra_program.drift import execute
+
+    require(
+        os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and os.environ.get("GITHUB_REF") == "refs/heads/main"
+        and os.environ.get("GITHUB_SHA") == args.commit
+        and bool(args.actor)
+        and args.actor
+        == os.environ.get("GITHUB_ACTOR")
+        == os.environ.get("GITHUB_REPOSITORY_OWNER")
+        and args.environment == args.unit + "-monitor"
+    )
+
+    def credentials() -> dict[str, str]:
+        names = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "PULUMI_CONFIG_PASSPHRASE"}
+        if args.unit.startswith("oci-"):
+            names |= {"OCI_USER_OCID", "OCI_FINGERPRINT", "OCI_PRIVATE_KEY_PATH"}
+        if "AWS_SESSION_TOKEN" in os.environ:
+            names.add("AWS_SESSION_TOKEN")
+        return {name: os.environ[name] for name in names}
+
+    execute(root, args, credentials)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    return core_main(argv, preview=_preview, apply=_apply, resource_import=_import)
+    return core_main(argv, preview=_preview, apply=_apply, resource_import=_import, drift=_drift)

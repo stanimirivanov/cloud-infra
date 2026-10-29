@@ -437,3 +437,20 @@ handoff gate rejects older receipts missing those fields. Existing APIs/defaults
 stay unchanged. Focused tests run with
 `uv run --locked pytest -q tests/test_ownership_handoff.py tests/test_ownership.py tests/test_cutover.py tests/test_recovery_rehearsal.py tests/test_import_driver.py`.
 Run the complete shared gate and existing operation integration gate before delivery.
+
+## Isolated drift observation (M05-PR11)
+
+The separate default-disabled drift adapter (`infra drift --help`) accepts monitor-specific
+schema-2 approvals and private four-unit preview/checkpoint inputs. Authoritative
+access exposes encrypted export only; refresh preview and mandatory-policy desired
+comparison run in a disposable local backend, then re-export source checkpoints
+to prove preservation. Clean, drifted and unknown remain distinct; unknown exits
+nonzero and no result authorizes state acceptance or remediation.
+
+See [the drift observation contract](docs/runbooks/drift-observation.md) for exact
+bundle/signature/credential boundaries, journal outcomes and activation gaps.
+Focused tests use
+`uv run --locked pytest -q tests/test_drift_results.py tests/test_drift.py tests/test_drift_runtime.py`.
+The existing operation integration gate includes synthetic provider errors/deletion
+and real pinned provider-free encrypted local drift rehearsals. Scheduling and
+notifications remain M05-PR14; native provider/IAM acceptance is separate.
