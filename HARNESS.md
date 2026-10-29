@@ -355,3 +355,9 @@ only after admission/CAS. The executor verifies tools/providers, compares the cu
 checkpoint, runs a fresh mandatory-policy preview and rechecks before exact planned
 update. Before-launch failures are failed; unresolved launched updates are
 indeterminate. No retry/rollback or normal deployment activation is introduced.
+
+M05-PR6d adds the explicit protected service apply/check CLI and manual workflow.
+See [the service runbook](docs/runbooks/independent-services.md#controlled-single-service-apply-m05-pr6)
+for frozen bundle/signature preparation, fixed durable journals, dedicated runner
+requirements and failure reconciliation. All tracked activation switches remain off.
+The PR6a -> PR6b -> PR6c -> PR6d stack is the complete M05-PR6 slice.

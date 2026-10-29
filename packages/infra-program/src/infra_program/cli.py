@@ -1,6 +1,7 @@
 """Composition entry point; offline commands do not import the Pulumi runtime."""
 
 import argparse
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -13,5 +14,29 @@ def _preview(root: Path, args: argparse.Namespace) -> None:
     execute(root, args)
 
 
+def _apply(root: Path, args: argparse.Namespace) -> None:
+    from infra_program.operation_runtime import require
+    from infra_program.service_apply import execute
+
+    require(
+        os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and os.environ.get("GITHUB_REF") == "refs/heads/main"
+        and os.environ.get("GITHUB_SHA") == args.commit
+        and bool(args.actor)
+        and args.actor
+        == os.environ.get("GITHUB_ACTOR")
+        == os.environ.get("GITHUB_REPOSITORY_OWNER")
+        and args.environment == args.unit + "-apply"
+    )
+
+    def credentials() -> dict[str, str]:
+        names = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "PULUMI_CONFIG_PASSPHRASE"}
+        if "AWS_SESSION_TOKEN" in os.environ:
+            names.add("AWS_SESSION_TOKEN")
+        return {name: os.environ[name] for name in names}
+
+    execute(root, args, credentials)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    return core_main(argv, preview=_preview)
+    return core_main(argv, preview=_preview, apply=_apply)
