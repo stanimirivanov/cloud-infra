@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "repository": "stanimirivanov/cloud-infra",
+  "repository_id": 1323328453,
+  "max_approval_age_seconds": null,
+  "max_backup_age_seconds": null,
+  "environments": {
+    "apply/oci-network": "oci-network-apply",
+    "apply/oci-oke": "oci-oke-apply",
+    "apply/cloudflare-edge": "cloudflare-edge-apply",
+    "apply/supabase-database": "supabase-database-apply",
+    "import/oci-network": "oci-network-import",
+    "import/oci-oke": "oci-oke-import",
+    "import/cloudflare-edge": "cloudflare-edge-import",
+    "import/supabase-database": "supabase-database-import",
+    "recovery/oci-network": "oci-network-recovery",
+    "recovery/oci-oke": "oci-oke-recovery",
+    "recovery/cloudflare-edge": "cloudflare-edge-recovery",
+    "recovery/supabase-database": "supabase-database-recovery",
+    "monitor/oci-network": "oci-network-monitor",
+    "monitor/oci-oke": "oci-oke-monitor",
+    "monitor/cloudflare-edge": "cloudflare-edge-monitor",
+    "monitor/supabase-database": "supabase-database-monitor"
+  },
+  "reviewers": []
+}

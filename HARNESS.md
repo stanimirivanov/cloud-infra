@@ -289,3 +289,47 @@ reusing this SDK method. All checkpoint/plan files remain in disposable test sto
 Resource-import engine/provider behavior, production secret custody, cloud IAM,
 crash recovery and distributed writer exclusion remain live acceptance gaps.
 The bounded launch helper is test-only and does not constitute an operational executor.
+
+## Operation approval preflight (M05-PR5)
+
+infra_core.operation_admission.admit validates immutable request, approval,
+role-signature, backup-receipt/manifest, environment-observation and journal bytes.
+Its separately supplied context contains actor, environment, commit, configuration,
+checkpoint and plan SHA-256 values, and the observed journal head. Callers must
+compute that context from their current trusted inputs, never copy expectations
+from an approval. The checkout must be clean at that commit. All deployment flags
+remain disabled and no credential, execution or journal mutation API is exposed.
+
+config/operations-policy.json ships disabled with no enrolled reviewers or age
+limits. Enabling it requires independent review of keys, principal/role custody,
+repository identity, explicit per-action/unit environments and positive age limits
+(approval lifetime at most fifteen minutes). Two distinct enrolled operator/approver
+principals must verify exact approval bytes; neither may be the requester, including
+case variants. Duplicate keys/principals fail. Signing remains external; no signing
+service or private key is introduced. Different principal strings do not prove
+independent humans or custody.
+
+Operation DSSE payloadType is application/vnd.cloud-infra.operation-approval.v1+json;
+existing cutover signatures retain their fixed in-toto profile. The schema-1 approval
+contains operation_id, all seven context fields, request_sha256, policy_sha256,
+backup_sha256, environment_sha256, issued_at and expires_at. Hashes bind exact
+supplied bytes; the backup manifest additionally binds the canonical request hash,
+stack, unit, commit and encrypted pair hashes. Approval expiry cannot exceed request
+expiry. Current hashes, fresh source-export age and prepared journal head must match.
+
+administration.collect_operation_environment performs four explicit read-only GitHub
+queries for repository, main branch, named environment and complete branch policies.
+Its separate schema-1 observation must be fresh within fifteen minutes, collected
+within five minutes, tied to the expected main commit/repository, and show required
+reviewers, prevented self-review, explicit no-admin-bypass and only-main branch
+selection. Existing qualification/cutover observation schemas are unchanged. This
+checks observed settings, not historical enforcement, approval of the current job,
+effective IAM, source authenticity or undisclosed bypass. Callers must establish
+protected execution and provenance before exposing credentials.
+
+admission_verified=true is bounded diagnostic evidence; execution_authorized stays
+false. Rechecking an unchanged prepared request is idempotent. Advanced journals
+reject replay. Future executors must recheck freshness and atomically transition
+the observed journal before admitting credentials; this result is not a bearer token
+or distributed lock. A monitor request currently requires the same backup bindings;
+separate read-only monitoring admission policy remains a later scoped decision.

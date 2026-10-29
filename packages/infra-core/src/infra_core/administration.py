@@ -649,3 +649,99 @@ def private_path(root: Path, path: Path) -> Path:
         "administrative evidence must be private JSON under checkout .infra",
     )
     return destination
+
+
+def validate_operation_environment(
+    payload: bytes,
+    *,
+    repository: str,
+    repository_id: int,
+    environment: str,
+    commit: str,
+    now: datetime,
+) -> None:
+    """Validate a fresh, approval-bound environment observation; no execution authority."""
+    data = fields(
+        _json(payload),
+        {"schema_version", "commit", "started_at", "completed_at", "responses"},
+        "operation environment snapshot",
+    )
+    require(
+        type(data["schema_version"]) is int
+        and data["schema_version"] == 1
+        and data["commit"] == commit,
+        "ADMIN006",
+        "operation observation binding differs",
+    )
+    start, end = timestamp(data["started_at"], "start"), timestamp(data["completed_at"], "end")
+    require(
+        start <= end <= now
+        and end - start <= timedelta(minutes=5)
+        and now - start <= timedelta(minutes=15),
+        "ADMIN006",
+        "operation observations stale",
+    )
+    responses = fields(
+        data["responses"],
+        {"repository", "branch", "environment", "branches"},
+        "operation environment responses",
+    )
+    require(
+        responses["repository"].get("id") == repository_id
+        and responses["repository"].get("full_name") == repository
+        and responses["repository"].get("default_branch") == "main"
+        and responses["branch"].get("name") == "main"
+        and responses["branch"].get("commit", {}).get("sha") == commit,
+        "ADMIN006",
+        "operation repository or main commit differs",
+    )
+    require(
+        responses["branch"].get("protected") is True
+        and responses["environment"].get("can_admins_bypass") is False,
+        "ADMIN006",
+        "operation environment controls incomplete",
+    )
+    _environment({"repository": repository, "environment": environment}, responses)
+
+
+def collect_operation_environment(
+    root: Path, *, repository: str, repository_id: int, environment: str, commit: str
+) -> bytes:
+    """Explicit read-only GitHub queries; caller binds returned bytes into signed approval."""
+    require(
+        re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is not None
+        and re.fullmatch(r"[A-Za-z0-9_-]{1,100}", environment) is not None,
+        "ADMIN006",
+        "invalid operation observation scope",
+    )
+    start = datetime.now(UTC)
+    base = "repos/" + repository
+    target = base + "/environments/" + environment
+    responses = {
+        name: _get(root, endpoint)
+        for name, endpoint in {
+            "repository": base,
+            "branch": base + "/branches/main",
+            "environment": target,
+            "branches": target + "/deployment-branch-policies?per_page=100&page=1",
+        }.items()
+    }
+    end = datetime.now(UTC)
+    payload = json.dumps(
+        dict(
+            schema_version=1,
+            commit=commit,
+            started_at=start.isoformat(),
+            completed_at=end.isoformat(),
+            responses=responses,
+        )
+    ).encode()
+    validate_operation_environment(
+        payload,
+        repository=repository,
+        repository_id=repository_id,
+        environment=environment,
+        commit=commit,
+        now=end,
+    )
+    return payload
