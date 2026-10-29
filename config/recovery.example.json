@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "max_backup_age_seconds": null,
+  "restore_objective_seconds": null,
+  "require_independent_host": true
+}

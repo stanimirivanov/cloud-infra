@@ -20,7 +20,8 @@
         "linux-x64": {
           "url": "https://github.com/pulumi/pulumi/releases/download/v3.272.0/pulumi-v3.272.0-linux-x64.tar.gz",
           "sha256": "58d545f2b98761051922008ebd381ecef95484d7f7a5ff7faa15d7a780ea84f6",
-          "binary": "pulumi/pulumi"
+          "binary": "pulumi/pulumi",
+          "binary_sha256": "ce1e0815f2506d16df377006847e5233913a090da3569f9aaf084b9300ea1929"
         }
       }
     },

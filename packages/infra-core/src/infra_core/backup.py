@@ -33,6 +33,13 @@ def executable(root: Path) -> Path:
     return binary
 
 
+def host_id() -> str:
+    """Stable host fingerprint, not an attestation or a raw machine identifier."""
+    identity = Path("/etc/machine-id").read_bytes().strip()
+    require(bool(identity))
+    return hashlib.sha256(identity).hexdigest()
+
+
 def _encrypted(value: object) -> None:
     if isinstance(value, dict):
         require("plaintext" not in value)
@@ -179,7 +186,8 @@ def _capture(
     destination = parent / str(value["operation_id"])
     destination.mkdir(mode=0o700)  # Reserve identity even if upload outcome is uncertain.
     manifest = dict(
-        schema_version=1,
+        schema_version=2,
+        source_host_id=host_id(),
         operation_id=value["operation_id"],
         unit=value["unit"],
         stack=stack,
