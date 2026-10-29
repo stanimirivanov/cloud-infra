@@ -454,3 +454,19 @@ Focused tests use
 The existing operation integration gate includes synthetic provider errors/deletion
 and real pinned provider-free encrypted local drift rehearsals. Scheduling and
 notifications remain M05-PR14; native provider/IAM acceptance is separate.
+
+## Cost, capacity, and evidence-age findings (M05-PR12)
+
+The offline `infra monitoring findings --help` interface consumes existing private
+OCI account/inventory and Cloudflare/Supabase service evidence. It reuses resource
+classification, collection coverage and billing-cycle rules, compares observed
+measurements against reviewed profile limits and explicit private thresholds, and
+preserves original clocks/watermarks. Missing or incomplete measurements remain
+unknown; output never grants admission or changes an allowance, journal or resource.
+
+`config/monitoring.example.json` is disabled and intentionally incomplete. See
+[the operational findings contract](docs/runbooks/operational-findings.md) for exact
+inputs, outcomes, account-wide scope, CLI exits and evidence limits. Focused checks:
+`uv run --locked pytest -q tests/test_operational_findings.py tests/test_governance.py tests/test_services.py`.
+The shared gate covers this entirely offline slice; scheduling/incident persistence
+and delivery remain M05-PR14. No dependency or provider integration gate is added.
