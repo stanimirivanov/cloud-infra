@@ -98,7 +98,7 @@ def admission(tmp_path, monkeypatch):
         journal_head=op.digest(entry),
     )
 
-    def inputs():
+    def inputs(execution_inputs=None):
         receipt["manifest_sha256"] = a._hash(op.encoded(manifest))
         raw = op.encoded(policy)
         (tmp_path / "config/operations-policy.json").write_bytes(raw)
@@ -122,6 +122,9 @@ def admission(tmp_path, monkeypatch):
             issued_at=NOW.isoformat(),
             expires_at=value["expires_at"],
         )
+        if execution_inputs is not None:
+            approval["schema_version"] = 2
+            approval["execution_inputs_sha256"] = a._hash(execution_inputs)
         args["approval"] = op.encoded(approval)
         args["signatures"] = {
             role: op.encoded(
@@ -308,3 +311,14 @@ def test_checkout_change_during_verification_is_rejected(admission, monkeypatch)
     monkeypatch.setattr(a, "repository_state", lambda root: next(states))
     with pytest.raises(ValueError, match="ADMIT001"):
         a.admit(root, **inputs())
+
+
+def test_execution_approval_requires_exact_extended_binding(admission):
+    root, inputs, *_ = admission
+    args = inputs(b"frozen-service-inputs")
+    assert a.admit(root, **args, execution_inputs=b"frozen-service-inputs")["admission_verified"]
+    for changed in (None, b"changed"):
+        with pytest.raises(ValueError, match="ADMIT001"):
+            a.admit(root, **args, execution_inputs=changed)
+    with pytest.raises(ValueError, match="ADMIT001"):
+        a.admit(root, **inputs(), execution_inputs=b"frozen-service-inputs")
