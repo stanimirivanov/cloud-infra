@@ -201,6 +201,12 @@ def build_parser() -> argparse.ArgumentParser:
     drift_mode = drift.add_mutually_exclusive_group(required=True)
     drift_mode.add_argument("--check", action="store_true")
     drift_mode.add_argument("--allow-local-writes", action="store_true")
+    monitoring = commands.add_parser("monitoring", help="offline operational observations")
+    monitoring_commands = monitoring.add_subparsers(dest="monitoring_command", required=True)
+    findings = monitoring_commands.add_parser(
+        "findings", help="read captured cost/capacity evidence"
+    )
+    findings.add_argument("--evidence", type=Path, required=True)
     return parser
 
 
@@ -524,6 +530,12 @@ def main(
                     config, json.loads((root / args.receipt).read_text(encoding="utf-8"))
                 )
                 print("PASS: OCI receipt binding/freshness only; deployment remains disabled")
+        elif args.command == "monitoring":
+            from infra_core.operational_findings import check as check_findings
+
+            result = check_findings(root, args.evidence)
+            print(json.dumps(result, sort_keys=True))
+            return 1 if result["status"] == "unknown" else 0
         elif args.command == "drift":
             if drift is None:
                 raise ValueError("DRIFT001: explicit observation composition required")

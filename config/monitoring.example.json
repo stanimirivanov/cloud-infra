@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "warning_utilization_percent": null,
+  "critical_utilization_percent": null,
+  "warning_age_percent": null,
+  "max_age_seconds": {
+    "observation": null,
+    "billing_lag": null,
+    "profile": null,
+    "entitlement": null
+  }
+}
