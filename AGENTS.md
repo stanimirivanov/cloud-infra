@@ -22,6 +22,11 @@ and source in the directory you change. Do not ingest all docs.
    `gh pr create` with title `[#N] title`, `Closes #N`, summary, verification and
    limitations. Return the PR URL and stop. Do not merge or poll CI.
 
+Deliver one coherent PR per requested task. Choose boundaries by the behavior,
+contracts and acceptance criteria being delivered, not a line-count or PR-size
+limit. Keep the complete change reviewable, include its tests, and exclude unrelated
+refactors. Do not split a requested task into multiple or stacked PRs solely for size.
+
 For explicitly requested PR revisions, reuse its branch and issue, inspect only
 relevant feedback, verify, commit, push and comment with the resolution. Stop.
 

@@ -13,6 +13,7 @@ import test_preview_program
 import test_services
 from infra_core import operations
 from infra_core.foundation import load_foundation
+from infra_program import oci_apply
 from infra_program import service_apply as apply
 from test_operation_runtime import plan
 
@@ -63,15 +64,18 @@ def test_service_preflight_audits_existing_inputs_before_secret_lookup(
         apply._service(tmp_path, context.contract.unit, COMMIT, raw)
 
 
-@pytest.mark.parametrize("unit", ["cloudflare-edge", "supabase-database"])
+@pytest.mark.parametrize("unit", ["cloudflare-edge", "supabase-database", "oci-network", "oci-oke"])
 @pytest.mark.parametrize(
     "fault", [None, "preview", "up", "mutate-preview", "mutate-up", "checkpoint", "credentials"]
 )
 def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault):
+    oci = unit.startswith("oci-")
     private = tmp_path / ".infra"
     private.mkdir()
     (tmp_path / "config").mkdir()
     (tmp_path / "config/service-apply.json").write_text('{"schema_version":1,"enabled":true}')
+    if oci:
+        (tmp_path / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":true}')
     uv = private / "tools/uv/uv"
     uv.parent.mkdir(parents=True)
     uv.write_bytes(b"fixture-uv")
@@ -94,7 +98,7 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
     value.update(unit=unit, expires_at="2099-01-01T00:00:00+00:00")
     journal = private / "operations" / (unit + ".json")
     head = operations.journal(tmp_path, journal, value, "prepared", predecessor=None)
-    paths = {n: str(private / (n + ".bin")) for n in apply.NAMES}
+    paths = {n: str(private / (n + ".bin")) for n in apply._names(oci, unit)}
     for name, path in paths.items():
         Path(path).write_bytes(json.dumps(value).encode() if name == "operation" else b"frozen")
     bundle = dict(
@@ -133,6 +137,20 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
     monkeypatch.setattr(apply, "verified_supabase_environment", lambda *a: {})
     events = []
 
+    def confirm_dependency(*args):
+        if (fault == "dependency-before-up" and "preview" in events) or (
+            fault == "dependency-after-up" and "up" in events
+        ):
+            raise ValueError("changed network")
+
+    def network_result(*args):
+        if fault == "network-output":
+            raise ValueError("unavailable committed outputs")
+        return {"dependency_outputs_sha256": "fixture", "checkpoint_sha256": "fixture"}
+
+    monkeypatch.setattr(oci_apply, "confirm_dependency", confirm_dependency)
+    monkeypatch.setattr(oci_apply, "network_result", network_result)
+
     class FakeRuntime:
         def __init__(self, *args):
             pass
@@ -159,28 +177,38 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
         events.append("credentials")
         if fault == "credentials":
             raise RuntimeError("PRIVATE_ERROR")
-        return dict(
+        result = dict(
             AWS_ACCESS_KEY_ID="fixture",
             AWS_SECRET_ACCESS_KEY="fixture",
             PULUMI_CONFIG_PASSPHRASE="synthetic-passphrase-long",
         )
 
+        if oci:
+            key = private / "key.pem"
+            key.write_bytes(b"synthetic key")
+            result.update(
+                OCI_USER_OCID="fixture", OCI_FINGERPRINT="fixture", OCI_PRIVATE_KEY_PATH=str(key)
+            )
+        return result
+
     if fault:
         with pytest.raises(ValueError, match="APPLY001") as error:
-            apply.execute(tmp_path, args, credentials)
+            apply.execute(tmp_path, args, credentials, oci)
         assert "PRIVATE_ERROR" not in str(error.value)
         assert operations.inspect_journal(journal)["state"] == (
-            "indeterminate" if fault in {"up", "mutate-up"} else "failed"
+            "indeterminate"
+            if fault in {"up", "mutate-up", "dependency-after-up", "network-output"}
+            else "failed"
         )
         assert not Path(bundle["output"]).exists()
     else:
-        apply.execute(tmp_path, args, credentials)
+        apply.execute(tmp_path, args, credentials, oci)
         assert operations.inspect_journal(journal)["state"] == "succeeded"
         assert events == ["credentials", "select", "preview", "up"]
         # Real admission rejects the advanced journal before another credential load.
         monkeypatch.setattr(apply, "_admit", lambda *a: (_ for _ in ()).throw(ValueError("replay")))
         with pytest.raises(ValueError):
-            apply.execute(tmp_path, args, lambda: pytest.fail("replay credentials"))
+            apply.execute(tmp_path, args, lambda: pytest.fail("replay credentials"), oci)
 
 
 @pytest.mark.parametrize("dry_run", [True, False])
@@ -239,3 +267,15 @@ def test_owned_bootstrap_checks_identity_and_mode_before_factory(
 def test_preflight_is_disabled_by_default():
     with pytest.raises(ValueError):
         apply.check(ROOT, argparse.Namespace())
+
+
+@pytest.mark.parametrize(
+    "unit,fault",
+    [
+        ("oci-network", "network-output"),
+        ("oci-oke", "dependency-before-up"),
+        ("oci-oke", "dependency-after-up"),
+    ],
+)
+def test_oci_dependency_failure_records_own_outcome(tmp_path, monkeypatch, unit, fault):
+    test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault)

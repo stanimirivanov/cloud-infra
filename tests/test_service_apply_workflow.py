@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from infra_program import oci_apply
 from infra_program import service_apply as apply
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,11 +27,12 @@ def test_default_gate_and_workflow_are_explicit(tmp_path):
 
 
 @pytest.mark.parametrize("allowed", [False, True])
-def test_cli_checks_dispatch_identity_before_adapter(monkeypatch, allowed):
+@pytest.mark.parametrize("unit", ["cloudflare-edge", "oci-network", "oci-oke"])
+def test_cli_checks_dispatch_identity_before_adapter(monkeypatch, allowed, unit):
     from infra_program import cli
 
     args = argparse.Namespace(
-        actor="owner", commit="a" * 40, unit="cloudflare-edge", environment="cloudflare-edge-apply"
+        actor="owner", commit="a" * 40, unit=unit, environment=unit + "-apply"
     )
     for name, value in dict(
         GITHUB_EVENT_NAME="workflow_dispatch" if allowed else "pull_request",
@@ -46,6 +48,7 @@ def test_cli_checks_dispatch_identity_before_adapter(monkeypatch, allowed):
         called.append("checked")
 
     monkeypatch.setattr(apply, "execute", execute)
+    monkeypatch.setattr(oci_apply, "execute", execute)
     if allowed:
         cli._apply(ROOT, args)
         assert called == ["checked"]

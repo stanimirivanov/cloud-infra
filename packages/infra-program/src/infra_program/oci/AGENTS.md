@@ -35,3 +35,12 @@ Run the focused OCI tests after graph/policy changes and the complete harness
 before delivery. Preserve the deployment freeze and follow the OCI components
 runbook for adoption prerequisites. Never run a credentialed preview, import,
 apply or destroy as routine verification.
+
+M05 OCI apply uses the separate default-disabled oci_apply adapter and shared
+journaled apply driver. It delegates these same audited factories and output
+interfaces; dispatch_preview remains dry-run-only. Each unit needs its own approval,
+backup and fixed journal. OKE additionally binds a succeeded network journal/receipt
+and exact committed checkpoint/outputs. Both units share a dependency lock and
+workflow concurrency group. Never update network implicitly to admit OKE or treat
+network success as OKE success. External writer exclusion remains an administrator
+prerequisite; local locks cannot fence an unrelated writer.

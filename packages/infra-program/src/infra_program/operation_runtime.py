@@ -1,4 +1,4 @@
-"""Closed service update commands; private bounded transport, never operational admission."""
+"""Closed service/OCI update commands; private bounded transport, never operational admission."""
 
 import hashlib
 import json
@@ -7,6 +7,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 from infra_core.operations import _pairs
 from infra_core.preview_results import _EVENTS, MAX_EVENT_BYTES, MAX_EVENTS, PACK, RULE
@@ -14,7 +15,7 @@ from infra_core.services.governance import DNS, PROJECT
 
 from infra_program.preview_runtime import CliRuntime, Wire, _events, _futures, _grpc
 
-MESSAGE = "APPLY001: constrained service operation rejected; diagnostics withheld"
+MESSAGE = "APPLY001: constrained resource operation rejected; diagnostics withheld"
 ALLOWED = {"same", "create", "update", "read"}
 
 
@@ -130,7 +131,7 @@ class Runtime:
             stack
             in {
                 "organization/free-infrastructure/" + u
-                for u in ("cloudflare-edge", "supabase-database")
+                for u in ("cloudflare-edge", "supabase-database", "oci-network", "oci-oke")
             }
         )
         require(policy == Path(__file__).resolve().parents[4] / "policies")
@@ -169,6 +170,32 @@ class Runtime:
         self._run(["stack", "export", "--file", str(path), "--stack", self.stack])
         require(path.stat().st_size <= 1024 * 1024)
         return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def network_outputs(self) -> tuple[str, dict[str, Any]]:
+        """Export only the fixed network stack; never refresh or reveal secrets."""
+        require(self.stack.endswith(("/oci-network", "/oci-oke")))
+        path = self.work / "network-checkpoint.json"
+        path.unlink(missing_ok=True)
+        self._run(
+            [
+                "stack",
+                "export",
+                "--file",
+                str(path),
+                "--stack",
+                "organization/free-infrastructure/oci-network",
+            ]
+        )
+        require(path.stat().st_size <= 1024 * 1024)
+        raw = path.read_bytes()
+        checkpoint = json.loads(raw, object_pairs_hook=_pairs)
+        roots = [
+            r for r in checkpoint["deployment"]["resources"] if r["type"] == "pulumi:pulumi:Stack"
+        ]
+        require(len(roots) == 1)
+        outputs = roots[0]["outputs"]
+        require(type(outputs) is dict and set(outputs) == {"network", "network_stack_identity"})
+        return hashlib.sha256(raw).hexdigest(), outputs
 
     def operation(self, *, preview: bool) -> dict[str, int]:
         server = _grpc.server(

@@ -10,11 +10,14 @@ import time
 from pathlib import Path
 
 import pytest
+import test_oci
+import test_oci_dependency
 import test_preview_runtime as fixtures
 from infra_program import operation_runtime as operation
 from infra_program import preview_runtime as preview
 
 ROOT = Path(__file__).resolve().parents[1]
+config = test_oci.config
 OPT_IN = pytest.mark.skipif(
     os.environ.get("RUN_OPERATION_INTEGRATION") != "1", reason="opt-in apply transport/engine"
 )
@@ -63,7 +66,8 @@ def test_synthetic_apply_transport_reaps_and_discards_private_output(
 
 @pytest.mark.operation_integration
 @OPT_IN
-def test_real_cli_policy_plan_and_update_events(tmp_path):
+@pytest.mark.parametrize("unit", ["cloudflare-edge", "oci-network"])
+def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
     source = ROOT / ".infra/tools/pulumi"
     pin = json.loads((ROOT / "config/toolchain.json").read_bytes())["tools"]["pulumi"]
     assert (
@@ -106,13 +110,21 @@ def test_real_cli_policy_plan_and_update_events(tmp_path):
         )
     )
     (work / "__main__.py").write_text('import pulumi\npulumi.export("fixture", "synthetic")\n')
+    if unit == "oci-network":
+        outputs = test_oci_dependency.committed(config)
+        (work / "__main__.py").write_text(
+            "import pulumi\n"
+            + "\n".join(
+                "pulumi.export(" + repr(k) + ", " + repr(v) + ")" for k, v in outputs.items()
+            )
+        )
     (work / "stack.yaml").write_text('{"config":{}}')
     for args in (
-        ["stack", "init", "cloudflare-edge", "--secrets-provider", "passphrase"],
+        ["stack", "init", unit, "--secrets-provider", "passphrase"],
         [
             "preview",
             "--stack",
-            "cloudflare-edge",
+            unit,
             "--save-plan",
             str(work / "plan.json"),
             "--config-file",
@@ -129,11 +141,55 @@ def test_real_cli_policy_plan_and_update_events(tmp_path):
             check=True,
             timeout=120,
         )
-    stack = "organization/free-infrastructure/cloudflare-edge"
-    operation.validate_plan((work / "plan.json").read_bytes(), stack, pin["version"])
+    stack = "organization/free-infrastructure/" + unit
+    if unit == "cloudflare-edge":
+        operation.validate_plan((work / "plan.json").read_bytes(), stack, pin["version"])
     adapter = operation.Runtime(cli, work, env, stack, ROOT / "policies")
     adapter.select()
     before = adapter.checkpoint()
     assert adapter.operation(preview=True).get("create") == 1
     assert adapter.operation(preview=False).get("create") == 1
     assert adapter.checkpoint() != before
+
+    if unit == "oci-network":
+        from infra_program.oci.dependencies import validate_network
+
+        checkpoint, observed = adapter.network_outputs()
+        assert checkpoint == adapter.checkpoint()
+        assert observed == outputs
+        validate_network(observed, config, outputs["network"]["account_id"])
+        # Probe the pinned engine's saved-plan shape for the actual read-only reference.
+        (work / "__main__.py").write_text(
+            "import pulumi\n"
+            'pulumi.StackReference("fixture-network-reference", '
+            'stack_name="organization/free-infrastructure/oci-network", '
+            "opts=pulumi.ResourceOptions(protect=True))\n"
+        )
+        for command in (
+            ["stack", "init", "oci-oke", "--secrets-provider", "passphrase"],
+            [
+                "preview",
+                "--stack",
+                "oci-oke",
+                "--save-plan",
+                str(work / "reference-plan.json"),
+                "--policy-pack",
+                str(ROOT / "policies"),
+            ],
+        ):
+            completed = subprocess.run(
+                [str(cli.binary), *command, "--non-interactive"],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                check=False,
+                timeout=120,
+            )
+            assert completed.returncode == 0, completed.stdout.decode() + completed.stderr.decode()
+        resources = json.loads((work / "reference-plan.json").read_bytes())["resourcePlans"]
+        kinds = {r["goal"]["type"] for r in resources.values()}
+        assert kinds == {"pulumi:pulumi:Stack", "pulumi:providers:pulumi"}
+        provider = next(
+            r for r in resources.values() if r["goal"]["type"] == "pulumi:providers:pulumi"
+        )
+        assert provider["goal"]["name"] == "default" and provider["goal"]["protect"] is False

@@ -152,9 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
-    service_apply = commands.add_parser("apply", help="explicit protected single-service update")
+    service_apply = commands.add_parser("apply", help="explicit protected single-unit update")
     service_apply.add_argument(
-        "--unit", choices=["cloudflare-edge", "supabase-database"], required=True
+        "--unit",
+        choices=["cloudflare-edge", "supabase-database", "oci-network", "oci-oke"],
+        required=True,
     )
     for name in ("commit", "actor", "environment"):
         service_apply.add_argument("--" + name, required=True)

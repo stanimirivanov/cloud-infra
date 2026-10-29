@@ -361,3 +361,21 @@ See [the service runbook](docs/runbooks/independent-services.md#controlled-singl
 for frozen bundle/signature preparation, fixed durable journals, dedicated runner
 requirements and failure reconciliation. All tracked activation switches remain off.
 The PR6a -> PR6b -> PR6c -> PR6d stack is the complete M05-PR6 slice.
+
+## Dependency-ordered OCI apply (M05-PR7)
+
+The separate oci_apply adapter reuses the owned service apply lifecycle and the
+existing audited network/OKE factories. config/oci-apply.json ships disabled; all
+preview/deployment flags and reviewer enrollment remain unchanged. The existing
+apply CLI accepts oci-network and oci-oke only through explicit protected composition.
+Each operation selects an existing stack and requires its own immutable request,
+backup, schema-2 approval and fixed durable journal. OKE additionally requires the
+successful network journal/receipt and exact committed outputs/checkpoint. Both
+workflow concurrency and a shared local lock serialize the dependency pair.
+
+See [the OCI apply runbook](docs/runbooks/oci-components.md#controlled-oci-apply-m05-pr7)
+for input formats, sequencing, custody and limitations. Focused offline tests use
+`uv run --locked pytest -q tests/test_oci_apply.py tests/test_service_apply.py`.
+The existing opt-in operation integration gate also exercises real local network
+checkpoint exports and StackReference saved-plan behavior, without OCI providers
+or cloud resources. Run the complete shared gate before delivery.

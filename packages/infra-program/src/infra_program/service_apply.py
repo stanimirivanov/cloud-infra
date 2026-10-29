@@ -27,7 +27,7 @@ from infra_core.provider_tools import (
 from infra_program import preview_driver as preview
 from infra_program.operation_runtime import MESSAGE, Runtime, require, validate_plan
 from infra_program.preview_orchestration import _private
-from infra_program.preview_program import ServicePreviewContext
+from infra_program.preview_program import NetworkPreviewContext, ServicePreviewContext
 from infra_program.preview_runtime import cli_runtime
 from infra_program.services.configuration import register_services_from_config
 
@@ -63,8 +63,10 @@ def _hash(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _enabled(root: Path) -> None:
-    value = operations.read_json(root / "config/service-apply.json")
+def _enabled(root: Path, oci: bool = False) -> None:
+    value = operations.read_json(
+        root / ("config/oci-apply.json" if oci else "config/service-apply.json")
+    )
     require(
         value == {"schema_version": 1, "enabled": True}
         and type(value["schema_version"]) is int
@@ -120,8 +122,15 @@ def _admit(
     bundle: dict[str, Any],
     raw: dict[str, bytes],
     journal: bytes,
-) -> tuple[ServicePreviewContext, dict[str, str]]:
-    context, inputs = _service(root, args.unit, args.commit, raw)
+    oci: bool = False,
+) -> tuple[preview.Context, dict[str, str]]:
+    context: preview.Context
+    if oci:
+        from infra_program.oci_apply import prepare
+
+        context, inputs = prepare(root, args.unit, args.commit, raw)
+    else:
+        context, inputs = _service(root, args.unit, args.commit, raw)
     validate_posture_evidence(
         context.foundation,
         raw["posture"],
@@ -164,9 +173,20 @@ def _admit(
     return context, expected
 
 
-def _load(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
-    _enabled(root)
-    require(args.unit in {"cloudflare-edge", "supabase-database"})
+def _names(oci: bool, unit: str) -> set[str]:
+    if oci:
+        from infra_program.oci_apply import names
+
+        return names(unit)
+    require(unit in {"cloudflare-edge", "supabase-database"})
+    return NAMES
+
+
+def _load(
+    root: Path, args: argparse.Namespace, oci: bool = False
+) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
+    _enabled(root, oci)
+    names = _names(oci, args.unit)
     require(_private(root, args.journal) == root / ".infra/operations" / (args.unit + ".json"))
     bundle = operations.read_json(_private(root, args.bundle))
     require(
@@ -181,7 +201,7 @@ def _load(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[st
         }
         and type(bundle["schema_version"]) is int
         and bundle["schema_version"] == 1
-        and set(bundle["paths"]) == NAMES
+        and set(bundle["paths"]) == names
     )
     raw = {
         n: preview._read(_private(root, p), operations.MAX_BYTES)
@@ -210,13 +230,15 @@ def _current_environment(root: Path, args: argparse.Namespace, raw: dict[str, by
     require(all(before[n] == after[n] for n in ("environment", "branches")))
 
 
-def check(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
+def check(
+    root: Path, args: argparse.Namespace, oci: bool = False
+) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
     """Credential-free preflight; returned frozen inputs are not an execution permit."""
     try:
         root = root.resolve()
         preview._checkout(root)
-        bundle, raw, journal = _load(root, args)
-        _admit(root, args, bundle, raw, journal)
+        bundle, raw, journal = _load(root, args, oci)
+        _admit(root, args, bundle, raw, journal, oci)
         _current_environment(root, args, raw)
         return bundle, raw, journal
     except Exception:
@@ -224,12 +246,15 @@ def check(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[st
 
 
 def execute(
-    root: Path, args: argparse.Namespace, credentials: Callable[[], dict[str, str]]
+    root: Path,
+    args: argparse.Namespace,
+    credentials: Callable[[], dict[str, str]],
+    oci: bool = False,
 ) -> None:
     """Trusted caller establishes protected execution and durable journal custody first."""
     try:
         root = root.resolve()
-        bundle, raw, journal = check(root, args)
+        bundle, raw, journal = check(root, args, oci)
         if args.check:
             return
         require(args.allow_resource_writes)
@@ -238,7 +263,7 @@ def execute(
         with os.fdopen(os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), "a") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             require(preview._read(path, operations.MAX_BYTES) == journal)
-            _run(root, args, bundle, raw, journal, credentials)
+            _run(root, args, bundle, raw, journal, credentials, oci)
     except Exception:
         raise ValueError(MESSAGE) from None
 
@@ -250,8 +275,9 @@ def _run(
     raw: dict[str, bytes],
     journal: bytes,
     credentials: Callable[[], dict[str, str]],
+    oci: bool = False,
 ) -> None:
-    context, expected = _admit(root, args, bundle, raw, journal)
+    context, expected = _admit(root, args, bundle, raw, journal, oci)
     value = operations.request(preview._json(raw["operation"], operations.MAX_BYTES))
     path = _private(root, args.journal)
     _current_environment(root, args, raw)
@@ -279,6 +305,14 @@ def _run(
             require(_hash((uv_dir / "uv").read_bytes()) == uv_hash)
             private = credentials()
             required = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "PULUMI_CONFIG_PASSPHRASE"}
+            if oci:
+                required |= {"OCI_USER_OCID", "OCI_FINGERPRINT", "OCI_PRIVATE_KEY_PATH"}
+                key = _private(root, private["OCI_PRIVATE_KEY_PATH"])
+                key_bytes = preview._read(key, 65536)
+                require(bool(key_bytes))
+                (work / "oci-key.pem").write_bytes(key_bytes)
+                (work / "oci-key.pem").chmod(0o600)
+                private["OCI_PRIVATE_KEY_PATH"] = str(work / "oci-key.pem")
             require(
                 required <= set(private) <= required | {"AWS_SESSION_TOKEN"}
                 and all(type(v) is str and bool(v) for v in private.values())
@@ -321,7 +355,15 @@ def _run(
             }
             for name, content in owned.items():
                 (work / name).write_bytes(content)
+            if oci:
+                owned["oci-key.pem"] = key_bytes
             runtime = Runtime(cli, work, env, context.contract.stack_identity, root / "policies")
+
+            def dependency() -> None:
+                if oci and args.unit == "oci-oke":
+                    from infra_program.oci_apply import confirm_dependency
+
+                    confirm_dependency(runtime, context, raw)
 
             def confirm() -> None:
                 require(operations.inspect_journal(path)["head"] == head)
@@ -332,7 +374,8 @@ def _run(
                     )
                 )
                 require(all((work / n).read_bytes() == v for n, v in owned.items()))
-                _admit(root, args, bundle, raw, journal)
+                _admit(root, args, bundle, raw, journal, oci)
+                dependency()
                 cli.verify()
                 require(_hash((uv_dir / "uv").read_bytes()) == uv_hash)
                 (
@@ -344,6 +387,7 @@ def _run(
             def bootstrap() -> None:
                 owned["apply.json"] = preview._encoded(
                     dict(
+                        oci=oci,
                         root=str(root),
                         unit=args.unit,
                         commit=args.commit,
@@ -359,6 +403,7 @@ def _run(
                 (work / "apply.json").write_bytes(owned["apply.json"])
 
             runtime.select()
+            dependency()
             require(runtime.checkpoint() == expected["checkpoint_sha256"])
             bootstrap()
             runtime.operation(preview=True)
@@ -371,6 +416,11 @@ def _run(
             started = True
             changes = runtime.operation(preview=False)
             confirm()
+            extra: dict[str, Any] = {}
+            if oci and args.unit == "oci-network":
+                from infra_program.oci_apply import network_result
+
+                extra = network_result(runtime, context)
             head = operations.journal(root, path, value, "succeeded", predecessor=head)
             finished = True
             output = _private(root, bundle["output"])
@@ -380,6 +430,7 @@ def _run(
                 stream.write(
                     preview._encoded(
                         dict(
+                            **extra,
                             schema_version=1,
                             operation_id=value["operation_id"],
                             status="succeeded",
@@ -407,8 +458,10 @@ def program_from_request() -> None:
         root = Path(data["root"])
         preview._checkout(root)
         raw = {n: bytes.fromhex(v) for n, v in data["raw"].items()}
+        oci = data.get("oci", False)
+        require(type(oci) is bool)
         require(
-            set(raw) == NAMES
+            set(raw) == _names(oci, data["unit"])
             and operations.inspect_journal(Path(data["journal"]))["head"] == data["journal_head"]
         )
         require(
@@ -422,7 +475,7 @@ def program_from_request() -> None:
             environment=data["environment"],
         )
         context, _ = _admit(
-            root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"])
+            root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"]), oci
         )
         require(Path(data["journal"]) == root / ".infra/operations" / (args.unit + ".json"))
         identity = f"{pulumi.get_organization()}/{pulumi.get_project()}/{pulumi.get_stack()}"
@@ -432,6 +485,15 @@ def program_from_request() -> None:
             operations.inspect_journal(Path(data["journal"]))["state"]
             == ("admitted" if dry_run else "running")
         )
+        if oci:
+            from infra_program.oci_apply import register
+
+            require(isinstance(context, NetworkPreviewContext))
+            assert isinstance(context, NetworkPreviewContext)
+            register(context)
+            return
+        require(isinstance(context, ServicePreviewContext))
+        assert isinstance(context, ServicePreviewContext)
         register_services_from_config(
             context.proposal,
             context.evidence,

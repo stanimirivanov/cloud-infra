@@ -39,3 +39,10 @@ Pulumi recovery credentials belong only to its rehearsal step. Restore writes mu
 remain in fresh disposable local state, never the mounted source or production
 backend. Keep runner isolation, source transport and credential custody explicit;
 no PR job may receive recovery credentials or run on that recovery runner.
+
+Manual OCI apply follows the service apply custody boundary and uses one shared
+OCI dependency concurrency group, plus the durable local dependency lock, to
+serialize network/OKE. Both require separate unit environments/approvals and a
+dedicated service-operations runner. OCI key paths refer only to reviewed private
+runner material under .infra; cloud secrets are absent from preflight. Preserve the
+journal during checkout and never run this workflow from PR validation.
