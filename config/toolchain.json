@@ -10,7 +10,8 @@
         "linux-x64": {
           "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-gnu.tar.gz",
           "sha256": "68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2",
-          "binary": "uv-x86_64-unknown-linux-gnu/uv"
+          "binary": "uv-x86_64-unknown-linux-gnu/uv",
+          "binary_sha256": "b65f23a420c4acc96427efb30e5ed9bc0f7e25d2d712000f6ede77c1a0de5f46"
         }
       }
     },
