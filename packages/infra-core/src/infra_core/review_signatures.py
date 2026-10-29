@@ -25,9 +25,9 @@ class Reviewer:
     roles: frozenset[str]
 
 
-def preauth(payload: bytes) -> bytes:
-    """DSSE v1 PAE for the fixed application-specific in-toto payload type."""
-    kind = PAYLOAD_TYPE.encode("ascii")
+def preauth(payload: bytes, payload_type: str = PAYLOAD_TYPE) -> bytes:
+    """DSSE v1 PAE; existing callers retain the fixed in-toto payload type."""
+    kind = payload_type.encode("ascii")
     return (
         b"DSSEv1 "
         + str(len(kind)).encode()
@@ -111,15 +111,17 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def verify_review(
+def verify_payload(
     role: str,
     envelope: bytes,
     signature: bytes,
     reviewers: tuple[Reviewer, ...],
+    *,
+    payload_type: str,
 ) -> str:
     """Authenticate a key holder; keyid is an untrusted hint and never selects identity."""
     require(
-        role in REPORTS
+        isinstance(role, str)
         and type(envelope) is bytes
         and len(envelope) <= MAX_ENVELOPE_BYTES
         and type(signature) is bytes
@@ -134,7 +136,7 @@ def verify_review(
             "DSSE envelope",
         )
         require(
-            data["payloadType"] == PAYLOAD_TYPE
+            data["payloadType"] == payload_type
             and isinstance(data["signatures"], list)
             and len(data["signatures"]) == 1,
             "CUT010",
@@ -156,7 +158,7 @@ def verify_review(
         require(payload == envelope and len(sig) == 64, "CUT010", "signed payload differs")
     except (ValueError, TypeError, RecursionError):
         raise GovernanceError("CUT010: invalid review signature envelope") from None
-    message = preauth(payload)
+    message = preauth(payload, payload_type)
     for reviewer in reviewers:
         if role not in reviewer.roles:
             continue
@@ -166,3 +168,11 @@ def verify_review(
             continue
         return reviewer.principal
     raise GovernanceError("CUT010: no authorized reviewer key verified the signature")
+
+
+def verify_review(
+    role: str, envelope: bytes, signature: bytes, reviewers: tuple[Reviewer, ...]
+) -> str:
+    """Keep cutover roles and payload type fixed for existing consumers."""
+    require(role in REPORTS, "CUT010", "invalid cutover review role")
+    return verify_payload(role, envelope, signature, reviewers, payload_type=PAYLOAD_TYPE)
