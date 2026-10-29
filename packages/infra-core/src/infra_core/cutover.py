@@ -440,3 +440,12 @@ def check(root: Path, document: object, *, now: datetime | None = None) -> dict[
             "explicit human cutover instruction",
         ],
     }
+
+
+def handoff(
+    root: Path, document: object, *, actor: str, environment: str, now: datetime | None = None
+) -> dict[str, object]:
+    """Explicit owner handoff facade; check() remains diagnostic and never authorizes."""
+    from infra_core.ownership import handoff as decide
+
+    return decide(root, document, actor=actor, environment=environment, now=now)

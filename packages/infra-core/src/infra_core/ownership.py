@@ -470,3 +470,12 @@ def inspect(root: Path, path: Path) -> dict[str, object]:
         return result
     except Exception:
         raise ValueError(MESSAGE) from None
+
+
+def handoff(
+    root: Path, document: object, *, actor: str, environment: str, now: datetime | None = None
+) -> dict[str, object]:
+    """Separate signed owner-admission decision; never change state or activate writers."""
+    from infra_core.ownership_handoff import check
+
+    return check(root, document, actor=actor, environment=environment, now=now)

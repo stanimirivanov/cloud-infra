@@ -108,6 +108,7 @@ def _rehearse(
     restic, pulumi = _tool(root, "restic"), _tool(root, "pulumi")
     parent = backup._path(root / ".infra/rehearsals")
     parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    started_at = datetime.now(UTC).isoformat()
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(dir=parent) as directory:
         work = Path(directory)
@@ -164,7 +165,8 @@ def _rehearse(
         require(source_time.utcoffset() is not None)
         age = (datetime.now(UTC) - source_time).total_seconds()
         require(age >= 0)
-        independent = manifest["source_host_id"] != backup.host_id()
+        recovery_host_id = backup.host_id()
+        independent = manifest["source_host_id"] != recovery_host_id
         require(
             type(manifest["source_host_id"]) is str
             and re.fullmatch("[a-f0-9]{64}", manifest["source_host_id"]) is not None
@@ -234,7 +236,16 @@ def _rehearse(
                 )
         duration = time.perf_counter() - started
         report = dict(
-            schema_version=1,
+            schema_version=2,
+            started_at=started_at,
+            completed_at=datetime.now(UTC).isoformat(),
+            unit=manifest["unit"],
+            stack=manifest["stack"],
+            operation_id=manifest["operation_id"],
+            checkpoint_sha256=manifest["checkpoint_sha256"],
+            configuration_sha256=manifest["configuration_sha256"],
+            source_host_id=manifest["source_host_id"],
+            recovery_host_id=recovery_host_id,
             policy_sha256=hashlib.sha256(encoded(settings)).hexdigest(),
             kind="off-host" if independent else "same-host",
             snapshot_id=evidence["snapshot_id"],

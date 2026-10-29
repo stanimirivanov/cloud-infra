@@ -456,6 +456,8 @@ def _run(
 
                 extra = network_result(runtime, context)
             if importing:
+                extra["checkpoint_sha256"] = runtime.checkpoint()
+                require(extra["checkpoint_sha256"] == runtime.verified_checkpoint_sha256)
                 extra["post_import_equivalent"] = True
             head = operations.journal(root, path, value, "succeeded", predecessor=head)
             finished = True

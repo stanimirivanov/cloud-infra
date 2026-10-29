@@ -78,6 +78,17 @@ def test_isolation_and_same_host_evidence(recovery, monkeypatch, independent):
     report = r.rehearse(*args)
     assert report["kind"] == ("off-host" if independent else "same-host")
     assert report["objectives_met"]
+    assert report["schema_version"] == 2
+    assert report["unit"] == "oci-network"
+    assert report["stack"] == "organization/free-infrastructure/oci-network"
+    assert (
+        report["source_host_id"] != report["recovery_host_id"]
+        if independent
+        else report["source_host_id"] == report["recovery_host_id"]
+    )
+    assert r.datetime.fromisoformat(report["started_at"]) <= r.datetime.fromisoformat(
+        report["completed_at"]
+    )
     assert report["execution_authorized"] is False
     assert report["restore_seconds"] > 0 and report["backup_age_seconds"] >= 0
     commands = [(a, k) for a, k in calls if a[0].endswith("pulumi")]

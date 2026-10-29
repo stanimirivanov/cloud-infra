@@ -80,3 +80,10 @@ import command may adopt exact reviewed IDs; import-mode child programs are alwa
 dry-run-only. Require existing parent/provider metadata and a no-op mandatory-policy
 post-preview. Never enable imports in preview dispatch or ordinary apply. Preserve
 source state/freeze and indeterminate outcomes; handoff is separate.
+
+ownership_handoff owns a separate signed read-only owner-admission decision. Both
+OCI units must prove import equivalence, current network dependency, off-host
+recovery and external source release under a continuous idle freeze. Never turn
+cutover.check into authority. Handoff output cannot activate a writer or resource
+operation, edit source state or advance a journal. Enforce action-specific DSSE
+roles and current scoped receipts; operator attestations are not live IAM discovery.

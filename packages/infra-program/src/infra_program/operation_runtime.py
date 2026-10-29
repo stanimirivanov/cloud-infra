@@ -130,6 +130,8 @@ def validate_events(
 
 
 class Runtime:
+    verified_checkpoint_sha256: str | None = None
+
     def __init__(self, cli: CliRuntime, work: Path, env: dict[str, str], stack: str, policy: Path):
         self.cli, self.work, self.env, self.stack, self.policy = cli, work, dict(env), stack, policy
         require(

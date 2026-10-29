@@ -294,6 +294,7 @@ def test_runtime_import_requires_noop_post_preview(case, monkeypatch, fault):
             runtime.operation(preview=False)
     else:
         assert runtime.operation(preview=False) == {"import": len(case.graph)}
+        assert runtime.verified_checkpoint_sha256 == "post"
         assert calls == ["import", "checkpoint", "post-preview", "checkpoint"]
 
 
