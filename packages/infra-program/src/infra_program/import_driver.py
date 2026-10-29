@@ -225,6 +225,7 @@ class ImportRuntime(Runtime):
         validate_imported((self.work / "current.json").read_bytes(), self.context, self.raw)
         equivalent = super().operation(preview=True)
         require(set(equivalent) <= {"same", "read"} and self.checkpoint() == post)
+        self.verified_checkpoint_sha256 = post
         return changes
 
 

@@ -51,3 +51,9 @@ resource-import.json stays disabled. Import activation is separate from OCI appl
 and requires reviewed existing target metadata, original ownership/freeze inputs,
 backup and operation-specific signatures. Do not change this flag or enroll keys as
 part of routine verification.
+
+ownership-handoff.json ships disabled with an unset evidence-age policy; its example
+contains no usable evidence. handoff/oci selects a separately protected environment
+in the operation policy and reuses reviewed public roles only. Enabling this gate
+or enrolling keys requires explicit independent operational review. Never make an
+example assert source release, writer exclusion or target-owner authority.

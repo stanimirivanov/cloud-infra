@@ -6,6 +6,7 @@
   "max_approval_age_seconds": null,
   "max_backup_age_seconds": null,
   "environments": {
+    "handoff/oci": "oci-handoff",
     "apply/oci-network": "oci-network-apply",
     "apply/oci-oke": "oci-oke-apply",
     "apply/cloudflare-edge": "cloudflare-edge-apply",

@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "handoff_id": "00000000-0000-0000-0000-000000000000",
+  "commit": "0000000000000000000000000000000000000000",
+  "artifacts": {
+    "approval": {
+      "path": ".infra/handoff/approval.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "approver": {
+      "path": ".infra/handoff/approver.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "configuration": {
+      "path": ".infra/handoff/configuration.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "environment": {
+      "path": ".infra/handoff/environment.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "freeze": {
+      "path": ".infra/handoff/freeze.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_backup_manifest": {
+      "path": ".infra/handoff/network_backup_manifest.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_backup_receipt": {
+      "path": ".infra/handoff/network_backup_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_backup_request": {
+      "path": ".infra/handoff/network_backup_request.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_checkpoint": {
+      "path": ".infra/handoff/network_checkpoint.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_import_receipt": {
+      "path": ".infra/handoff/network_import_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_journal": {
+      "path": ".infra/operations/oci-network.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_outputs": {
+      "path": ".infra/handoff/network_outputs.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_preparation": {
+      "path": ".infra/handoff/network_preparation.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_prepared_journal": {
+      "path": ".infra/handoff/network_prepared_journal.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_preview": {
+      "path": ".infra/handoff/network_preview.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_preview_inputs": {
+      "path": ".infra/handoff/network_preview_inputs.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_recovery_policy": {
+      "path": ".infra/handoff/network_recovery_policy.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_recovery_receipt": {
+      "path": ".infra/handoff/network_recovery_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "network_released_source": {
+      "path": ".infra/handoff/network_released_source.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_backup_manifest": {
+      "path": ".infra/handoff/oke_backup_manifest.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_backup_receipt": {
+      "path": ".infra/handoff/oke_backup_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_backup_request": {
+      "path": ".infra/handoff/oke_backup_request.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_checkpoint": {
+      "path": ".infra/handoff/oke_checkpoint.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_import_receipt": {
+      "path": ".infra/handoff/oke_import_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_journal": {
+      "path": ".infra/operations/oci-oke.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_preparation": {
+      "path": ".infra/handoff/oke_preparation.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_prepared_journal": {
+      "path": ".infra/handoff/oke_prepared_journal.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_preview": {
+      "path": ".infra/handoff/oke_preview.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_preview_inputs": {
+      "path": ".infra/handoff/oke_preview_inputs.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_recovery_policy": {
+      "path": ".infra/handoff/oke_recovery_policy.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_recovery_receipt": {
+      "path": ".infra/handoff/oke_recovery_receipt.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "oke_released_source": {
+      "path": ".infra/handoff/oke_released_source.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "operator": {
+      "path": ".infra/handoff/operator.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "release": {
+      "path": ".infra/handoff/release.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}

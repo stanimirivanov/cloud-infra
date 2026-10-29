@@ -151,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
         "check", help="check pinned private review artifacts"
     )
     cutover_check.add_argument("--evidence", type=Path, required=True)
+    cutover_handoff = cutover_commands.add_parser(
+        "handoff", help="separate signed owner admission; no writer activation"
+    )
+    cutover_handoff.add_argument("--evidence", type=Path, required=True)
+    cutover_handoff.add_argument("--actor", required=True)
+    cutover_handoff.add_argument("--environment", required=True)
     services = commands.add_parser("services", help="offline independent-service preflight")
     services_commands = services.add_subparsers(dest="services_command", required=True)
     service_audit = services_commands.add_parser(
@@ -298,12 +304,25 @@ def main(
         elif args.command == "cutover":
             from infra_core.cutover import check
 
-            print(
-                json.dumps(
-                    check(root, json.loads((root / args.evidence).read_text(encoding="utf-8"))),
-                    indent=2,
+            if args.cutover_command == "handoff":
+                # Bound/redact the private index through the handoff transport adapter.
+                from infra_core.ownership_handoff import inspect as inspect_handoff
+
+                print(
+                    json.dumps(
+                        inspect_handoff(
+                            root, args.evidence, actor=args.actor, environment=args.environment
+                        ),
+                        indent=2,
+                    )
                 )
-            )
+            else:
+                print(
+                    json.dumps(
+                        check(root, json.loads((root / args.evidence).read_text(encoding="utf-8"))),
+                        indent=2,
+                    )
+                )
         elif args.command == "kubernetes":
             from infra_core.kubernetes.audit import audit as audit_kubernetes
             from infra_core.kubernetes.config import load_config as load_kubernetes

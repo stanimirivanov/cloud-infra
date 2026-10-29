@@ -419,3 +419,11 @@ gate exercises real encrypted capture/readback locally with same-host limits.
 Keep snapshot retention/pruning frozen during the lock-free read. Runner-group
 availability and repository access must be verified administratively before dispatch;
 this workflow does not create runner infrastructure or establish external protections.
+
+M05-PR10 strengthens newly generated isolated-rehearsal reports to schema 2. They
+add the measured started/completed clocks, unit/stack/backup-operation ID,
+checkpoint/configuration digests and source/recovery host hashes. Existing wrong-key,
+readback, independence and RPO/RTO measurements remain unchanged. The separate
+[owner handoff gate](kubernetes-cutover.md#signed-owner-handoff-m05-pr10) requires
+these scope bindings and rejects old unscoped reports; it never restores production
+state. No recovery credentials or raw machine identifiers are added to reports.

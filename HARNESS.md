@@ -414,3 +414,26 @@ Focused tests use `uv run --locked pytest -q tests/test_import_driver.py tests/t
 The existing operation_integration gate now includes owned synthetic import
 subprocess/RPC success, failure, timeout, incomplete-event and post-preview drift
 cases. Native OCI import remains separate live acceptance, not a CI operation.
+
+## Signed owner admission (M05-PR10)
+
+The separate ownership handoff gate checks both OCI import journals/checkpoints,
+fresh policy no-op previews, committed dependency outputs, measured scoped off-host
+recovery and externally recorded source release under a continuous two-writer
+freeze. Two distinct non-requester roles must sign the complete action-specific
+subject. config/ownership-handoff.json ships disabled and no keys are enrolled.
+
+The existing cutover check remains diagnostic with cutover_authorized=false.
+The new read-only command is
+`uv run --locked infra cutover handoff --evidence .infra/handoff/index.json --actor owner --environment oci-handoff`.
+It returns an expiring owner-admission decision with writer/resource activation
+false and writes no state, journal or settings. See
+[the full handoff contract](docs/runbooks/kubernetes-cutover.md#signed-owner-handoff-m05-pr10)
+and the deliberately incomplete config/ownership-handoff.example.json.
+
+Fresh import receipts now bind the checkpoint actually verified after the no-op
+preview. New recovery receipts are schema 2 with scope/host/clock bindings; the new
+handoff gate rejects older receipts missing those fields. Existing APIs/defaults
+stay unchanged. Focused tests run with
+`uv run --locked pytest -q tests/test_ownership_handoff.py tests/test_ownership.py tests/test_cutover.py tests/test_recovery_rehearsal.py tests/test_import_driver.py`.
+Run the complete shared gate and existing operation integration gate before delivery.

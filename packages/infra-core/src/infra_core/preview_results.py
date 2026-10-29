@@ -10,6 +10,16 @@ from typing import Any, NoReturn
 from infra_core.evidence import MAX_ARTIFACT_BYTES, MAX_TOTAL_BYTES
 from infra_core.preview_contracts import PreviewContract
 
+POLICY_SOURCES = (
+    "policies/__main__.py",
+    "policies/PulumiPolicy.yaml",
+    "packages/infra-program/src/infra_program/governance.py",
+    "uv.lock",
+    ".python-version",
+    "packages/infra-program/src/infra_program/preview_driver.py",
+    "packages/infra-program/src/infra_program/preview_runtime.py",
+)
+
 PACK = "always-free-governance"
 RULE = "reviewed-resource-costs"
 MAX_EVENT_BYTES = 256 * 1024

@@ -158,6 +158,8 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
     monkeypatch.setattr(oci_apply, "network_result", network_result)
 
     class FakeRuntime:
+        verified_checkpoint_sha256 = "fixture-checkpoint"
+
         def __init__(self, *args):
             pass
 
@@ -212,6 +214,10 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
     else:
         apply.execute(tmp_path, args, credentials, oci, importing)
         assert operations.inspect_journal(journal)["state"] == "succeeded"
+        if importing:
+            receipt = json.loads(Path(bundle["output"]).read_bytes())
+            assert receipt["post_import_equivalent"] is True
+            assert receipt["checkpoint_sha256"] == "fixture-checkpoint"
         assert events == ["credentials", "select", "preview", "up"]
         # Real admission rejects the advanced journal before another credential load.
         monkeypatch.setattr(apply, "_admit", lambda *a: (_ for _ in ()).throw(ValueError("replay")))

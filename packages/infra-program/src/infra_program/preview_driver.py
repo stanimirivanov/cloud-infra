@@ -23,6 +23,7 @@ from infra_core.oci.config import FoundationConfig as OciConfig
 from infra_core.oci.config import ImageEvidence
 from infra_core.oci.graph import NETWORK_UNIT, OKE_UNIT, network_graph, oke_graph, proposal
 from infra_core.preview_contracts import PreviewContract, describe_preview
+from infra_core.preview_results import POLICY_SOURCES as SOURCES
 from infra_core.preview_results import create_preview_result, preview_input_digests
 from infra_core.provider_tools import (
     materialize_home,
@@ -44,15 +45,6 @@ from infra_program.preview_runtime import MESSAGE, Command, Stack, cli_runtime, 
 
 Context = ServicePreviewContext | NetworkPreviewContext | OkePreviewContext
 REQUEST_LIMIT = 2 * MAX_TOTAL_BYTES + 65536
-SOURCES = (
-    "policies/__main__.py",
-    "policies/PulumiPolicy.yaml",
-    "packages/infra-program/src/infra_program/governance.py",
-    "uv.lock",
-    ".python-version",
-    "packages/infra-program/src/infra_program/preview_driver.py",
-    "packages/infra-program/src/infra_program/preview_runtime.py",
-)
 
 
 def _encoded(value: Any) -> bytes:

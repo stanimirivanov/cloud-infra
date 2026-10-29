@@ -661,3 +661,138 @@ StackReference provider rejects import, so it cannot stand in for a successful
 native OCI import rehearsal. Native OCI read/import semantics, property equivalence,
 protected metadata setup and live custody remain explicit acceptance prerequisites.
 No cloud import or workflow dispatch was performed during implementation.
+
+## Signed owner handoff (M05-PR10)
+
+`uv run --locked infra cutover handoff --evidence .infra/handoff/index.json --actor owner --environment oci-handoff`
+checks one paired OCI network/OKE handoff. It is a separate read-only decision from
+cutover check: the existing diagnostic API and its cutover_authorized=false result
+remain unchanged. A successful handoff admits Pulumi as the target owner for the
+reviewed snapshot, reports observed_active_writer=none and names the next transition
+as target-writer-activation-review. Resource execution, writer activation and
+cutover authorization remain false. The command does not persist an ownership
+ledger, advance a journal, remove source state, configure IAM or activate a writer.
+The expiring decision is not a reusable execution permit; every subsequent resource
+operation still needs its own protected operational approval and current controls.
+
+config/ownership-handoff.json ships disabled with no invented evidence-age limit.
+The separately reviewed operation policy must also be enabled with independent
+operator/approver keys and the handoff/oci -> oci-handoff environment mapping.
+Environment protection is an administrator prerequisite. No settings, credentials,
+key enrollment or live flags are enabled by this implementation.
+
+### Immutable input bundle
+
+The [public example](../../config/ownership-handoff.example.json) is intentionally
+unusable. A schema-1 private index has handoff_id (canonical UUID), commit (the exact
+clean current commit) and artifacts. Every reference contains exactly path and
+sha256. Files/index are bounded to 1 MiB each, all captured evidence to 12 MiB,
+and must stay under ignored .infra without symlink ancestors. The checker snapshots
+parsed input and rereads every referenced file and both policies before returning.
+It prints hashes/counts/decision metadata only; errors withhold state contents.
+
+Shared artifact names are configuration (the existing OCI JSON schema),
+network_outputs (the exact committed non-secret network interface), release, freeze,
+environment, approval, operator and approver. For each prefix network and oke,
+provide these names with PREFIX_ prepended:
+
+| Suffix | Required evidence |
+| --- | --- |
+| preparation | Original immutable PR8 index and its pinned source/configuration/freeze references |
+| prepared_journal | Retained exact original prepared snapshot; its hash must match that index |
+| journal | Current fixed .infra/operations/oci-UNIT.json; the original prefix plus admitted/running/succeeded for this same import, with no later request |
+| import_receipt | Succeeded PR9 receipt with post_import_equivalent=true, exact journal head, operation ID and verified post-import checkpoint digest |
+| checkpoint | Current encrypted target checkpoint, unchanged from that verified import result |
+| released_source | Externally captured source state after release, same lineage with a higher serial; every mapped source address and physical ID must be absent |
+| preview | Fresh existing preview-result receipt with mandatory-policy evidence and only same/read changes |
+| preview_inputs | checkpoint_sha256 plus artifacts mapping names to original immutable input bytes encoded as hex |
+| backup_request | Separate immutable recovery request for this exact post-import checkpoint/configuration and commit |
+| backup_manifest / backup_receipt | Complete restic capture bindings to that recovery request and current target pair |
+| recovery_policy / recovery_receipt | Explicit reviewed RPO/RTO/independent-host settings and new scoped schema-2 off-host rehearsal result |
+
+Both units must use the same reviewed OCI configuration and account. Original and
+released source checkpoints are inspected locally using the existing narrow state-v4
+reader; no Terraform/OpenTofu command or backend edit is run. The complete existing
+unit graph must match its exact IDs, provider/parent bindings and protection. Source
+ownership must actually be absent in the captured released state, including under
+renamed addresses. Import and backup UUIDs must be distinct. If both units share a
+source backend/workspace/lineage, their released checkpoints must agree; equal
+original serials also require equal original state bytes.
+
+Network import success must precede OKE import launch. Committed network outputs
+must match the network checkpoint, its receipt digest, the OKE preview dependency
+and the OKE checkpoint's known non-secret StackReference output. A missing, secret,
+changed or mismatched dependency fails. Import failure/indeterminate status, changed
+checkpoint or non-no-op preview cannot be waived by valid signatures.
+
+preview_inputs contains the same artifact bytes consumed by the existing preview
+validator (proposal/profile/account/inventory/envelope/toolchain/provider pins/policy,
+and OKE dependency outputs). Preserve these bytes when preparing the reviewed
+preview, using the existing preview artifact encoding. The checker independently
+compares proposal configuration, encrypted stack configuration, tracked profile,
+tool/provider pins and policy source hashes; it repeats inventory/account governance.
+The shared policy-source list and pure network interface validator are reused by
+preview/runtime and handoff. The conservative capacity audit is retained; this
+feature grants no accounting credits or new resource kinds.
+
+### Source release, freeze and signatures
+
+Release is operator-assisted and external. The release report has schema_version=1,
+handoff_id, scope_sha256, source_released=true, source_writer_disabled=true and
+completed_at. The freeze report has schema_version=1, the same handoff_id/scope,
+complete=true, continuous_freeze=true, other_writers_reviewed=true,
+live_equivalence_reviewed=true, observed_at, expires_at and exactly two writers.
+Each writer names unit, source_identity_sha256, source_active=false,
+target_active=false, active_operations=0 and frozen_at. Its source identity digest
+is operations.digest of the original preparation source identity.
+
+The pure ownership_handoff.scope_digest helper binds handoff ID/commit and hashes
+of every evidence artifact except release, freeze, environment and signature files.
+This avoids circular report hashes. Both external reports name that exact scope;
+there is no generic boolean waiver. The final approval additionally binds the actual
+release/freeze/environment bytes, both current policies and foundation digest.
+
+The approval is schema 1 with handoff_id, actor, environment, commit,
+evidence_sha256 (canonical digest of all artifact hashes except approval/operator/
+approver), handoff_policy_sha256, operation_policy_sha256, foundation_sha256,
+issued_at and expires_at. operator and approver are DSSE envelopes over those exact
+approval bytes, with payload type
+application/vnd.cloud-infra.ownership-handoff.v1+json. Both signers must hold their
+separate enrolled roles, have distinct principals/keys and differ from the requester.
+Operation/cutover-review signatures cannot be replayed as handoff signatures.
+
+Evidence must show this order: original prepare/freeze -> checkpoints -> admitted
+import -> running import -> success -> capture the current target backup and prove
+measured off-host recovery -> external source release -> fresh no-op target previews
+-> current freeze/environment observations -> signed expiring owner admission.
+Both writers remain frozen throughout. A freeze interval may have no active writer;
+it must never have two. Release before freeze/import/recovery, future/stale evidence,
+failed key readback or missed recovery objectives blocks the decision.
+
+New recovery receipts use schema 2 and bind unit/stack/backup-operation ID,
+checkpoint/configuration hashes, source/recovery host hashes and started/completed
+clocks. Same-host evidence is insufficient here. The gate recomputes backup age and
+checks measured restore duration against explicitly reviewed settings rather than
+trusting objectives_met alone. Recovery completion must also fall inside the
+handoff evidence-age window, independently of a longer backup-age/RPO policy. Old schema-1 recovery receipts and import receipts
+without the newly verified checkpoint hash cannot pass this new gate; recapture or
+independently reconcile them, never restamp old evidence. Existing diagnostic and
+local rehearsal use remains available.
+
+### Operational meaning and reversal
+
+The checker verifies local evidence consistency and role-bound human approval. It
+does not query live IAM or prove that an administrator's statement is true. Source
+backend/workspace custody, effective external writer exclusion, live property
+comparison and receipt/run provenance require independent review. Preview refresh
+stays disabled, so preview evidence alone is not a live drift scan; the explicit
+live_equivalence_reviewed attestation remains an external gate. Existing Kubernetes
+health/admission/isolation acceptance is not replaced by this owner decision.
+
+Before any target resource mutation, a reversal may use a separately reviewed
+state-only procedure while both writers stay frozen. After target mutation, never
+blindly restore an older source checkpoint or resume its writer: reconcile actual
+resources and use separately approved recovery/handoff evidence. This command has
+no compensating action or retry loop. Code rollback stops future owner admission
+and does not reverse source release, imports or cloud changes. Writer activation
+and any subsequent apply remain separate explicit operations.
