@@ -15,9 +15,19 @@ def _preview(root: Path, args: argparse.Namespace) -> None:
 
 
 def _apply(root: Path, args: argparse.Namespace) -> None:
+    _operation(root, args, False)
+
+
+def _import(root: Path, args: argparse.Namespace) -> None:
+    _operation(root, args, True)
+
+
+def _operation(root: Path, args: argparse.Namespace, importing: bool) -> None:
     from infra_program.operation_runtime import require
 
-    if args.unit in {"oci-network", "oci-oke"}:
+    if importing:
+        from infra_program.import_driver import execute
+    elif args.unit in {"oci-network", "oci-oke"}:
         from infra_program.oci_apply import execute
     else:
         from infra_program.service_apply import execute
@@ -30,7 +40,7 @@ def _apply(root: Path, args: argparse.Namespace) -> None:
         and args.actor
         == os.environ.get("GITHUB_ACTOR")
         == os.environ.get("GITHUB_REPOSITORY_OWNER")
-        and args.environment == args.unit + "-apply"
+        and args.environment == args.unit + ("-import" if importing else "-apply")
     )
 
     def credentials() -> dict[str, str]:
@@ -45,4 +55,4 @@ def _apply(root: Path, args: argparse.Namespace) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    return core_main(argv, preview=_preview, apply=_apply)
+    return core_main(argv, preview=_preview, apply=_apply, resource_import=_import)

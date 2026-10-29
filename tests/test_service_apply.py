@@ -13,7 +13,7 @@ import test_preview_program
 import test_services
 from infra_core import operations
 from infra_core.foundation import load_foundation
-from infra_program import oci_apply
+from infra_program import import_driver, oci_apply
 from infra_program import service_apply as apply
 from test_operation_runtime import plan
 
@@ -68,7 +68,7 @@ def test_service_preflight_audits_existing_inputs_before_secret_lookup(
 @pytest.mark.parametrize(
     "fault", [None, "preview", "up", "mutate-preview", "mutate-up", "checkpoint", "credentials"]
 )
-def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault):
+def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault, importing=False):
     oci = unit.startswith("oci-")
     private = tmp_path / ".infra"
     private.mkdir()
@@ -76,6 +76,8 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
     (tmp_path / "config/service-apply.json").write_text('{"schema_version":1,"enabled":true}')
     if oci:
         (tmp_path / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":true}')
+    if importing:
+        (tmp_path / "config/resource-import.json").write_text('{"schema_version":1,"enabled":true}')
     uv = private / "tools/uv/uv"
     uv.parent.mkdir(parents=True)
     uv.write_bytes(b"fixture-uv")
@@ -95,10 +97,14 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
         )
     )
     value = json.loads((ROOT / "config/operations.example.json").read_bytes())
-    value.update(unit=unit, expires_at="2099-01-01T00:00:00+00:00")
+    value.update(
+        unit=unit,
+        operation="import" if importing else "apply",
+        expires_at="2099-01-01T00:00:00+00:00",
+    )
     journal = private / "operations" / (unit + ".json")
     head = operations.journal(tmp_path, journal, value, "prepared", predecessor=None)
-    paths = {n: str(private / (n + ".bin")) for n in apply._names(oci, unit)}
+    paths = {n: str(private / (n + ".bin")) for n in apply._names(oci, unit, importing)}
     for name, path in paths.items():
         Path(path).write_bytes(json.dumps(value).encode() if name == "operation" else b"frozen")
     bundle = dict(
@@ -115,7 +121,7 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
         unit=unit,
         commit=COMMIT,
         actor="owner",
-        environment=unit + "-apply",
+        environment=unit + ("-import" if importing else "-apply"),
         journal=journal,
         bundle=bundle_file,
         check=False,
@@ -171,6 +177,8 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
             return {"same": 1}
 
     monkeypatch.setattr(apply, "Runtime", FakeRuntime)
+    monkeypatch.setattr(import_driver, "ImportRuntime", FakeRuntime)
+    monkeypatch.setattr(import_driver, "import_file", lambda raw: b"frozen-import")
 
     def credentials():
         assert operations.inspect_journal(journal)["state"] == "admitted"
@@ -193,7 +201,7 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
 
     if fault:
         with pytest.raises(ValueError, match="APPLY001") as error:
-            apply.execute(tmp_path, args, credentials, oci)
+            apply.execute(tmp_path, args, credentials, oci, importing)
         assert "PRIVATE_ERROR" not in str(error.value)
         assert operations.inspect_journal(journal)["state"] == (
             "indeterminate"
@@ -202,13 +210,13 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
         )
         assert not Path(bundle["output"]).exists()
     else:
-        apply.execute(tmp_path, args, credentials, oci)
+        apply.execute(tmp_path, args, credentials, oci, importing)
         assert operations.inspect_journal(journal)["state"] == "succeeded"
         assert events == ["credentials", "select", "preview", "up"]
         # Real admission rejects the advanced journal before another credential load.
         monkeypatch.setattr(apply, "_admit", lambda *a: (_ for _ in ()).throw(ValueError("replay")))
         with pytest.raises(ValueError):
-            apply.execute(tmp_path, args, lambda: pytest.fail("replay credentials"), oci)
+            apply.execute(tmp_path, args, lambda: pytest.fail("replay credentials"), oci, importing)
 
 
 @pytest.mark.parametrize("dry_run", [True, False])

@@ -72,3 +72,11 @@ inspect bounded private source/target checkpoints, exact mappings and external
 writer-freeze observations, but never edits state, advances journals or grants
 import/transfer/writer-release authority. Preserve cutover.check diagnostics.
 A source identity/freeze claim is an external attestation, not discovered authority.
+
+M05 resource import is a separate default-disabled OCI adapter. It reuses the shared
+owned lifecycle in explicit import mode, with action-specific approvals, original
+ownership evidence and a prepared-journal continuation check. Only its closed CLI
+import command may adopt exact reviewed IDs; import-mode child programs are always
+dry-run-only. Require existing parent/provider metadata and a no-op mandatory-policy
+post-preview. Never enable imports in preview dispatch or ordinary apply. Preserve
+source state/freeze and indeterminate outcomes; handoff is separate.

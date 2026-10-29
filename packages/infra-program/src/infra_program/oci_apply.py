@@ -85,7 +85,9 @@ def validate_plan(raw: bytes, context: NetworkPreviewContext) -> None:
             )
 
 
-def dependency(context: NetworkPreviewContext, raw: dict[str, bytes]) -> dict[str, Any]:
+def dependency(
+    context: NetworkPreviewContext, raw: dict[str, bytes], allow_import: bool = False
+) -> dict[str, Any]:
     observed = preview._json(raw["dependency_outputs"], 65536)
     validate_network(observed, context.configuration, context.account["account_id"])
     entries = operations._validate(
@@ -97,7 +99,14 @@ def dependency(context: NetworkPreviewContext, raw: dict[str, bytes]) -> dict[st
     require(
         entry["state"] == "succeeded"
         and entry["request"]["unit"] == "oci-network"
-        and entry["request"]["operation"] == "apply"
+        and (
+            entry["request"]["operation"] == "apply"
+            or (
+                allow_import
+                and entry["request"]["operation"] == "import"
+                and receipt.get("post_import_equivalent") is True
+            )
+        )
         and receipt["status"] == "succeeded"
         and receipt["operation_id"] == entry["request"]["operation_id"]
         and receipt["journal_head"] == operations.digest(entry)
@@ -107,9 +116,9 @@ def dependency(context: NetworkPreviewContext, raw: dict[str, bytes]) -> dict[st
 
 
 def prepare(
-    root: Path, unit: str, commit: str, raw: dict[str, bytes]
+    root: Path, unit: str, commit: str, raw: dict[str, bytes], importing: bool = False
 ) -> tuple[NetworkPreviewContext, bytes]:
-    driver._enabled(root, True)
+    driver._enabled(root, True, importing)
     require(set(raw) == names(unit))
     foundation = load_foundation(root)
     configuration = parse_config(preview._json(raw["proposal"], operations.MAX_BYTES))
@@ -140,7 +149,7 @@ def prepare(
     if unit == "oci-oke":
         path = _private(root, ".infra/operations/oci-network.json")
         require(preview._read(path, operations.MAX_BYTES) == raw["network_journal"])
-        dependency(context, raw)
+        dependency(context, raw, importing)
     return context, preview._encoded(
         {
             "adapter": "oci-apply-v1",
@@ -151,10 +160,12 @@ def prepare(
     )
 
 
-def confirm_dependency(runtime: Runtime, context: preview.Context, raw: dict[str, bytes]) -> None:
+def confirm_dependency(
+    runtime: Runtime, context: preview.Context, raw: dict[str, bytes], allow_import: bool = False
+) -> None:
     require(isinstance(context, OkePreviewContext))
     assert isinstance(context, OkePreviewContext)
-    receipt = dependency(context, raw)
+    receipt = dependency(context, raw, allow_import)
     checkpoint, observed = runtime.network_outputs()
     validate_network(observed, context.configuration, context.account["account_id"])
     require(

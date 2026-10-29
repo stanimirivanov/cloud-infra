@@ -395,3 +395,22 @@ Focused regression tests run with
 `uv run --locked pytest -q tests/test_ownership.py tests/test_operations.py tests/test_cutover.py`.
 The complete gate remains `uv run --locked infra verify`; no new integration marker,
 executable or dependency is required for this read-only feature.
+
+## Protected OCI resource import (M05-PR9)
+
+The separate disabled import_driver consumes PR8 preparation plus execution-bound
+import approvals through the shared owned driver. It imports only a bounded existing
+OCI unit graph with exact IDs and pre-existing protected parent/provider metadata.
+It verifies the imported checkpoint and requires a no-op mandatory-policy preview
+before success. Source state and writer ownership remain unchanged; launched
+uncertainty is indeterminate with no automatic retry. Existing apply/preview gates
+remain separate. config/resource-import.json ships disabled.
+
+See [the import contract](docs/runbooks/kubernetes-cutover.md#protected-resource-import-m05-pr9)
+for input bindings, existing-target prerequisites and the pinned CLI policy/plan
+limitations. The explicit command is
+`uv run --locked infra resource-import --check --unit oci-network --commit 0000000000000000000000000000000000000000 --actor owner --environment oci-network-import --bundle .infra/import/bundle.json --journal .infra/operations/oci-network.json`.
+Focused tests use `uv run --locked pytest -q tests/test_import_driver.py tests/test_operation_admission.py tests/test_ownership.py`.
+The existing operation_integration gate now includes owned synthetic import
+subprocess/RPC success, failure, timeout, incomplete-event and post-preview drift
+cases. Native OCI import remains separate live acceptance, not a CI operation.
