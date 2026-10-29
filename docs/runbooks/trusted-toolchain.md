@@ -2,14 +2,13 @@
 
 ## Bootstrap and trust roots
 
-Use PowerShell 7 and Git on Linux/Windows x64. In a PowerShell session, run
-`./.github/scripts/install-tools.ps1`, then the locked commands in
+Use Python 3.11+ and Git on Linux x64. In a POSIX shell session, run
+`python3 .github/scripts/install-tools.py`, then the locked commands in
 [HARNESS.md](../../HARNESS.md). The installer downloads fixed uv, Pulumi,
 Gitleaks and actionlint releases into ignored .infra/tools, verifies the committed
-archive SHA-256
-before extraction, and adds their binary directories to this session's PATH and
-GITHUB_PATH in CI. It never executes downloaded installer scripts. Fresh extraction
-directories avoid stale install contents. Gitleaks and actionlint use stable binary locations
+archive SHA-256 before extraction, and adds their binary directories to GITHUB_PATH in CI.
+For local use, export PATH as shown in HARNESS.md. It never executes downloaded
+installer scripts. Fresh extraction directories avoid stale install contents. Gitleaks and actionlint use stable binary locations
 whose SHA-256 hashes are rechecked by every infra verify invocation; PATH substitutes are
 not accepted. Verification does not install anything or access cloud APIs.
 
@@ -19,7 +18,7 @@ APIs on 25 October 2026: [uv 0.12.5](https://github.com/astral-sh/uv/releases/ta
 [Pulumi 3.272.0](https://github.com/pulumi/pulumi/releases/tag/v3.272.0),
 [Gitleaks 8.30.1](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1), and
 [actionlint 1.7.12](https://github.com/rhysd/actionlint/releases/tag/v1.7.12).
-The downloaded Linux and Windows scanner and workflow-linter archives matched
+The downloaded Linux scanner and workflow-linter archives matched
 those digests; extracted scanner/linter binaries supplied the additional binary hashes. SHA-256 protects against
 replacement relative to these reviewed values; it does not prove publisher
 integrity, code safety, or a cryptographically independent release identity.
@@ -27,7 +26,7 @@ integrity, code safety, or a cryptographically independent release identity.
 Checkout and upload-artifact retain their existing v4 major lines, resolved to
 full commit SHAs through the official repositories' Git ref APIs on the same date.
 The gate checks every workflow/action YAML uses reference against the reviewed
-catalogue. Local reusable workflows must exist. Hosted runner images, PowerShell,
+catalogue. Local reusable workflows must exist. Hosted runner images, Python,
 Git and the platform TLS store remain bootstrap trust dependencies. Python is
 selected by .python-version through pinned uv; Python distributions and locked
 Python dependencies remain upstream supply-chain dependencies, not independently
@@ -42,15 +41,15 @@ The Gitleaks Action is not used.
 ### Native providers (M04-PR7)
 
 [The provider manifest](../../config/provider-toolchain.json) pins OCI 5.5.0,
-Cloudflare 6.23.1 and terraform-provider 1.5.0 for Linux/Windows x64, matching
+Cloudflare 6.23.1 and terraform-provider 1.5.0 for Linux x64, matching
 the SDK/bridge pins. Release archive SHA-256 values were read from the official
 GitHub release asset APIs on 27 October 2026. This reuses standard-library hashing
 and tar parsing; no dependency or upstream code is copied. Publisher/GitHub/TLS
 trust remains required, as with the existing toolchain.
 
-Run `./.github/scripts/install-providers.ps1` after normal workspace setup, before
+Run `python3 .github/scripts/install-providers.py` after normal workspace setup, before
 credentials. It installs into a fresh ignored .infra/provider-home, with an explicit
-HomeDirectory option for another .infra child. No overwrite, PATH fallback,
+`--home` option for another .infra child. No overwrite, PATH fallback,
 plugin execution or automatic acquisition occurs. Original archives remain in that
 home (including upstream license material); only the expected executable is copied.
 Supabase's downstream binary cache is verified separately below.
@@ -66,7 +65,7 @@ sandbox or defense against concurrent filesystem modification by the same user.
 
 Default verification never downloads providers. CI installs the real release assets
 without credentials and runs the provider_integration marker with
-RUN_PROVIDER_INTEGRATION=1 on both platforms; it verifies bytes without executing
+RUN_PROVIDER_INTEGRATION=1 on Linux; it verifies bytes without executing
 providers or accessing cloud/state. Local focused tests use synthetic archives.
 
 The shared gate copies tracked and nonignored new working files to a temporary
@@ -100,7 +99,7 @@ a negative regression test preserving the original detection requirement.
 Provider-manifest schema 2 adds Supabase 1.11.0 ZIP pins from its official
 [release assets](https://github.com/supabase/terraform-provider-supabase/releases/tag/v1.11.0).
 Old schema-1 provider manifests fail closed; foundation/evidence schemas and SDK
-versions are unchanged. Run `./.github/scripts/install-providers.ps1 -Provider supabase`
+versions are unchanged. Run `python3 .github/scripts/install-providers.py --provider supabase`
 after native setup, using the same explicit private home. ZIP checks precede any
 member processing/copy; the original archive retains upstream MPL-2.0 material.
 No generated SDK or remote parameterization is rewritten.
@@ -109,7 +108,7 @@ No generated SDK or remote parameterization is rewritten.
 ZIP-rooted executable hashes and matching SDK source/version/resource metadata.
 It sets PULUMI_DYNAMIC_TF_PLUGIN_CACHE_DIR to the private dynamic_tf_plugins cache
 and clears PULUMI_BRIDGE_REATTACH_PROVIDERS and TF_REATTACH_PROVIDERS. The unpacked path is
-registry.opentofu.org/supabase/supabase/1.11.0/linux_amd64 (windows_amd64 on Windows).
+registry.opentofu.org/supabase/supabase/1.11.0/linux_amd64.
 Alternate hosts, versions, platforms, executables or links fail before admission.
 This adapts the cache-first loader in the
 [bridge 1.5.0 source](https://github.com/pulumi/pulumi-terraform-bridge/blob/20da3e0a7d568b355b3da17fd0e6a83b0f36b4fd/dynamic/internal/shim/run/loader.go).

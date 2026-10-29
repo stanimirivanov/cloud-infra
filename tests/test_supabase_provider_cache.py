@@ -142,17 +142,10 @@ def test_real_bridge_uses_verified_cache_with_proxy_denied(tmp_path):
     assert pulumi is not None, "CI requires the pinned Pulumi CLI"
     allowed = {
         "PATH",
-        "SYSTEMROOT",
-        "WINDIR",
-        "COMSPEC",
-        "PATHEXT",
         "TEMP",
         "TMP",
         "TMPDIR",
         "HOME",
-        "USERPROFILE",
-        "APPDATA",
-        "LOCALAPPDATA",
     }
     env = {k: v for k, v in os.environ.items() if k.upper() in allowed}
     env.update(

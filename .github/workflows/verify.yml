@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2025]
+        os: [ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -24,8 +24,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Install checksum-verified tools
-        shell: pwsh
-        run: ./.github/scripts/install-tools.ps1
+        shell: bash
+        run: python3 .github/scripts/install-tools.py
       - run: uv sync --locked --all-groups
       - run: uv build --all-packages
       - name: Verify Python, Pulumi contracts and private artifacts
@@ -41,16 +41,16 @@ jobs:
           RUN_SYNTHETIC_PREVIEW_INTEGRATION: '1'
         run: uv run --locked pytest -q -m preview_integration --basetemp .infra/pytest-preview -o cache_dir=.infra/pytest-cache
       - name: Verify native provider release assets (no credentials or execution)
-        shell: pwsh
+        shell: bash
         env:
           RUN_PROVIDER_INTEGRATION: '1'
         run: |
-          ./.github/scripts/install-providers.ps1
+          python3 .github/scripts/install-providers.py
           uv run --locked pytest tests/test_provider_tools.py -q -m provider_integration --basetemp .infra/pytest-providers -o cache_dir=.infra/pytest-cache
       - name: Verify Supabase cache and offline schema (no credentials)
-        shell: pwsh
+        shell: bash
         env:
           RUN_PROVIDER_INTEGRATION: '1'
         run: |
-          ./.github/scripts/install-providers.ps1 -Provider supabase
+          python3 .github/scripts/install-providers.py --provider supabase
           uv run --locked pytest tests/test_supabase_provider_cache.py -q -m provider_integration --basetemp .infra/pytest-supabase-provider -o cache_dir=.infra/pytest-cache

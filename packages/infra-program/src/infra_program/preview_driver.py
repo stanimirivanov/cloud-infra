@@ -77,7 +77,7 @@ def _json(content: bytes, limit: int) -> dict[str, Any]:
 
 
 def _read(path: Path, limit: int) -> bytes:
-    require(not path.is_symlink() and not path.is_junction())
+    require(not path.is_symlink())
     with path.open("rb") as stream:
         value = stream.read(limit + 1)
     require(len(value) <= limit)
@@ -342,7 +342,7 @@ def _run(
     )
     require(len(credentials["PULUMI_CONFIG_PASSPHRASE"]) >= 20)
     parent = root / ".infra"
-    require(not parent.is_symlink() and not parent.is_junction())
+    require(not parent.is_symlink())
     parent.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="preview-", dir=parent) as directory:
         work = Path(directory)
@@ -351,12 +351,8 @@ def _run(
         supabase = context.contract.unit == "supabase-database"
         environment = materialize_home(root, provider_home, work / "home", supabase=supabase)
         environment.update(credentials)
-        for key in ("SystemRoot", "WINDIR"):
-            if key in os.environ:
-                environment[key] = os.environ[key]
         environment.update(
             HOME=str(work),
-            USERPROFILE=str(work),
             TMP=str(work),
             TEMP=str(work),
             TMPDIR=str(work),

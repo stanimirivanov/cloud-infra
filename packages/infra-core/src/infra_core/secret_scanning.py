@@ -18,16 +18,16 @@ def _git(root: Path, *args: str) -> bytes:
 
 
 def scanner(root: Path) -> Path:
-    target = {"Windows": "windows-x64", "Linux": "linux-x64"}.get(platform.system())
+    target = {"Linux": "linux-x64"}.get(platform.system())
     if target is None or platform.machine().lower() not in {"amd64", "x86_64"}:
-        raise RuntimeError("SECRET003: scanner requires a reviewed Linux/Windows x64 platform")
+        raise RuntimeError("SECRET003: scanner requires a reviewed Linux x64 platform")
     asset = json.loads((root / "config/toolchain.json").read_text())["tools"]["gitleaks"]["assets"][
         target
     ]
     binary = root / ".infra/tools/gitleaks" / str(asset["binary"])
     if not binary.is_file():
         raise RuntimeError(
-            "SECRET003: install verified tools with .github/scripts/install-tools.ps1"
+            "SECRET003: install verified tools with .github/scripts/install-tools.py"
         )
     with binary.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()

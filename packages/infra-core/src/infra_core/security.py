@@ -10,9 +10,9 @@ from pathlib import Path
 
 
 def workflow_linter(root: Path) -> Path:
-    target = {"Windows": "windows-x64", "Linux": "linux-x64"}.get(platform.system())
+    target = {"Linux": "linux-x64"}.get(platform.system())
     if target is None or platform.machine().lower() not in {"amd64", "x86_64"}:
-        raise RuntimeError("WORKFLOW001: actionlint requires reviewed Linux/Windows x64")
+        raise RuntimeError("WORKFLOW001: actionlint requires reviewed Linux x64")
     try:
         asset = json.loads((root / "config/toolchain.json").read_text())["tools"]["actionlint"][
             "assets"
@@ -26,7 +26,7 @@ def workflow_linter(root: Path) -> Path:
             )
     except (OSError, KeyError, ValueError, TypeError):
         raise RuntimeError(
-            "WORKFLOW001: install verified tools with .github/scripts/install-tools.ps1"
+            "WORKFLOW001: install verified tools with .github/scripts/install-tools.py"
         ) from None
     return binary
 

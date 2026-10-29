@@ -72,7 +72,7 @@ to the fixed sequence and does not expand milestone scope.
   Missing visibility/data blocks evidence; no deployment or cutover activation.
 - M04-PR7: issue #93 pins native provider archives and verifies executable members
   in an explicit private home. Binary hashes derive from reverified pinned archives;
-  CI checks both platforms' real assets. Downstream Supabase cache remains PR8;
+  CI checks Linux real assets. Downstream Supabase cache remains PR8;
   no provider execution or resource-operation activation is added.
 - M04-PR8: issue #95 pins the Supabase downstream ZIP and verifies its exact bridge
   cache layout and SDK parameterization. A CI-only offline schema probe checks the

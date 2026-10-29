@@ -71,7 +71,7 @@ def _private(root: Path, value: str | Path) -> Path:
     path = root / value
     # Check unresolved ancestors as well as the resolved destination.
     _require(path.is_absolute() and path.is_relative_to(root / ".infra"))
-    _require(not any(p.is_symlink() or p.is_junction() for p in (path, *path.parents)))
+    _require(not any(p.is_symlink() for p in (path, *path.parents)))
     _require(path.resolve().is_relative_to(root / ".infra") and path.resolve() != root / ".infra")
     return path.resolve()
 

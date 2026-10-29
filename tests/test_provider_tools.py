@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tomllib
 from pathlib import Path
@@ -25,13 +26,13 @@ def archive(path, names):
             package.addfile(entry, io.BytesIO(content) if entry.size else None)
 
 
-@pytest.fixture(params=["Linux", "Windows"])
-def fixture(tmp_path, monkeypatch, request):
-    monkeypatch.setattr(pt.platform, "system", lambda: request.param)
+@pytest.fixture
+def fixture(tmp_path, monkeypatch):
+    monkeypatch.setattr(pt.platform, "system", lambda: "Linux")
     monkeypatch.setattr(pt.platform, "machine", lambda: "x86_64")
     (tmp_path / "config").mkdir()
     pins = json.loads((ROOT / "config/provider-toolchain.json").read_text())
-    target = "linux-x64" if request.param == "Linux" else "windows-x64"
+    target = "linux-x64"
     archives = {}
     for name, provider in pins["providers"].items():
         asset = provider["assets"][target]
@@ -137,54 +138,32 @@ def test_unreviewed_manifest_fields_fail_closed(fixture, field, value):
         pt.load_assets(root)
 
 
-def test_junction_and_missing_files_fail_closed(fixture, monkeypatch):
+def test_missing_files_fail_closed(fixture):
     root, home, archives, _ = fixture
     with pytest.raises(RuntimeError, match="PROVIDER001"):
         pt.verify_provider(root, "oci", home)
-    monkeypatch.setattr(Path, "is_junction", lambda path: path == home)
-    with pytest.raises(RuntimeError, match="reparse"):
-        pt.install_provider(root, "oci", archives["oci"], home)
 
 
 @pytest.mark.parametrize("provider", ["oci", "supabase"])
-def test_powershell_rejects_altered_archive_before_python_or_extraction(tmp_path, provider):
+def test_installer_rejects_altered_archive_before_uv_or_extraction(tmp_path, provider):
     root = tmp_path / "repository"
-    installer = root / ".github/scripts/install-providers.ps1"
+    installer = root / ".github/scripts/install-providers.py"
     installer.parent.mkdir(parents=True)
     (root / "config").mkdir()
     (root / ".infra").mkdir()
-    shutil.copyfile(ROOT / ".github/scripts/install-providers.ps1", installer)
+    shutil.copyfile(ROOT / ".github/scripts/install-providers.py", installer)
     shutil.copyfile(
         ROOT / "config/provider-toolchain.json", root / "config/provider-toolchain.json"
-    )
-    launcher = tmp_path / "hidden-directory.ps1"
-    launcher.write_text(
-        "param([string]$Repository, [string]$Installer, [string]$Archive, [string]$Provider)\n"
-        "$ErrorActionPreference = 'Stop'\n"
-        "$directory = Join-Path $Repository '.infra'\n"
-        "if ($IsWindows) {\n"
-        "  [IO.File]::SetAttributes($directory, "
-        "([IO.File]::GetAttributes($directory) -bor [IO.FileAttributes]::Hidden))\n"
-        "}\n"
-        "& $Installer -Provider $Provider -Archive $Archive\n"
-        "exit $LASTEXITCODE\n",
-        encoding="utf-8",
     )
     source = tmp_path / "bad.tar.gz"
     source.write_bytes(b"not a release")
     result = subprocess.run(
         [
-            "pwsh",
-            "-NoProfile",
-            "-File",
-            str(launcher),
-            "-Repository",
-            str(root),
-            "-Installer",
+            sys.executable,
             str(installer),
-            "-Archive",
+            "--archive",
             str(source),
-            "-Provider",
+            "--provider",
             provider,
         ],
         cwd=ROOT,

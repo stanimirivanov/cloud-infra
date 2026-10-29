@@ -8,7 +8,7 @@ feature PRs, cross-milestone prerequisites or stubs are planned.
 
 The implementation baseline is [PR #114](https://github.com/stanimirivanov/oci-oke-terraform/pull/114),
 merged as 3bc28485f952045c2a8cb80ba062543a7cbf6e68; the owner reported its checks
-passed. This PR needs its own Linux/Windows CI results. Live acceptance is separate
+passed. This PR needs its own Linux CI results. Live acceptance is separate
 and remains blocked. Every tracked preview flag is false; deployment and cutover
 authorization remain false. Neither this record nor successful tests authorize
 operations, change GitHub settings or transfer resource/state ownership.
@@ -63,9 +63,8 @@ SDK resource serialization, bootstrap parsing, collectors and protected handoff
 using mocks/spies. These are complementary boundaries, not one credentialed run.
 The synthetic policy event is a test input, not proof that a live policy pack ran.
 
-The real Windows timeout smoke test exposed denied taskkill cleanup. PR17 adds a
-bounded direct-process-handle kill/wait fallback even when the tree-kill fails;
-regression tests cover denied and ineffective tree kills. OS permissions still
+PR17 adds a bounded direct-process-handle kill/wait fallback when process-group
+cleanup fails; regression tests cover denied and ineffective tree kills. OS permissions still
 govern descendant cleanup. No isolation claim extends to a hostile host or an
 arbitrary privileged Python caller. Receipts remain unsigned consistency evidence.
 
@@ -104,7 +103,7 @@ the precise environment names, secrets and private handoff limitations.
 The existing CI matrix must pass the shared `uv run --locked infra verify`, builds,
 local backend/policy-host qualification, native/downstream asset checks and the
 new `preview_integration` gate. It sets RUN_SYNTHETIC_PREVIEW_INTEGRATION=1 and runs
-`uv run --locked pytest -q -m preview_integration` on Linux and Windows. This heavy
+`uv run --locked pytest -q -m preview_integration` on Linux. This heavy
 subprocess gate is opt-in locally; the normal suite mechanically checks its CI wiring.
 
 After this PR's CI and merge, the only M04 closeout action is owner-managed

@@ -3,7 +3,6 @@
 import hashlib
 import json
 import os
-import platform
 import subprocess
 import sys
 import time
@@ -45,9 +44,7 @@ CASES += [
 @pytest.mark.parametrize("unit,fault", CASES)
 def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, unit, fault):
     # Fixture asset hashes replace release hashes only inside the synthetic root.
-    root, archive, work = fixtures.prepared.__wrapped__(
-        tmp_path, monkeypatch, SimpleNamespace(param=platform.system())
-    )
+    root, archive, work = fixtures.prepared.__wrapped__(tmp_path, monkeypatch)
     cli = runtime.cli_runtime(root, archive, work / "bin")
     env = fixtures.environment(work)
     command = runtime.Command(
@@ -61,12 +58,6 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
     real_popen = subprocess.Popen
 
     def launch(argv, **options):
-        if sys.platform == "win32" and argv[0] == str(
-            Path(env["SystemRoot"]) / "System32/taskkill.exe"
-        ):
-            assert argv[1] == "/PID" and int(argv[2]) in {p.pid for p in processes}
-            assert argv[3:] == ["/T", "/F"]
-            return real_popen(argv, **options)
         # Only substitute the verified synthetic binary at the OS launch boundary.
         assert argv[0] == str(cli.binary)
         assert options["env"] == env and options["cwd"] == work
@@ -169,7 +160,7 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
 def test_ci_requires_synthetic_preview_integration_on_existing_matrix():
     config = yaml.load((ROOT / ".github/workflows/verify.yml").read_text(), Loader=yaml.BaseLoader)
     job = config["jobs"]["verify"]
-    assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04", "windows-2025"}
+    assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04"}
     step = next(
         s for s in job["steps"] if s.get("env", {}).get("RUN_SYNTHETIC_PREVIEW_INTEGRATION")
     )

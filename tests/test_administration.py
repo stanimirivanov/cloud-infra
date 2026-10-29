@@ -23,6 +23,11 @@ def observation(tmp_path, monkeypatch):
         (tmp_path / name).write_bytes((ROOT / name).read_bytes())
     monkeypatch.setattr(admin, "repository_state", lambda root: (COMMIT, True))
     policy = json.loads((tmp_path / admin.POLICY).read_bytes())
+    # Keep multi-check identity/suite coverage independent of the hosted runner matrix.
+    policy["required_checks"].append(
+        {"context": "Synthetic additional Linux gate", "app_id": 15368}
+    )
+    (tmp_path / admin.POLICY).write_text(json.dumps(policy))
     responses = administration_responses(policy, COMMIT)
     calls = []
 
@@ -36,8 +41,8 @@ def observation(tmp_path, monkeypatch):
             )
         return deepcopy(
             responses[
-                {8: "workflow_runs", 9: "pull_requests", 10: "pull_request", 11: "reviews"}[
-                    len(calls)
+                {1: "workflow_runs", 2: "pull_requests", 3: "pull_request", 4: "reviews"}[
+                    len(calls) - 5 - len(policy["required_checks"])
                 ]
             ]
         )
@@ -291,7 +296,7 @@ def test_rootless_validator_uses_only_supplied_immutable_bytes(observation, monk
             )
 
 
-def test_policy_check_names_match_both_workflow_matrix_jobs():
+def test_policy_check_names_match_linux_workflow_matrix_job():
     policy = json.loads((ROOT / admin.POLICY).read_bytes())
     workflow = yaml.load(
         (ROOT / ".github/workflows/verify.yml").read_text(), Loader=yaml.BaseLoader

@@ -40,14 +40,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Install checksum-verified tools
-        shell: pwsh
-        run: ./.github/scripts/install-tools.ps1
+        shell: bash
+        run: python3 .github/scripts/install-tools.py
       - run: uv sync --locked --all-groups --extra inventory-oci
       - name: Check enabled OCI contract before credentials
         run: uv run --locked python .github/scripts/service-preview.py --oci --check
       - name: Prepare verified native provider caches without credentials
-        shell: pwsh
-        run: ./.github/scripts/install-providers.ps1
+        shell: bash
+        run: python3 .github/scripts/install-providers.py
       - name: Collect evidence and run constrained OCI preview
         id: preview
         env:

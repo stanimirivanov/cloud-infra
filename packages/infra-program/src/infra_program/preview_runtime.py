@@ -6,12 +6,10 @@ import os
 import platform
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tarfile
 import time
-import zipfile
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -53,22 +51,13 @@ class CliRuntime:
     _permit: object = field(repr=False)
 
     def verify(self) -> None:
-        require(
-            self._permit is _PERMIT
-            and not self.binary.parent.is_symlink()
-            and not self.binary.parent.is_junction()
-        )
+        require(self._permit is _PERMIT and not self.binary.parent.is_symlink())
         require(
             {p.name for p in self.binary.parent.iterdir()} == {name for name, _, _ in self.files}
         )
         for name, size, digest in self.files:
             path = self.binary.parent / name
-            require(
-                path.is_file()
-                and not path.is_symlink()
-                and not path.is_junction()
-                and path.stat().st_size == size
-            )
+            require(path.is_file() and not path.is_symlink() and path.stat().st_size == size)
             with path.open("rb") as stream:
                 require(hashlib.file_digest(stream, "sha256").hexdigest() == digest)
 
@@ -82,12 +71,9 @@ def cli_runtime(root: Path, archive: Path, target: Path) -> CliRuntime:
 
 def _cli_runtime(root: Path, archive: Path, target: Path) -> CliRuntime:
     """Verify the original release before copying CLI/companion files; never download."""
-    require(
-        platform.system() in {"Windows", "Linux"}
-        and platform.machine().lower() in {"amd64", "x86_64"}
-    )
+    require(platform.system() == "Linux" and platform.machine().lower() in {"amd64", "x86_64"})
     pin = json.loads((root / "config/toolchain.json").read_bytes())["tools"]["pulumi"]
-    asset = pin["assets"]["windows-x64" if platform.system() == "Windows" else "linux-x64"]
+    asset = pin["assets"]["linux-x64"]
     require(str(sdk_version) == pin["version"] and archive.stat().st_size <= 512 * 1024**2)
 
     def digest() -> str:
@@ -111,28 +97,19 @@ def _cli_runtime(root: Path, archive: Path, target: Path) -> CliRuntime:
             shutil.copyfileobj(source, output)
         (target / path.name).chmod(0o755)
 
-    if asset["url"].endswith(".zip"):
-        with zipfile.ZipFile(archive) as package:
-            for item in package.infolist():
-                if not item.is_dir():
-                    require(stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG})
-                    with package.open(item) as member:
-                        save(item.filename, item.file_size, member)
-    else:
-        with tarfile.open(archive, "r|gz") as tar:
-            for entry in tar:
-                if entry.isdir():
-                    continue
-                require(entry.isfile())
-                tar_member = tar.extractfile(entry)
-                require(tar_member is not None)
-                assert tar_member is not None
-                with tar_member:
-                    save(entry.name, entry.size, tar_member)
+    with tarfile.open(archive, "r|gz") as tar:
+        for entry in tar:
+            if entry.isdir():
+                continue
+            require(entry.isfile())
+            tar_member = tar.extractfile(entry)
+            require(tar_member is not None)
+            assert tar_member is not None
+            with tar_member:
+                save(entry.name, entry.size, tar_member)
     require(digest() == asset["sha256"])
     binary = target / PurePosixPath(asset["binary"]).name
-    suffix = ".exe" if platform.system() == "Windows" else ""
-    require(binary.is_file() and (target / ("pulumi-language-python" + suffix)).is_file())
+    require(binary.is_file() and (target / "pulumi-language-python").is_file())
     files = []
     for path in sorted(target.iterdir()):
         with path.open("rb") as stream:
@@ -163,7 +140,7 @@ class Command(auto.PulumiCommand):
         self.work, self.env, self.stack, self.policy = work, dict(env), stack, str(policy)
         allowed = set(
             (
-                "SystemRoot WINDIR HOME USERPROFILE TMP TEMP TMPDIR PATH PULUMI_HOME "
+                "HOME TMP TEMP TMPDIR PATH PULUMI_HOME "
                 "PULUMI_BACKEND_URL PULUMI_SKIP_UPDATE_CHECK PULUMI_DEBUG_COMMANDS "
                 "PULUMI_IGNORE_AMBIENT_PLUGINS PULUMI_DISABLE_AUTOMATIC_PLUGIN_ACQUISITION "
                 "PULUMI_CONFIG_PASSPHRASE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY "
@@ -188,8 +165,6 @@ class Command(auto.PulumiCommand):
                 for k in ("PULUMI_BRIDGE_REATTACH_PROVIDERS", "TF_REATTACH_PROVIDERS")
             )
         )
-        if sys.platform == "win32":
-            require(env.get("SystemRoot") == os.environ.get("SystemRoot"))
         require(
             env.get("PATH")
             == os.pathsep.join((str(Path(sys.executable).parent), str(runtime.binary.parent)))
@@ -197,9 +172,7 @@ class Command(auto.PulumiCommand):
         require(
             runtime.binary.parent == work / "bin" and env.get("PULUMI_HOME") == str(work / "home")
         )
-        require(
-            all(env.get(k) == str(work) for k in ("HOME", "USERPROFILE", "TMP", "TEMP", "TMPDIR"))
-        )
+        require(all(env.get(k) == str(work) for k in ("HOME", "TMP", "TEMP", "TMPDIR")))
         require(
             all(
                 bool(env.get(k))
@@ -282,23 +255,14 @@ class Command(auto.PulumiCommand):
             env=self.env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=os.name != "nt",
+            start_new_session=True,
         )
         try:
             require(process.wait(timeout=remaining) == 0)
         finally:
             if process.poll() is None:
                 try:
-                    if sys.platform == "win32":
-                        killer = Path(self.env["SystemRoot"]) / "System32/taskkill.exe"
-                        subprocess.run(
-                            [str(killer), "/PID", str(process.pid), "/T", "/F"],
-                            capture_output=True,
-                            timeout=10,
-                            check=False,
-                        )
-                    else:
-                        os.killpg(process.pid, signal.SIGKILL)
+                    os.killpg(process.pid, signal.SIGKILL)
                 finally:
                     # A denied/failed tree-kill must still reap the owned process
                     # through its existing handle. Descendants remain OS-governed.

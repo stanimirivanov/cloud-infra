@@ -10,12 +10,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_workflow_runs_the_same_gate_on_both_platforms_without_credentials():
+def test_workflow_runs_the_linux_gate_without_credentials():
     workflow = (ROOT / ".github/workflows/verify.yml").read_text()
     config = yaml.load(workflow, Loader=yaml.BaseLoader)
     assert_credential_free(config)
     job = config["jobs"]["verify"]
-    assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04", "windows-2025"}
+    assert set(job["strategy"]["matrix"]["os"]) == {"ubuntu-24.04"}
     assert "if" not in job
     steps = job["steps"]
     runs = {step.get("run"): step for step in steps if "run" in step}
@@ -29,8 +29,8 @@ def test_workflow_runs_the_same_gate_on_both_platforms_without_credentials():
     assert set(setup) == {"actions/checkout"}
     assert setup["actions/checkout"]["with"]["fetch-depth"] == "0"
     install = next(s for s in steps if s.get("name") == "Install checksum-verified tools")
-    assert install["shell"] == "pwsh"
-    assert install["run"] == "./.github/scripts/install-tools.ps1"
+    assert install["shell"] == "bash"
+    assert install["run"] == "python3 .github/scripts/install-tools.py"
     assert steps.index(install) < steps.index(runs["uv sync --locked --all-groups"])
     assert setup["actions/checkout"]["with"]["persist-credentials"] == "false"
     integration = next(s for s in steps if s.get("env", {}).get("RUN_PULUMI_LOCAL_QUALIFICATION"))

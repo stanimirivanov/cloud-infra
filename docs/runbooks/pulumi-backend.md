@@ -79,7 +79,7 @@ Local qualification uses disposable filesystem storage and generated synthetic
 credentials. Its receipt has `kind=local` and is rejected as OCI evidence. It proves
 CLI/runtime/encryption/locking behavior, not OCI compatibility. Default verification
 runs unit tests without backend writes; CI explicitly opts into the isolated local
-integration test on Windows and Linux. pip is a locked development dependency because
+integration test on Linux. pip is a locked development dependency because
 the Pulumi Python host uses `pip list` for package discovery; dependencies are still
 installed by uv. No deployment-time pip install is performed.
 

@@ -50,16 +50,17 @@ without the explicitly injected adapter. See [the PR14 contract](docs/m04-plan.m
 
 ## Setup and verification
 
-Use Git and PowerShell 7 on Linux/Windows x64. The reviewed installer verifies uv
+Use Git and Python 3.11+ on Linux x64. The reviewed installer verifies uv
 **0.12.5**, Pulumi **3.272.0**, Gitleaks **8.30.1** and actionlint **1.7.12**
 release archives before extraction. The shared .python-version pins Python **3.12.14**.
 GitHub CLI is needed for the issue/PR workflow. Pulumi CLI **3.272.0** is required
 for explicit backend integration tests and qualification, matching the locked SDK.
 
-In a PowerShell 7 session:
+In a POSIX shell session:
 
 ```shell
-./.github/scripts/install-tools.ps1
+python3 .github/scripts/install-tools.py
+export PATH="$PWD/.infra/tools/uv:$PWD/.infra/tools/pulumi:$PATH"
 uv sync --locked --all-groups
 uv run --locked pre-commit install
 uv run --locked infra verify
@@ -97,7 +98,7 @@ actual adapter serialization is exercised using the generated SDK in mocks.
 
 Default tests skip opt-in backend/policy-host/provider and synthetic process
 integration tests. CI requires the real SDK/subprocess/loopback RPC test gate with
-RUN_SYNTHETIC_PREVIEW_INTEGRATION=1 on both platforms; its CLI worker and events are
+RUN_SYNTHETIC_PREVIEW_INTEGRATION=1 on Linux; its CLI worker and events are
 synthetic, with no engine/provider/cloud execution. See [the M04 closeout](docs/m04-closeout.md).
 CI explicitly
 sets RUN_PULUMI_LOCAL_QUALIFICATION=1 and runs the backend_integration marker with the
@@ -132,8 +133,8 @@ reviewed Action SHA pins, archive/binary verification, mandatory redacted curren
 staged and reachable-history scans, and tool update/incident procedures. The gate
 fails on missing/tampered scanners or shallow clones and never downloads tools.
 
-The Harness workflow runs the same complete gate and package build on Linux and
-Windows for every PR and main push, without secrets or deployment environments.
+The Harness workflow runs the same complete gate and package build on Linux for
+every PR and main push, without secrets or deployment environments.
 The pre-commit hook invokes the same gate; it is convenience, not remote enforcement.
 
 The manual Pulumi foundation workflow depends on shared verification, checks out
