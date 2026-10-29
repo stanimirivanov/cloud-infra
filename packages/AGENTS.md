@@ -60,3 +60,9 @@ the existing service preview/evidence contracts. Only Cloudflare/Supabase apply 
 supported. Keep preview dispatch dry-run-only, standalone deployment denied, saved
 plans enforced and mandatory policies attached. Never automatically retry or roll
 back a launched update; unresolved results remain indeterminate in the durable journal.
+
+M05 OCI apply extends that owned driver through explicit OCI composition, gated by
+config/oci-apply.json. OCI uses the existing network/OKE factories; separate signed
+operations and journals enforce dependency order. No graph expansion, stack creation,
+imports, deletes or replacements are admitted. Keep service defaults and preview-only
+admission unchanged.

@@ -268,3 +268,105 @@ capacity availability, IAM policies and Kubernetes governance need later reviewe
 work. No cloud preview, deployment, import, account verification or ownership
 transfer was performed by these tests. A green mock harness is not operational
 readiness or authorization to enable a stack.
+
+## Controlled OCI apply (M05-PR7)
+
+OCI apply is a separate disabled capability, using the same signed admission,
+backup binding, isolated runtime, policy/event checks and durable outcomes as
+[service apply](independent-services.md#controlled-single-service-apply-m05-pr6).
+config/oci-apply.json, preview flags and operation policy must all be reviewed and
+enabled before use; this change enables none of them. Existing preview APIs remain
+dry-run-only. Graph factories, security rules and versioned outputs are unchanged.
+No new resource kinds, imports, replacements, deletes or implicit stack creation
+are supported. An existing stack with the exact reserved identity is mandatory.
+
+### Inputs and signatures
+
+Use the service bundle schema (schema_version, paths, backend_account_id,
+cli_archive, provider_home, output). All paths are private files below ignored
+.infra; output must be new. Each file is bounded to 1 MiB, the combined frozen set
+to 4 MiB. Use the normal service input names plus account. For OCI, proposal is
+JSON with foundation and image objects matching the existing OCI TOML schema;
+account is the captured account object as JSON. Evidence/envelope are the original
+immutable inventory bytes and sidecar. Encrypted configuration uses the existing
+JSON stack configuration encoding with encryptionsalt and an empty config object.
+There are no cloud keys in that configuration.
+
+OKE additionally requires dependency_outputs, network_receipt and network_journal.
+Dependency outputs must contain only network_stack_identity and the existing
+schema-1 network object, with known non-secret IDs/CIDRs in the reviewed account,
+region and compartment. network_journal is an exact snapshot of the current fixed
+.infra/operations/oci-network.json; its latest entry must be a succeeded network
+apply matching the receipt operation UUID and journal head. The receipt binds the
+canonical network output digest and exact encrypted checkpoint digest produced
+after network success. Any later prepared/failed/indeterminate network operation
+invalidates that prerequisite until independently reconciled and successfully
+replaced. This is intentional even if its previous outputs happen to be unchanged.
+
+Both units use a schema-2 execution approval. The execution-input binding retains
+the outer service/backend_account_id encoding used by the shared driver. Its inner
+OCI profile is canonical JSON containing adapter=oci-apply-v1, hashes of all frozen
+non-approval inputs (including dependency files), profile hash and foundation
+configuration digest. Review the actual bytes; never derive expectations from an
+unverified approval. A saved plan from the same factories and pinned runtime remains
+an operator-supplied artifact. Plan authoring is not automated here. Plans must
+contain the exact existing graph, protected resources and explicit native provider
+bindings. Pinned Pulumi omits read-only StackReferences from saved plans and records
+their built-in pulumi provider instead; only that exact default provider is allowed
+without protection. Mandatory policy allows only its default name with empty
+configuration; it is engine infrastructure with no billable cloud resources.
+The owned OKE factory checks the fixed actual StackReference.
+
+### Sequence and custody
+
+1. Review effective external writer exclusion, protected environments and separate
+   credential custody. Provision a trusted dedicated service-operations runner with
+   durable .infra storage. Restrict that runner group to reviewed manual workflows.
+   No PR jobs may run there or receive operational credentials.
+2. Prepare and separately approve the network operation for the exact main commit.
+   Its journal is .infra/operations/oci-network.json, environment oci-network-apply.
+   Dispatch the Protected OCI apply workflow for oci-network. The workflow runs
+   shared verification and a credential-free cloud preflight using only the
+   read-only GitHub operation-observation token.
+3. Only an admitted update receives separately supplied S3 backend credentials,
+   passphrase and OCI_USER_OCID/OCI_FINGERPRINT/OCI_PRIVATE_KEY_PATH. The key path must
+   refer to private runner material under .infra. The driver copies it into its
+   disposable workspace with mode 0600 and checks the owned copy before execution.
+   Ambient credential discovery and plugin downloads remain disabled.
+4. After network succeeds, capture its current committed outputs and retain its
+   sanitized receipt and journal snapshot. Prepare a new OKE request, backup and
+   independently signed approval binding those exact dependency bytes. Its journal
+   is .infra/operations/oci-oke.json, environment oci-oke-apply. A network approval
+   cannot authorize OKE, and network success does not establish OKE success.
+5. Dispatch OKE separately. Before preview, before update and after update the
+   driver re-exports the fixed network checkpoint, compares its digest/outputs to
+   the approved dependency, and rejects any mismatch. The child also checks the
+   actual StackReference's known/non-secret values against the expected digest
+   before registering OCI resources. It never applies network to repair OKE input.
+
+Set OCI_APPLY_BUNDLE and OCI_APPLY_JOURNAL as protected per-environment variables.
+The manual workflow requires owner/main/exact SHA, keeps cloud credentials out of
+preflight, and preserves ignored journals during checkout. Both units share one
+workflow concurrency group and .infra/operations/oci-dependency.apply.lock for local
+serialization. Local locks and GitHub concurrency cannot fence external writers;
+exclusive IAM/process custody is an activation prerequisite. No workflow was
+dispatched and no cloud resources were touched during implementation verification.
+
+### Outcomes and recovery
+
+The network receipt adds checkpoint_sha256 and dependency_outputs_sha256 to the
+existing success receipt. These contain no resource values or credentials. Read
+outputs from the committed backend, not from preview or synthesized IDs. An invalid
+post-update output/export makes the result indeterminate; it never emits a success
+receipt. The network and OKE journals remain independent: OKE failure does not
+rewrite network success. Preserve both on partial completion. No automatic retry,
+compensating deletion, rollback or writer release occurs. Receipt persistence
+failure after a succeeded journal requires reconciliation, not a new apply.
+
+Code rollback stops future admission and does not undo cloud changes. Keep live
+activation, external writer exclusion and actual OCI/provider acceptance separate
+from the credential-free synthetic/local verification evidence.
+
+The shared runtime currently enforces a 300-second total command deadline. Long OCI
+provisioning may exceed it and must remain indeterminate pending reconciliation;
+review execution deadlines before live activation. Do not retry a timed-out update.

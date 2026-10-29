@@ -61,6 +61,13 @@ def validate_resource(args: ResourceValidationArgs, report: ReportViolation) -> 
         return
     try:
         properties = _properties(args.props)
+        if args.resource_type == "pulumi:providers:pulumi":
+            # Pinned engine infrastructure for StackReference, with no cloud configuration.
+            if args.name != "default" or properties:
+                raise GovernanceError(
+                    "OCI041: only the empty built-in stack-reference provider is allowed"
+                )
+            return
         if args.resource_type == "pulumi:pulumi:StackReference":
             if properties.get("name") != NETWORK_STACK or set(properties) - {
                 "name",
