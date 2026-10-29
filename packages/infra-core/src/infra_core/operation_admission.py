@@ -103,6 +103,7 @@ def admit(
     journal: bytes,
     context: dict[str, str],
     now: datetime | None = None,
+    execution_inputs: bytes | None = None,
 ) -> dict[str, Any]:
     """Caller supplies independent current context, never expectations from the approval.
 
@@ -124,6 +125,7 @@ def admit(
             journal,
             context,
             now or datetime.now(UTC),
+            execution_inputs,
         )
         require(repository_state(root) == (head, True))
         return result
@@ -150,6 +152,7 @@ def _admit(
     journal_raw: bytes,
     context: dict[str, str],
     now: datetime,
+    execution_inputs: bytes | None = None,
 ) -> dict[str, Any]:
     policy, reviewers = _policy(policy_raw)
     require(set(context) == CONTEXT and all(type(v) is str for v in context.values()))
@@ -209,7 +212,7 @@ def _admit(
     )
     approval = administration._json(approval_raw)
     expected = dict(
-        schema_version=1,
+        schema_version=2 if execution_inputs is not None else 1,
         operation_id=value["operation_id"],
         **context,
         request_sha256=_hash(request_raw),
@@ -217,6 +220,11 @@ def _admit(
         backup_sha256=_hash(receipt_raw),
         environment_sha256=_hash(environment_raw),
     )
+    if execution_inputs is not None:
+        require(
+            type(execution_inputs) is bytes and 0 < len(execution_inputs) <= operations.MAX_BYTES
+        )
+        expected["execution_inputs_sha256"] = _hash(execution_inputs)
     require(
         set(approval) == set(expected) | {"issued_at", "expires_at"}
         and all(approval[k] == v for k, v in expected.items())

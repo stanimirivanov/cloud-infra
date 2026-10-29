@@ -21,3 +21,8 @@ remain disabled; tracked preview flags stay false. Mocks must
 exercise the real generated Supabase SDK parameterization and Cloudflare SDK
 serialization. No cloud credentials, state imports, network calls or data-plane
 SQL are part of this library's verification.
+
+The separate service_apply owned entry point may call the same factories for an
+explicitly admitted preview/update lifecycle. It must validate frozen execution
+bindings, live journal head and runtime identity before secret lookup. This does
+not widen preview_program admission or authorize direct factory callers.

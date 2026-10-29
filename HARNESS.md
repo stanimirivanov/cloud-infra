@@ -339,3 +339,19 @@ It is a transport foundation, not operational admission. The existing opt-in
 operation_integration gate exercises synthetic timeout/failure handling and a
 mandatory-policy saved-plan update against disposable provider-free local state.
 The separate preflight, executor and operator handoff follow as stacked PR6b–PR6d.
+
+M05-PR6b adds credential-free service_apply.check and the default-disabled
+config/service-apply.json switch. Schema-2 operation approvals add the exact
+execution_inputs_sha256 binding; schema-1 diagnostic preflight remains supported.
+The check validates the reviewed factory graph, current service/backend evidence,
+fixed per-unit prepared journal and freshly observed environment controls. It loads
+no cloud credentials and executes no resource program. PR6c adds the journaled
+executor; PR6d exposes the protected operator handoff.
+
+M05-PR6c adds the separate service_apply.execute and owned child-program lifecycle.
+Protected callers supply independent actor/environment context and a lazy credential
+loader. Per-unit durable journals are fixed under .infra/operations; callbacks run
+only after admission/CAS. The executor verifies tools/providers, compares the current
+checkpoint, runs a fresh mandatory-policy preview and rechecks before exact planned
+update. Before-launch failures are failed; unresolved launched updates are
+indeterminate. No retry/rollback or normal deployment activation is introduced.
