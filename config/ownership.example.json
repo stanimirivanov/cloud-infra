@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": {
+    "engine": "terraform",
+    "backend_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "workspace": "REVIEW_REQUIRED",
+    "lineage": "00000000-0000-0000-0000-000000000000",
+    "serial": 0
+  },
+  "target_stack": "organization/free-infrastructure/oci-network",
+  "entries": [],
+  "artifacts": {
+    "request": {
+      "path": ".infra/ownership/request.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "configuration": {
+      "path": ".infra/ownership/configuration.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "encrypted_configuration": {
+      "path": ".infra/ownership/encrypted_configuration.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "source_checkpoint": {
+      "path": ".infra/ownership/source_checkpoint.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "target_checkpoint": {
+      "path": ".infra/ownership/target_checkpoint.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "freeze": {
+      "path": ".infra/ownership/freeze.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "journal": {
+      "path": ".infra/operations/oci-network.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}

@@ -41,3 +41,8 @@ Service examples contain no tokens/passwords. service-evidence.example.json must
 remain unverified, incomplete and stale. Service profile enablement permits offline
 classification only; all pulumi.toml deployment identities remain disabled. Keep
 private scope/usage evidence under .infra and use the independent services runbook.
+
+ownership.example.json remains an incomplete read-only preparation index. Actual
+source/target checkpoints, mappings, freeze observations and backend locator digests
+belong under ignored .infra. Never commit source state or make this example claim
+writer exclusion, operational admission or ownership transfer.

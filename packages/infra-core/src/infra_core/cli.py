@@ -139,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
     operation_input = operation_inspect.add_mutually_exclusive_group(required=True)
     operation_input.add_argument("--request", type=Path)
     operation_input.add_argument("--journal", type=Path)
+    ownership = commands.add_parser("ownership", help="offline ownership preparation; no authority")
+    ownership_commands = ownership.add_subparsers(dest="ownership_command", required=True)
+    ownership_prepare = ownership_commands.add_parser(
+        "prepare", help="check frozen writers and checkpoint-bound mapping"
+    )
+    ownership_prepare.add_argument("--evidence", type=Path, required=True)
     cutover = commands.add_parser("cutover", help="offline evidence checks; never an executor")
     cutover_commands = cutover.add_subparsers(dest="cutover_command", required=True)
     cutover_check = cutover_commands.add_parser(
@@ -273,6 +279,10 @@ def main(
                 else inspect_journal(root / args.journal)
             )
             print(json.dumps(result, indent=2))
+        elif args.command == "ownership":
+            from infra_core.ownership import inspect as inspect_ownership
+
+            print(json.dumps(inspect_ownership(root, args.evidence), indent=2))
         elif args.command == "cutover":
             from infra_core.cutover import check
 
