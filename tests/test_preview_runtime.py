@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import tarfile
-import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,30 +21,22 @@ fixture = test_provider_tools.fixture
 cache = test_supabase_provider_cache.cache
 
 
-@pytest.fixture(params=["Linux", "Windows"])
-def prepared(tmp_path, monkeypatch, request):
-    monkeypatch.setattr(runtime.platform, "system", lambda: request.param)
+@pytest.fixture
+def prepared(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime.platform, "system", lambda: "Linux")
     monkeypatch.setattr(runtime.platform, "machine", lambda: "x86_64")
     root = tmp_path
     (root / "config").mkdir()
     pins = json.loads((ROOT / "config/toolchain.json").read_bytes())
-    asset = pins["tools"]["pulumi"]["assets"][
-        "windows-x64" if request.param == "Windows" else "linux-x64"
-    ]
+    asset = pins["tools"]["pulumi"]["assets"]["linux-x64"]
     prefix = str(Path(asset["binary"]).parent).replace("\\", "/")
-    suffix = ".exe" if request.param == "Windows" else ""
-    names = [asset["binary"], prefix + "/pulumi-language-python" + suffix]
-    archive = root / ("cli.zip" if request.param == "Windows" else "cli.tar.gz")
-    if request.param == "Windows":
-        with zipfile.ZipFile(archive, "w") as package:
-            for name in names:
-                package.writestr(name, b"synthetic executable")
-    else:
-        with tarfile.open(archive, "w:gz") as package:
-            for name in names:
-                member = tarfile.TarInfo(name)
-                member.size = len(b"synthetic executable")
-                package.addfile(member, io.BytesIO(b"synthetic executable"))
+    names = [asset["binary"], prefix + "/pulumi-language-python"]
+    archive = root / "cli.tar.gz"
+    with tarfile.open(archive, "w:gz") as package:
+        for name in names:
+            member = tarfile.TarInfo(name)
+            member.size = len(b"synthetic executable")
+            package.addfile(member, io.BytesIO(b"synthetic executable"))
     asset["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
     (root / "config/toolchain.json").write_text(json.dumps(pins))
     work = root / "work"
@@ -56,7 +47,6 @@ def prepared(tmp_path, monkeypatch, request):
 def environment(work):
     return dict(
         HOME=str(work),
-        USERPROFILE=str(work),
         TMP=str(work),
         TEMP=str(work),
         TMPDIR=str(work),
@@ -71,7 +61,6 @@ def environment(work):
         PULUMI_SKIP_UPDATE_CHECK="true",
         PULUMI_DEBUG_COMMANDS="true",
         AWS_EC2_METADATA_DISABLED="true",
-        SystemRoot=os.environ.get("SystemRoot", str(work)),
     )
 
 
@@ -229,10 +218,7 @@ def test_timeout_terminates_owned_process_and_redacts_error(prepared, monkeypatc
             wait=wait, poll=lambda: None, pid=12345, kill=lambda: actions.append("direct-kill")
         ),
     )
-    if sys.platform == "win32":
-        monkeypatch.setattr(runtime.subprocess, "run", lambda args, **kw: actions.append(args))
-    else:
-        monkeypatch.setattr(runtime.os, "killpg", lambda *args: actions.append(args))
+    monkeypatch.setattr(runtime.os, "killpg", lambda *args: actions.append(args))
     with pytest.raises(RuntimeError, match="PREVIEW005") as error:
         command.run(["stack", "select", "--stack", command.stack], str(work), {})
     assert actions and "private-diagnostic" not in str(error.value)
@@ -282,9 +268,7 @@ def test_tree_kill_failure_still_reaps_owned_process(prepared, monkeypatch, fail
         pid=12345, wait=wait, kill=kill, poll=lambda: None if state.alive else 0
     )
     monkeypatch.setattr(runtime.subprocess, "Popen", lambda *a, **kw: process)
-    monkeypatch.setattr(runtime.subprocess, "run", tree)
-    if sys.platform != "win32":
-        monkeypatch.setattr(runtime.os, "killpg", tree)
+    monkeypatch.setattr(runtime.os, "killpg", tree)
     with pytest.raises(RuntimeError, match="PREVIEW005"):
         command.run(["stack", "select", "--stack", command.stack], str(work), {})
     assert state.killed and not state.alive and state.waits == 2

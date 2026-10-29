@@ -1,7 +1,7 @@
 # Automation boundaries
 
-PR validation is credential-free and runs the complete shared gate on Linux and
-Windows for every PR without path filters or actor exclusions. Do not use
+PR validation is credential-free and runs the complete shared gate on Linux
+for every PR without path filters or actor exclusions. Do not use
 pull_request_target to execute PR code. The manual Pulumi foundation workflow
 depends on shared verification, requires main and owner checks, and uses the
 dedicated protected environment. OCI signing credentials belong only to its
@@ -19,8 +19,8 @@ expose operational credentials to PR validation. Configuration of required
 reviewers/main-only environment branches is an administrator prerequisite.
 
 Pin external Actions to reviewed full SHAs in config/toolchain.json. Install tools
-only through .github/scripts/install-tools.ps1; native providers use
-.github/scripts/install-providers.ps1 and pinned archive-member verification.
+only through .github/scripts/install-tools.py; native providers use
+.github/scripts/install-providers.py and pinned archive-member verification.
 Neither installer executes provider code. Verify hashes before extraction.
 Opt-in Supabase integration may run verified schema metadata RPCs with credentials
 removed and external proxy traffic denied; never configure or mutate cloud resources.

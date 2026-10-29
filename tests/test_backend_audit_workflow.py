@@ -3,7 +3,6 @@
 import configparser
 import importlib.util
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -59,8 +58,7 @@ def setup(tmp_path, monkeypatch, adapter, posture):
             assert key.read_text() == credentials["key_content"]
             assert not key.is_relative_to(tmp_path)
             files.extend([Path(config_file), key])
-            if os.name != "nt":
-                assert all(path.stat().st_mode & 0o077 == 0 for path in files)
+            assert all(path.stat().st_mode & 0o077 == 0 for path in files)
             print("PRIVATE_SDK_WARNING")
 
         def backend_posture(self, config):

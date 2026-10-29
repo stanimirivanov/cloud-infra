@@ -24,7 +24,7 @@ def _require(value: bool, message: str) -> None:
 
 def _regular_path(path: Path) -> None:
     _require(
-        not any(p.is_symlink() or p.is_junction() for p in (path, *path.parents)),
+        not any(p.is_symlink() for p in (path, *path.parents)),
         "links and reparse paths are forbidden",
     )
 
@@ -45,12 +45,12 @@ def load_assets(root: Path) -> dict[str, Any]:
             set(downstream) == {"source", "version", "assets"}
             and downstream["source"] == "registry.opentofu.org/supabase/supabase"
             and downstream["version"] == "1.11.0"
-            and set(downstream["assets"]) == {"linux-x64", "windows-x64"},
+            and set(downstream["assets"]) == {"linux-x64"},
             "invalid downstream identity",
         )
         for target, asset in downstream["assets"].items():
             system = target.split("-")[0]
-            binary = "terraform-provider-supabase_v1.11.0" + (".exe" if system == "windows" else "")
+            binary = "terraform-provider-supabase_v1.11.0"
             url = (
                 "https://github.com/supabase/terraform-provider-supabase/releases/download/v1.11.0/"
                 f"terraform-provider-supabase_1.11.0_{system}_amd64.zip"
@@ -67,12 +67,12 @@ def load_assets(root: Path) -> dict[str, Any]:
             _require(
                 set(provider) == {"version", "assets"}
                 and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None
-                and set(provider["assets"]) == {"linux-x64", "windows-x64"},
+                and set(provider["assets"]) == {"linux-x64"},
                 "invalid provider version/platforms",
             )
             for target, asset in provider["assets"].items():
                 system = target.split("-")[0]
-                binary = f"pulumi-resource-{name}" + (".exe" if system == "windows" else "")
+                binary = f"pulumi-resource-{name}"
                 url = (
                     f"https://github.com/pulumi/pulumi-{name}/releases/download/v{version}/"
                     f"pulumi-resource-{name}-v{version}-{system}-amd64.tar.gz"
@@ -90,10 +90,10 @@ def load_assets(root: Path) -> dict[str, Any]:
 
 
 def _paths(root: Path, name: str, home: Path) -> tuple[dict[str, str], Path, Path]:
-    target = {"Linux": "linux-x64", "Windows": "windows-x64"}.get(platform.system())
+    target = {"Linux": "linux-x64"}.get(platform.system())
     _require(
         target is not None and platform.machine().lower() in {"x86_64", "amd64"},
-        "only reviewed Linux/Windows x64 is supported",
+        "only reviewed Linux x64 is supported",
     )
     providers = load_assets(root)
     _require(name in providers, "unknown provider")
@@ -168,7 +168,7 @@ def verify_provider(root: Path, name: str, home: Path) -> Path:
         binary = directory / asset["binary"]
         _require(_digest(binary) == expected, "installed executable checksum mismatch")
         _require(
-            os.name == "nt" or bool(binary.stat().st_mode & 0o111),
+            bool(binary.stat().st_mode & 0o111),
             "provider is not executable",
         )
         return binary
@@ -231,7 +231,7 @@ def _supabase_paths(root: Path, home: Path) -> tuple[dict[str, str], Path, Path,
     # Reuse native platform/home/reparse validation without executing the bridge.
     _paths(root, "terraform-provider", home)
     home = Path(os.path.abspath(home))
-    target = "windows-x64" if platform.system() == "Windows" else "linux-x64"
+    target = "linux-x64"
     asset = json.loads((root / "config/provider-toolchain.json").read_text())["downstream"][
         "assets"
     ][target]
@@ -318,9 +318,7 @@ def verify_supabase(root: Path, home: Path) -> Path:
             )
             current = current / part
         _require(_digest(current) == expected, "downstream executable checksum mismatch")
-        _require(
-            os.name == "nt" or bool(current.stat().st_mode & 0o111), "downstream is not executable"
-        )
+        _require(bool(current.stat().st_mode & 0o111), "downstream is not executable")
         return current
     except (OSError, zipfile.BadZipFile, EOFError):
         raise RuntimeError("PROVIDER001: downstream cache cannot be verified") from None

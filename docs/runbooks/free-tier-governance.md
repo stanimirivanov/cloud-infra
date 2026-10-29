@@ -80,8 +80,7 @@ uv run --locked --extra inventory-oci infra governance inventory \
   --oci-profile DEFAULT --usage .infra/usage.json --output .infra/inventory.json
 ```
 
-On PowerShell, run the command on one line (the backslashes above are POSIX shell
-line continuations). Keep account, usage, inventory and proposals under ignored
+Keep account, usage, inventory and proposals under ignored
 .infra; never upload them as PR artifacts. Credential file contents and raw SDK
 errors are withheld from CLI diagnostics. Failed collection removes any old
 destination payload and sidecar so a previous success cannot silently survive a retry.
@@ -288,7 +287,7 @@ uv run --locked infra verify
 uv build --all-packages
 ```
 
-The same pre-commit and Windows/Linux CI gate runs lint, formatting, strict mypy,
+The same pre-commit and Linux CI gate runs lint, formatting, strict mypy,
 schema/accounting/negative tests and tracked-artifact checks. CI's explicit
 backend_integration step also runs a real Pulumi preview against a temporary file
 backend and proves the mandatory policy rejects an unclassified synthetic
@@ -297,7 +296,7 @@ deploys cloud resources. Local opt-in uses RUN_PULUMI_LOCAL_QUALIFICATION=1 and
 the pinned Pulumi CLI, as described in the backend runbook.
 The policy integration runner uses PYTHONUNBUFFERED=1 and explicitly decodes CLI
 output as UTF-8; future protected policy invocations must preserve those settings
-when capturing output, including on Windows.
+when capturing output.
 
 Future deployment code must call infra_program.governance.preflight with the full
 account proposal before its registration callback and attach policies/ as a

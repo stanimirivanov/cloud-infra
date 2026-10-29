@@ -49,7 +49,7 @@ markers = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["packages/infra-core/src", "packages/infra-program/src", ".github/scripts/collect-backend-posture.py", ".github/scripts/service-preview.py"]
+files = ["packages/infra-core/src", "packages/infra-program/src", ".github/scripts/install-tools.py", ".github/scripts/install-providers.py", ".github/scripts/collect-backend-posture.py", ".github/scripts/service-preview.py"]
 
 # Generated provider SDK analysis is prohibitively large. Our interfaces remain strict;
 # constructor arguments and wire schemas are checked using the actual SDK in mocks.

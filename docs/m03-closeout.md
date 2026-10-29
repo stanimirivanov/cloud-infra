@@ -16,7 +16,7 @@ issue criteria, source/tests and the retirement amendment in the
 [dated harness audit](harness-audit.md). This record preserves that limitation.
 
 Implementation baseline: [PR #78](https://github.com/stanimirivanov/oci-oke-terraform/pull/78),
-merged as c3b622c5de050d41bfc04fc41b2ca6c4ea3ac598. Its Linux and Windows Harness
+merged as c3b622c5de050d41bfc04fc41b2ca6c4ea3ac598. Its Linux Harness
 jobs succeeded in [run 40454100602](https://github.com/stanimirivanov/oci-oke-terraform/actions/runs/40454100602).
 Those results establish the recorded development checks, not live administrative
 or cloud readiness. The closeout PR must obtain its own CI results.
@@ -157,13 +157,13 @@ limit does not by itself authorize another implementation slice.
 
 ## Finite closeout acceptance
 
-1. Merge this single documentation-only closeout PR after its existing Linux and
-   Windows Harness checks succeed. Do not change runtime files, policies, enabled
+1. Merge this single documentation-only closeout PR after its existing Linux Harness
+   checks succeed. Do not change runtime files, policies, enabled
    flags, dependencies or workflows as part of closeout.
 2. Retain the closeout merge commit and its CI links as engineering verification.
    The existing [Harness workflow](../.github/workflows/verify.yml) runs package
    build, the complete shared gate and opt-in disposable-local backend integration
-   on both platforms without cloud credentials.
+   on Linux without cloud credentials.
 3. The repository owner may close the M03 milestone with this exact disposition:
    **Engineering complete; deployment and cutover disabled; activation prerequisites outstanding.**
 4. Carry the owner-assigned activation checklist into subsequent operational

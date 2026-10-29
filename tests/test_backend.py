@@ -254,8 +254,8 @@ def test_protected_workflow_has_no_pr_trigger_or_resource_credentials(config):
     assert "refs/heads/main" in job["if"] and "github.repository_owner" in job["if"]
     steps = job["steps"]
     setup = next(step for step in steps if step.get("name") == "Install checksum-verified tools")
-    assert setup["run"] == "./.github/scripts/install-tools.ps1"
-    assert setup["shell"] == "pwsh"
+    assert setup["run"] == "python3 .github/scripts/install-tools.py"
+    assert setup["shell"] == "bash"
     assert not any(
         name in text for name in ("OCI_CLI_KEY_CONTENT", "PULUMI_ACCESS_TOKEN", "state push")
     )

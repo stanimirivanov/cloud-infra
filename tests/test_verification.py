@@ -24,7 +24,7 @@ def test_repository_discovery_outside_checkout():
 
 
 def test_installed_console_entrypoint_from_nested_directory():
-    script = Path(sys.executable).parent / ("infra.exe" if sys.platform == "win32" else "infra")
+    script = Path(sys.executable).parent / "infra"
     result = subprocess.run(
         [str(script), "backend", "inspect"],
         cwd=ROOT / "packages/infra-program",

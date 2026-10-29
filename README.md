@@ -11,17 +11,17 @@ from administrator-owned live acceptance; all tracked preview flags remain false
 
 ## Development
 
-From the repository root in PowerShell 7 on Linux/Windows x64:
+Use Git and Python 3.11+ from the repository root in a POSIX shell on Linux x64:
 
 ```shell
-./.github/scripts/install-tools.ps1
+python3 .github/scripts/install-tools.py
+export PATH="$PWD/.infra/tools/uv:$PWD/.infra/tools/pulumi:$PATH"
 uv sync --locked --all-groups
 uv run --locked infra verify
 ```
 
 The shared gate checks secrets, private artifacts, architecture, documentation,
-formatting, lint, typing and tests without cloud credentials. CI runs it on Linux
-and Windows.
+formatting, lint, typing and tests without cloud credentials. CI runs it on Linux.
 
 See [HARNESS.md](HARNESS.md) for the architecture, commands, and operational
 boundaries.

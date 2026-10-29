@@ -153,7 +153,7 @@ uv run --locked infra kubernetes audit --config .infra/kubernetes.toml \
   --inventory .infra/cluster-inventory.json --resources .infra/kubernetes-resources.json
 ```
 
-Use single lines on PowerShell. The JSON List may include reviewed desired
+The JSON List may include reviewed desired
 Deployment/Service objects in addition to the canonical controls. Keep manifests
 and all live evidence private. Passing returns within-kubernetes-envelope with
 deployment_authorized=false. Workloads, admission objects and network controllers

@@ -39,8 +39,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Install checksum-verified tools
-        shell: pwsh
-        run: ./.github/scripts/install-tools.ps1
+        shell: bash
+        run: python3 .github/scripts/install-tools.py
       - run: uv sync --locked --all-groups --extra inventory-oci
       - name: Collect and validate read-only backend posture
         id: audit

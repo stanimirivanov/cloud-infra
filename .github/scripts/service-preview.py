@@ -61,7 +61,7 @@ def gate(root: Path, source: Mapping[str, str], *, oci: bool = False) -> str:
 
 def private_root(root: Path) -> Path:
     private = root / ".infra"
-    require(not private.is_symlink() and not private.is_junction())
+    require(not private.is_symlink())
     return private
 
 
@@ -70,7 +70,7 @@ def cleanup(root: Path, *, oci: bool = False) -> None:
     name = "oci-preview" if oci else "service-preview"
     (private / (name + ".json")).unlink(missing_ok=True)
     for path in private.glob(name + "-*"):
-        require(not path.is_symlink() and not path.is_junction())
+        require(not path.is_symlink())
         if re.fullmatch(name + r"-[a-z0-9_]{8}", path.name):
             require(path.resolve().parent == private.resolve())
             shutil.rmtree(path)

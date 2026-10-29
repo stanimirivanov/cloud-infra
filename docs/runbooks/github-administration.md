@@ -55,7 +55,7 @@ was observed from GitHub; recreating the workflow requires explicit policy revie
   whose current HEAD equals this checkout. This deliberately does not support
   historical commits or feature-branch attestations.
 - Classic protection must enforce administrators, prohibit force pushes/deletions,
-  and require up-to-date Linux/Windows harness checks from the pinned GitHub App.
+  and require up-to-date Linux harness checks from the pinned GitHub App.
   Context-only/any-app checks, missing or ambiguous matches fail.
 - At least one PR approval, stale approval dismissal and last-push approval are
   required, with no explicit user/team/app PR bypass allowances.

@@ -212,8 +212,7 @@ uv run --locked infra governance audit --account .infra/account.toml \
   --inventory .infra/inventory.json --plan .infra/oci-proposal.json
 ```
 
-Use a single line on PowerShell instead of POSIX backslash continuations. Inputs
-and proposals stay private under ignored .infra. The proposal uses create actions
+Inputs and proposals stay private under ignored .infra. The proposal uses create actions
 and symbolic resource references; it is not a Pulumi deployment plan or adoption
 manifest. Existing resources remain fully counted, so a parallel full-size cluster
 may correctly fail capacity checks. Do not subtract them or mark them owned just

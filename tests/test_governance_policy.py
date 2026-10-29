@@ -69,20 +69,12 @@ def _preview(tmp_path):
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
-            start_new_session=sys.platform != "win32",
+            start_new_session=True,
         )
         try:
             stdout, stderr = process.communicate(timeout=120)
         except subprocess.TimeoutExpired:
-            if sys.platform == "win32":
-                subprocess.run(
-                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                    capture_output=True,
-                    check=False,
-                    timeout=15,
-                )
-            else:
-                os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process.pid, signal.SIGKILL)
             stdout, stderr = process.communicate(timeout=15)
             pytest.fail("Synthetic Pulumi command timed out:\n" + stdout + stderr)
         result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)

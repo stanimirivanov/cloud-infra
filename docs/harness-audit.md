@@ -169,7 +169,7 @@ The three backend_integration tests require explicit opt-in and the pinned Pulum
 CLI; a default skipped test is not a passed integration test. No credentialed
 qualification, cloud preview, state transfer or deployment was run for this review.
 
-Observed local results on Windows: `uv run --locked infra verify` passed lint,
+Historical local audit results: `uv run --locked infra verify` passed lint,
 format, strict typing and 313 tests; three explicit backend integration tests were
 skipped. `uv build --all-packages` built all three source distributions and wheels.
 `git diff --check` passed. Linux execution and live provider behavior were not
