@@ -533,3 +533,106 @@ Focused verification uses
 The shared gate remains `uv run --locked infra verify`. This adds no dependency or
 receipt/posture schema migration; reverting the checker removes only the new
 reporting interface and cannot undo an operational action.
+
+## M06 independent backup readiness
+
+M06-PR4 checks existing backup and off-host rehearsal evidence without contacting
+a repository, running restic/Pulumi, decrypting state or performing a restore.
+It retains the owner's existing local/mounted-repository choice. Production
+transport and physical storage independence are not inferred from a directory
+path, repository ID or different machine fingerprints.
+
+From a clean committed checkout, supply independently reviewed public identifiers:
+
+```sh
+uv run --locked infra backup check-readiness --unit oci-network --repository-id REPOSITORY_SHA256 --recovery-host-id HOST_SHA256
+uv run --locked infra backup check-readiness --unit oci-network --repository-id REPOSITORY_SHA256 --recovery-host-id HOST_SHA256 --evidence .infra/backup-readiness.json
+```
+
+The uppercase values are placeholders for actual 64-character lowercase hex
+identifiers: the restic repository ID and the independently reviewed recovery
+host's SHA-256 machine fingerprint. They are not passwords. Do not extract the
+expected identifiers from the candidate evidence merely to make the check pass.
+Run separately for each of the four configured units. Without an index, evidence
+is pending; unsupported units or malformed expected identifiers are rejected.
+
+The private closed-schema index contains exactly:
+
+```json
+{
+  "schema_version": 1,
+  "unit": "oci-network",
+  "commit": "CURRENT_REVIEWED_COMMIT",
+  "foundation_sha256": "CURRENT_FOUNDATION_DIGEST",
+  "artifacts": {
+    "restore_checkpoint": ".infra/selected-checkpoint.json",
+    "restore_configuration": ".infra/selected-stack-config.json",
+    "restore_manifest": ".infra/selected-manifest.json",
+    "restore_receipt": ".infra/selected-receipt.json",
+    "restore_policy": ".infra/recovery-policy.json",
+    "rehearsal": ".infra/off-host-rehearsal.json"
+  }
+}
+```
+
+This is a template, not acceptance evidence. Use the actual current clean commit
+and the foundation digest from `uv run --locked infra backend inspect`. Preserve
+the original exact captured bytes. The index's review commit is distinct from the
+historical backup manifest commit, which must not be relabeled or restamped.
+All six files are required once an index is supplied. Paths must be distinct,
+canonical relative `.infra/*.json` paths, with no symlinks or index aliases.
+Each capture is limited to 1 MiB; duplicate JSON fields and non-finite numbers fail.
+The checker rereads captured files and checks clean Git identity before returning.
+
+The checkpoint/configuration pair must satisfy the existing production recovery
+contract: matching passphrase salts, encrypted JSON configuration, correct unit
+URNs, no pending operations or deleted resources, and exact manifest hashes.
+The configuration subset is the recovery contract's `encryptionsalt` and `config`
+fields. Do not edit a captured configuration to fit a contract: unsupported pairs
+need a separately reviewed compatibility change and fresh capture/rehearsal.
+Ciphertext syntax cannot prove decryption or detect every unmarked sensitive value.
+
+The shared recovery validator checks manifest schema 2, receipt schema 1 and
+rehearsal schema 2; exact snapshot, manifest, policy and pair bindings; source and
+recovery host separation; wrong-key rejection and correct-key readback; ordered
+original clocks; current source-backup age; and measured restore duration. The
+policy must require an independent host and explicit positive objectives. The
+existing production recovery limit of at most 300 seconds still applies. No
+production RPO/RTO is selected by this PR. The extra readiness check requires a
+positive measured duration and an age measurement consistent with the interval
+between rehearsal start and completion (one-second clock tolerance).
+
+Missing evidence reports `backup_evidence: pending`; an inconsistent supplied
+bundle fails with redacted `BSAFE001`. A consistent bundle reports
+`backup_evidence: off-host-evidence-consistent`. Every result still has
+`status: pending`, `backup_ready: false`, `execution_authorized: false`,
+`activation_authorized: false` and `live_controls_verified: false`, and the CLI
+exits 1. These unsigned local observations are not proof of live retrieval,
+independent human identity, custody or effective storage isolation. The gap report
+cannot replace the original evidence in a separately reviewed acceptance record.
+
+### Independent storage and custody review
+
+The backup/key custodian and independent reviewer must retain private evidence of:
+
+- Actual source, storage and recovery failure domains, and access to the selected
+  existing repository from the recovery host after loss of the source host.
+- Separate custody and retrieval of the restic password and Pulumi passphrase,
+  without either credential being stored in the backup set or public CI.
+- Reviewed retention and budget, snapshot availability and exclusion of pruning
+  during the existing lock-free rehearsal. No prune/forget command is added.
+- Independently accepted per-unit backup-age and restore objectives, original
+  rehearsal measurements and evidence provenance. Measured retrieval/readback
+  excludes runner provisioning and credential recovery time.
+
+Use existing capture/rehearsal procedures only under their explicit operational
+write authorizations. A different mount path or machine ID is insufficient
+physical-independence evidence. No production destination, key custody, retention
+policy, runner settings or live rehearsal is configured or accepted by this PR.
+Capture/readback, journal handling and state recovery remain unchanged.
+
+Focused verification:
+`uv run --locked pytest -q tests/test_backup_readiness.py tests/test_backup.py tests/test_recovery_rehearsal.py tests/test_recovery_rejection.py tests/test_recovery_driver.py`.
+Run `uv run --locked infra verify` for the shared gate. No runtime dependency,
+transport or evidence-schema migration is added; reverting the report does not
+undo any backup or recovery operation.
