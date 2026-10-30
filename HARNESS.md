@@ -518,3 +518,26 @@ The shared gate remains `uv run --locked infra verify`. Explicit disposable loca
 verification uses `RUN_OPERATION_INTEGRATION=1 uv run --locked pytest -q -m operation_integration`;
 this includes actual encrypted import/readback, wrong-key rejection, empty-config
 rehearsal and exact restic snapshot retrieval. No live recovery is part of verification.
+
+## Failure rehearsal and finite closeout (M05-PR16)
+
+[The M05 closeout](docs/m05-closeout.md) maps all 16 approved tasks to implementation
+PRs and gives a finite administrator-owned live acceptance checklist. Its engineering
+completion is conditional on PR16 CI and merge; no live activation, SLO or owner
+transfer is inferred from passing repository tests.
+
+`tests/test_operations_integration.py` composes production journals/locks, recovery
+signature admission and incident/outbox persistence across bounded Linux child
+processes. Runtime/provider effects and remote delivery are synthetic. Crashes after
+mutation or success journaling, expired recovery approval, frozen recovery, interrupted
+monitoring and lost delivery acknowledgement cannot silently permit replay, clear
+an incident or release writers. Existing engine suites separately cover actual
+pinned CLI/SDK and restic behavior against disposable local state.
+
+Run only these process sequences with
+`RUN_OPERATION_INTEGRATION=1 uv run --locked pytest -q tests/test_operations_integration.py -m operation_integration`.
+The complete `RUN_OPERATION_INTEGRATION=1 uv run --locked pytest -q -m operation_integration`
+remains supported. CI runs the existing protocol/engine cases excluding this file,
+then this required failure suite, once each without credentials. The shared gate
+checks wiring and skips opt-in cases. Shared verification, workflow checking and
+workspace package builds remain required; no executable/dependency or live test is added.

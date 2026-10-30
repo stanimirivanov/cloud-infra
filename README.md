@@ -8,6 +8,10 @@ validation, cost and security policies, and isolated backend qualification.
 Account eligibility and measured usage must be verified before deployment.
 The [M04 closeout](docs/m04-closeout.md) separates implemented preview engineering
 from administrator-owned live acceptance; all tracked preview flags remain false.
+The [M05 closeout](docs/m05-closeout.md) reconciles protected operations, monitoring
+and recovery capabilities with failure rehearsals and a separate live acceptance
+checklist. Operational activation remains disabled; engineering closeout requires
+M05-PR16 CI and merge.
 
 ## Development
 

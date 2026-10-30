@@ -64,11 +64,8 @@ def test_service_preflight_audits_existing_inputs_before_secret_lookup(
         apply._service(tmp_path, context.contract.unit, COMMIT, raw)
 
 
-@pytest.mark.parametrize("unit", ["cloudflare-edge", "supabase-database", "oci-network", "oci-oke"])
-@pytest.mark.parametrize(
-    "fault", [None, "preview", "up", "mutate-preview", "mutate-up", "checkpoint", "credentials"]
-)
-def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault, importing=False):
+def prepare_lifecycle(tmp_path, monkeypatch, unit, fault, importing=False):
+    """Shared synthetic runtime setup; production journal/driver stay intact."""
     oci = unit.startswith("oci-")
     private = tmp_path / ".infra"
     private.mkdir()
@@ -201,6 +198,18 @@ def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, faul
             )
         return result
 
+    return args, bundle, credentials, events, oci
+
+
+@pytest.mark.parametrize("unit", ["cloudflare-edge", "supabase-database", "oci-network", "oci-oke"])
+@pytest.mark.parametrize(
+    "fault", [None, "preview", "up", "mutate-preview", "mutate-up", "checkpoint", "credentials"]
+)
+def test_apply_journal_and_credential_ordering(tmp_path, monkeypatch, unit, fault, importing=False):
+    args, bundle, credentials, events, oci = prepare_lifecycle(
+        tmp_path, monkeypatch, unit, fault, importing
+    )
+    journal = args.journal
     if fault:
         with pytest.raises(ValueError, match="APPLY001") as error:
             apply.execute(tmp_path, args, credentials, oci, importing)
