@@ -72,14 +72,14 @@ def test_disabled_cloudflare_rejected_before_bundle_or_secret_reads(tmp_path, mo
 
 
 @pytest.mark.parametrize("importing", [False, True])
-def test_oci_and_import_gate_contracts_unchanged(tmp_path, importing):
+def test_service_policy_cannot_enable_oci_or_import(tmp_path, importing):
     write(tmp_path, dict(schema_version=2, units=dict.fromkeys(UNITS, False)))
     path = tmp_path / ("config/resource-import.json" if importing else "config/oci-apply.json")
-    path.write_text('{"schema_version":1,"enabled":true}')
-    a._enabled(tmp_path, oci=True, importing=importing)
-    path.write_text('{"schema_version":1,"enabled":false}')
+    path.write_text('{"schema_version":2,"units":{"oci-network":true,"oci-oke":false}}')
+    a._enabled(tmp_path, oci=True, importing=importing, unit="oci-network")
+    path.write_text('{"schema_version":2,"units":{"oci-network":false,"oci-oke":false}}')
     with pytest.raises(ValueError):
-        a._enabled(tmp_path, oci=True, importing=importing)
+        a._enabled(tmp_path, oci=True, importing=importing, unit="oci-network")
 
 
 def test_committed_policy_keeps_both_services_disabled():

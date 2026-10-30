@@ -30,7 +30,9 @@ def case(request, config, tmp_path, monkeypatch):
         shutil.copytree(other / directory, tmp_path / directory, dirs_exist_ok=True)
     for filename in ("uv.lock", ".python-version"):
         shutil.copyfile(other / filename, tmp_path / filename)
-    (tmp_path / "config/resource-import.json").write_text('{"schema_version":1,"enabled":true}')
+    (tmp_path / "config/resource-import.json").write_text(
+        '{"schema_version":2,"units":{"oci-network":true,"oci-oke":true}}'
+    )
     target = json.loads(own.raw["target_checkpoint"])
     prefix = f"urn:pulumi:{own.unit}::free-infrastructure::"
     kind = "infrastructure:oci:" + ("Network" if own.unit == "oci-network" else "Oke")
@@ -98,7 +100,9 @@ def case(request, config, tmp_path, monkeypatch):
 
 
 def test_import_preflight_binds_mapping_without_apply_activation(case):
-    (case.root / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":false}')
+    (case.root / "config/oci-apply.json").write_text(
+        '{"schema_version":2,"units":{"oci-network":false,"oci-oke":false}}'
+    )
     context, binding = driver.prepare(
         case.root, case.unit, test_ownership.COMMIT, case.inputs, case.raw["journal"]
     )

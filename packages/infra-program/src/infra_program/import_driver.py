@@ -88,7 +88,7 @@ def _target_metadata(root: Path, raw: dict[str, bytes]) -> dict[str, dict[str, A
 def prepare(
     root: Path, unit: str, commit: str, raw: dict[str, bytes], journal: bytes
 ) -> tuple[NetworkPreviewContext, bytes]:
-    driver._enabled(root, True, True)
+    driver._enabled(root, True, True, unit=unit)
     require(set(raw) == names(unit))
     doc = _document(raw)
     result = ownership.prepare(root, doc, prepared_journal=journal)
@@ -238,7 +238,7 @@ def execute(
 ) -> None:
     try:
         root = root.resolve()
-        driver._enabled(root, True, True)
+        driver._enabled(root, True, True, unit=args.unit)
         require(args.unit in oci_apply.UNITS)
         if args.check:
             driver.check(root, args, True, True)

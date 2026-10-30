@@ -76,9 +76,13 @@ def prepare_lifecycle(tmp_path, monkeypatch, unit, fault, importing=False):
         '{"schema_version":2,"units":{"cloudflare-edge":true,"supabase-database":true}}'
     )
     if oci:
-        (tmp_path / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":true}')
+        (tmp_path / "config/oci-apply.json").write_text(
+            '{"schema_version":2,"units":{"oci-network":true,"oci-oke":true}}'
+        )
     if importing:
-        (tmp_path / "config/resource-import.json").write_text('{"schema_version":1,"enabled":true}')
+        (tmp_path / "config/resource-import.json").write_text(
+            '{"schema_version":2,"units":{"oci-network":true,"oci-oke":true}}'
+        )
     uv = private / "tools/uv/uv"
     uv.parent.mkdir(parents=True)
     uv.write_bytes(b"fixture-uv")

@@ -118,7 +118,7 @@ def dependency(
 def prepare(
     root: Path, unit: str, commit: str, raw: dict[str, bytes], importing: bool = False
 ) -> tuple[NetworkPreviewContext, bytes]:
-    driver._enabled(root, True, importing)
+    driver._enabled(root, True, importing, unit=unit)
     require(set(raw) == names(unit))
     foundation = load_foundation(root)
     configuration = parse_config(preview._json(raw["proposal"], operations.MAX_BYTES))
@@ -232,7 +232,7 @@ def execute(
     """One stack per approval; serialize both units without an implicit network update."""
     try:
         root = root.resolve()
-        driver._enabled(root, True)
+        driver._enabled(root, True, unit=args.unit)
         require(args.unit in UNITS)
         if args.check:
             driver.check(root, args, True)

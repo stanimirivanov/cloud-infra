@@ -424,7 +424,7 @@ by this PR.
 
 ## Verification
 
-uv run --locked infra verify and uv build --all-packages use no cluster credentials.
+`uv run --locked infra verify` and `uv build --all-packages` use no cluster credentials.
 The normal CI/hook tests exercise strict schemas, quantities, surge/current usage,
 aggregate capacity, billable/privileged resource denials, evidence tampering,
 ownership and deployment freezes. CI's opt-in tests exercise the real Analyzer
@@ -796,3 +796,120 @@ resources and use separately approved recovery/handoff evidence. This command ha
 no compensating action or retry loop. Code rollback stops future owner admission
 and does not reverse source release, imports or cloud changes. Writer activation
 and any subsequent apply remain separate explicit operations.
+
+## M06 OCI network-adoption staging
+
+M06-PR9 delivers checks and the staged procedure; activation remains pending.
+OCI apply and resource import previously each had a global switch covering network
+and OKE. Both policies now require schema 2, with separate unit entries:
+
+```json
+{
+  "schema_version": 2,
+  "units": {
+    "oci-network": false,
+    "oci-oke": false
+  }
+}
+```
+
+This shape applies independently to `config/oci-apply.json` and
+`config/resource-import.json`. All four committed values remain false. Enabling a
+network import in a later reviewed change does not enable network apply, OKE
+import or OKE apply. The service policy and its Cloudflare/Supabase units are
+unchanged. Exact unit selection is enforced at parent execution, bundle loading
+and repeated preparation used by owned-child admission, before disabled units can
+reach inputs, local locks or credentials. The shared OCI dependency lock and
+network-before-OKE dependency checks remain unchanged.
+
+**BREAKING configuration migration:** legacy schema-1 OCI policies, including
+global `enabled: true`, are rejected. Deploy matching checker and configuration
+versions together. Missing/extra units, truthy non-booleans, unknown/omitted units
+and service units in an OCI policy fail closed. Never migrate a global true into
+implicit approval for both units or both actions. This gate is necessary but does
+not replace signed action-specific admission or external writer exclusion.
+
+### Network-only preparation and acceptance sequence
+
+1. Independently review the protected runner/trust, qualified backend, account
+   eligibility/complete inventory, independent backup and shared writer-exclusion
+   prerequisites for the OCI dependency group. M06 pending consistency reports
+   are not acceptance. Freeze both applicable source and target writers, including
+   administrators and unrelated automation, and retain their authoritative history.
+2. Prepare the existing network ownership bundle with exact source checkpoint and
+   identity, target checkpoint, reviewed network configuration, encrypted stack
+   configuration and source-address/resource-ID mapping. Preserve source state;
+   do not infer ownership from tags or names. Check it using the existing read-only
+   preparation command:
+
+   ```sh
+   uv run --locked infra ownership prepare --evidence .infra/network-ownership.json
+   ```
+
+   This checks recorded scope and freeze assertions without importing resources
+   or releasing writers. Preserve original hashes/clocks and resolve conflicts
+   independently; never remove records to make a mapping pass.
+3. Confirm the target already has the exact protected network component parent,
+   explicit OCI provider metadata, and committed network interface carrying the
+   reviewed existing source IDs. **Existing capability gap:** resource import
+   cannot bootstrap a missing stack, parent/provider metadata or root outputs.
+   Any required setup is a separate reviewed operational action, not a fallback
+   in this stage. The conservative account audit still requires its modeled
+   headroom; import does not create implicit quota credits.
+4. Independently establish native OCI read/import compatibility and expected
+   property equivalence for the reviewed graph. Synthetic transport/local engine
+   tests are not native OCI proof. Prepare the exact pinned CLI/provider inputs,
+   encrypted pair backup, signed schema-2 operation approvals and import bundle
+   under the existing contracts. **Existing plan gap:** the preview CLI does not
+   produce the executor's saved plan, and this PR adds no plan-authoring CLI.
+   Do not proceed without separately reviewed exact plan production and review.
+5. Only in a separately authorized tracked change, enable `oci-network` in the
+   resource-import policy and its required preview flag. Keep OKE import and
+   both OCI apply entries disabled for this adoption stage. Recollect/reapprove
+   all commit/configuration-bound evidence at the resulting reviewed main commit;
+   never edit signed artifacts or refresh old clocks.
+6. Under the protected main workflow context, check exact network import admission:
+
+   ```sh
+   uv run --locked infra resource-import --check --unit oci-network --commit COMMIT --actor ACTOR --environment oci-network-import --bundle .infra/network-import.json --journal .infra/operations/oci-network.json
+   ```
+
+   `COMMIT` and `ACTOR` are placeholders for independently reviewed identities.
+   This intentionally rejects the disabled baseline. Once separately authorized,
+   the existing protected import workflow still requires all signatures, backups,
+   environment controls, current checkpoints, exact mappings and mandatory-policy
+   checks. No workflow dispatch or cloud operation is performed by this PR.
+7. After an explicitly authorized import, retain the succeeded receipt and journal
+   head, exact post-import checkpoint, `post_import_equivalent` result and committed
+   network output/checkpoint digests. Independently reconcile every mapped native
+   identity/property and the mandatory no-op post-import preview. Capture and
+   independently rehearse the current target backup before advancing acceptance.
+   A receipt alone is not effective ownership transfer or external-source release.
+8. Keep the source state and writer freeze intact while the later OKE stage is
+   reviewed. The existing owner-handoff contract requires the paired network/OKE
+   proof, including network import preceding OKE launch and matching committed
+   network dependencies. Network-only success cannot admit that handoff. Source
+   release, target writer activation and routine network apply are separate
+   decisions; do not enable them to declare this staging PR complete.
+
+### Stop and rollback boundaries
+
+Stop on uncertain ownership, missing metadata/interface/plan, stale evidence,
+unsupported import behavior, changed IDs/properties, deletion/replacement,
+non-equivalent post-preview or a dependency mismatch. Preserve all original state,
+freeze evidence, backups and journals. A launched import with an uncertain outcome
+remains indeterminate; a missing receipt after journal success requires separate
+reconciliation. Never retry, truncate history, undo source state or compensate with
+an apply automatically.
+
+Returning the selected unit entry to false blocks new admission but does not
+cancel an in-flight import, reverse adoption or release a writer. Git rollback
+cannot undo state/cloud changes. Reverting this schema migration requires matching
+legacy code/config with global switches disabled, never an enabled global policy.
+No live import, native OCI acceptance, settings change or writer release is claimed.
+
+Focused gate:
+`uv run --locked pytest -q tests/test_oci_activation.py tests/test_service_activation.py tests/test_oci_apply.py tests/test_import_driver.py tests/test_service_apply.py`.
+The full gate is `uv run --locked infra verify`. Existing opt-in import transport
+and service runtime tests remain credential-free. No dependency, journal-format,
+ownership-bundle or operation-approval schema change is introduced.
