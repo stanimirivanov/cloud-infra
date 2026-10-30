@@ -163,6 +163,12 @@ def build_parser() -> argparse.ArgumentParser:
     rehearsal.add_argument("--allow-local-writes", action="store_true", required=True)
     operations = commands.add_parser("operations", help="offline operation request inspection")
     operation_commands = operations.add_subparsers(dest="operations_command", required=True)
+    writer_readiness = operation_commands.add_parser(
+        "check-readiness", help="offline writer-exclusion evidence; never a fence"
+    )
+    writer_readiness.add_argument("--unit", required=True)
+    writer_readiness.add_argument("--writers", type=Path, required=True)
+    writer_readiness.add_argument("--evidence", type=Path)
     operation_inspect = operation_commands.add_parser(
         "inspect", help="validate request; no authority"
     )
@@ -384,6 +390,12 @@ def main(
                 args.exported_at,
             )
             print("PASS: encrypted pair snapshot stored; no resource operation authorized")
+        elif args.command == "operations" and args.operations_command == "check-readiness":
+            from infra_core.writer_readiness import check as check_writer_readiness
+
+            result = check_writer_readiness(root, args.writers, args.evidence, unit=args.unit)
+            print(json.dumps(result, sort_keys=True))
+            return 1  # Distributed writer exclusion remains an independent acceptance gate.
         elif args.command == "operations":
             from infra_core.operations import inspect, inspect_journal
 

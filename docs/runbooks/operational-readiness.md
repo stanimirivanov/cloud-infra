@@ -141,3 +141,102 @@ units. They cover unsigned/forged decisions, different payload types and roles,
 changed bindings, clocks, duplicate gates, missing/changed/cross-unit evidence,
 path bounds, input replacement and CLI exit/redaction behavior. Read-only behavior
 is checked against the fixture files. No live acceptance is performed by these tests.
+
+## M06 writer-exclusion readiness
+
+M06-PR6 adds an offline check of an external freeze observation against an
+independently reviewed writer registry and canonical operation journals. It does
+not acquire locks, freeze or release writers, create journals, dispatch workflows
+or establish distributed exclusion. OCI network and OKE are checked together;
+Cloudflare and Supabase each have their own scope.
+
+From a clean committed checkout:
+
+```sh
+uv run --locked infra operations check-readiness --unit oci-network --writers .infra/writers.json
+uv run --locked infra operations check-readiness --unit oci-network --writers .infra/writers.json --evidence .infra/writer-freeze.json
+```
+
+`--writers` is a separately reviewed private registry, not a list inferred from
+candidate freeze evidence. Its closed schema has `schema_version: 1` and `units`:
+a mapping from unit names to lists of 1–32 distinct lowercase 64-character identity
+hashes. OCI requires exactly `oci-network` and `oci-oke`; a service requires only
+its selected unit. The owners must define and retain the canonical identity
+material behind each hash privately, covering applicable source/target engines,
+manual/admin access and automation. No engine identity or writer ownership is
+inferred from tags. A missing source engine does not require an invented identity.
+
+Without `--evidence`, the command validates the registry and reports pending. When
+an observation is supplied, it must have exactly these fields:
+
+| Field | Required binding or meaning |
+| --- | --- |
+| `schema_version` | Integer 1 |
+| `commit` | Current clean reviewed commit |
+| `foundation_sha256` | Current foundation digest from `uv run --locked infra backend inspect` |
+| `writers_sha256` | SHA-256 of the exact registry file bytes |
+| `frozen_at`, `observed_at`, `expires_at` | Original UTC clocks; frozen ≤ observed ≤ now < expiry ≤ frozen + 15 minutes |
+| `complete`, `other_writers_reviewed` | Both explicitly true; assertions requiring independent review |
+| `units` | Exactly the same unit scope as the registry |
+
+Each `units` value contains only `journal_sha256`, `journal_head`, and `writers`.
+`journal_sha256` binds the exact bytes of `.infra/operations/<unit>.json`.
+`journal_head` is the existing canonical operation-entry digest (as shown by
+`uv run --locked infra operations inspect --journal .infra/operations/oci-network.json`), or null for an explicitly supplied empty
+journal. There is no caller-selectable journal path: alternate copied journals
+cannot stand in for the checkout's canonical location. Custody review must still
+establish that this checkout sees the actual authoritative shared storage.
+
+Each writer observation contains only `identity_sha256`, `frozen` and
+`active_operations`. Identities must match the entire registered set, without
+missing, additional or duplicate entries. Every writer must have `frozen: true`
+and integer `active_operations: 0`; booleans are not operation counts.
+
+### Journal and uncertainty gates
+
+The existing operation validator checks every request, hash-chain link, transition,
+predecessor and entry clock. Every entry must belong to its file's unit and precede
+the freeze. A prepared, admitted or running tail blocks the report. Any historical
+`indeterminate` entry, or `failed` after that operation reached `running`, also
+blocks it even when later work succeeded: a terminal failure is not proof that a
+mutation had no effect. Do not reset, truncate or rewrite history to pass.
+Uncertain outcomes require separate reconciliation and a reviewed trust/history
+procedure; this checker provides no bypass or automatic reconciliation mechanism.
+
+A failure before launch can be consistent with an idle journal. An explicitly
+present empty journal can also be consistent with an initial enrollment assertion,
+but cannot prove that prior history was not lost. Missing files are errors when
+an observation is supplied; the checker never initializes them. Empty/history
+custody acceptance remains pending and must be independently established.
+
+Registry, observation and journals must be distinct canonical relative private
+JSON files under `.infra`, with no symlinks. Reads are bounded to 1 MiB per file;
+duplicate JSON fields, wrong scope, changed bytes and a changed/dirty checkout
+fail with redacted `WREADY001`. The checker rechecks all captured bytes and Git
+identity before returning, but does not provide an atomic snapshot or hold locks.
+Observations can become stale immediately afterward.
+
+### External exclusion remains pending
+
+A consistent supplied observation reports
+`writer_evidence: freeze-assertions-consistent`; without one it reports `pending`.
+Every report has `status: pending`, `writers_excluded: false`,
+`locks_verified: false`, `writer_release_authorized: false`,
+`execution_authorized: false`, `activation_authorized: false` and
+`live_controls_verified: false`. The CLI exits 1. These unsigned assertions cannot
+replace the operation-specific ownership/recovery freeze contracts, signed
+acceptance or an effective external fence.
+
+Source/target owners and the independent reviewer must verify the effective freeze
+of all writers, including administrators and non-cooperating processes; common
+authoritative journal storage and lock namespace across cooperating runners;
+storage durability, retention and initial enrollment; clock/provenance trust;
+and continued exclusion between observation and the explicitly authorized action.
+GitHub concurrency and advisory local locks do not fence a different host or an
+external engine. Writer release remains a separate decision after reconciliation;
+this PR performs neither freeze nor release and changes no existing lock behavior.
+
+Focused verification:
+`uv run --locked pytest -q tests/test_writer_readiness.py tests/test_operations.py tests/test_ownership.py tests/test_recovery_driver.py`.
+The full shared gate remains `uv run --locked infra verify`. No new dependency,
+journal format migration, live operation or activation is introduced.

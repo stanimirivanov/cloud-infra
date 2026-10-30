@@ -581,3 +581,9 @@ with an optional `--evidence .infra/account-readiness.json` index. OCI, Cloudfla
 and Supabase reuse existing evidence/semantic audits; live entitlement and IAM
 acceptance remain pending. See the
 [account readiness procedure](docs/runbooks/free-tier-governance.md#m06-account-readiness).
+
+M06-PR6 adds `uv run --locked infra operations check-readiness --unit oci-network --writers .infra/writers.json`
+with optional `--evidence .infra/writer-freeze.json`. It checks external freeze
+assertions against canonical journals without locking, initializing or releasing
+writers. Distributed exclusion remains pending; see the
+[writer-exclusion procedure](docs/runbooks/operational-readiness.md#m06-writer-exclusion-readiness).
