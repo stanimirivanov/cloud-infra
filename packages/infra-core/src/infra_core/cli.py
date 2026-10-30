@@ -200,6 +200,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
+    staging = services_commands.add_parser(
+        "check-staging", help="offline Supabase inputs; activation pending"
+    )
+    for name in ("account-id", "scope-id"):
+        staging.add_argument("--" + name, required=True)
+    for name in ("config", "evidence", "encrypted-configuration"):
+        staging.add_argument("--" + name, type=Path, required=True)
     service_apply = commands.add_parser("apply", help="explicit protected single-unit update")
     service_apply.add_argument(
         "--unit",
@@ -325,6 +332,19 @@ def main(
                     with private_path(root, args.evidence).open("rb") as stream:
                         payload = stream.read(MAX_BYTES + 1)
                     print(json.dumps(check_administration(root, payload), indent=2))
+        elif args.command == "services" and args.services_command == "check-staging":
+            from infra_core.supabase_staging import check as check_supabase_staging
+
+            result = check_supabase_staging(
+                root,
+                args.config,
+                args.evidence,
+                args.encrypted_configuration,
+                account_id=args.account_id,
+                scope_id=args.scope_id,
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 1  # Staging consistency does not complete operational acceptance.
         elif args.command == "services":
             from infra_core.governance.contracts import mapping
             from infra_core.service_evidence import (

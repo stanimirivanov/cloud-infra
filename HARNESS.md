@@ -592,3 +592,8 @@ M06-PR7 separates service apply activation into schema-2 per-unit gates, both
 committed disabled. Cloudflare preparation and its saved-plan production gap are
 covered in the [staged activation procedure](docs/runbooks/independent-services.md#m06-cloudflare-staged-activation-preparation).
 Enabling Cloudflare never implicitly enables Supabase; OCI/import gates are unchanged.
+
+M06-PR8 adds the offline Supabase staging command documented in the
+[staged Supabase procedure](docs/runbooks/independent-services.md#m06-supabase-staging-checks-and-procedure).
+It checks exact account/organization, existing usage evidence and required encrypted
+configuration keys through the shared execution validator. Activation stays pending.
