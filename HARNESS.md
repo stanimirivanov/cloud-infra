@@ -175,7 +175,10 @@ nor proves administrator bypass, reviewer independence/custody or protected-comm
   identities, protected execution and synthetic integration implemented;
   [engineering closeout](docs/m04-closeout.md) requires PR17 CI/merge, with live
   acceptance separately blocked.
-- M05: controlled cutover and reliable operations.
+- [M05](docs/m05-closeout.md): controlled cutover and reliable operations;
+  final implementation merged in PR #156, live acceptance separate.
+- [M06](docs/m06-closeout.md): readiness checks and staged activation procedures;
+  PR1–12 merged, PR13 closeout conditional on CI/merge, operational acceptance pending.
 
 Retirement removes repository execution paths, not cloud resources, local private
 artifacts or external state ownership. The configured backend identity/prefix stays
@@ -522,9 +525,10 @@ rehearsal and exact restic snapshot retrieval. No live recovery is part of verif
 ## Failure rehearsal and finite closeout (M05-PR16)
 
 [The M05 closeout](docs/m05-closeout.md) maps all 16 approved tasks to implementation
-PRs and gives a finite administrator-owned live acceptance checklist. Its engineering
-completion is conditional on PR16 CI and merge; no live activation, SLO or owner
-transfer is inferred from passing repository tests.
+PRs and gives a finite administrator-owned live acceptance checklist. PR16 merged
+as PR #156; no live activation, SLO or owner transfer is inferred from passing
+repository tests. The [M06 closeout](docs/m06-closeout.md) tracks the subsequent
+readiness deliverables and remaining operational acceptance.
 
 `tests/test_operations_integration.py` composes production journals/locks, recovery
 signature admission and incident/outbox persistence across bounded Linux child

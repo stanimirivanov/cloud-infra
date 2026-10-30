@@ -11,8 +11,9 @@ that the asserted live controls actually exist. Every report has
 `execution_authorized: false`, `activation_authorized: false` and
 `live_controls_verified: false`, even when all gates are accepted. Existing protected
 operation approvals are still required and cannot consume this report as a permit.
-Producer-specific semantic validation and operational collection belong to later
-M06 slices; matching hashes are not independent live validation.
+Producer-specific consistency checks and staged procedures are reconciled in the
+[M06 closeout](../m06-closeout.md). Their implementation does not complete live
+acceptance; matching hashes are not independent live validation.
 
 ## Private input contract
 
@@ -98,7 +99,7 @@ operation and cutover payload types cannot substitute for a readiness signature.
 
 This command never signs records, enrolls keys or enables policy. Current repository
 trust is disabled/empty; it cannot authenticate acceptance until separately reviewed
-enrollment in M06-PR2. A disabled or invalid trust policy, wrong role, changed payload
+enrollment. M06-PR2 delivered enrollment checks with actual enrollment pending. A disabled or invalid trust policy, wrong role, changed payload
 or unverifiable signature makes present gates `failed/review_unverified`.
 Historical trust does not survive a policy-byte change automatically. Regenerate and
 review evidence at the new commit/policy; no fallback to old keys is provided.
