@@ -76,23 +76,18 @@ def _enabled(
             else "config/service-apply.json"
         )
     )
-    if not oci and not importing:
-        require(
-            type(value) is dict
-            and set(value) == {"schema_version", "units"}
-            and type(value["schema_version"]) is int
-            and value["schema_version"] == 2
-            and type(value["units"]) is dict
-            and set(value["units"]) == {"cloudflare-edge", "supabase-database"}
-            and all(type(enabled) is bool for enabled in value["units"].values())
-            and unit in value["units"]
-            and value["units"][unit] is True
-        )
-        return
+    require(type(oci) is bool and type(importing) is bool and (not importing or oci))
+    units = {"oci-network", "oci-oke"} if oci else {"cloudflare-edge", "supabase-database"}
     require(
-        value == {"schema_version": 1, "enabled": True}
+        type(value) is dict
+        and set(value) == {"schema_version", "units"}
         and type(value["schema_version"]) is int
-        and value["enabled"] is True
+        and value["schema_version"] == 2
+        and type(value["units"]) is dict
+        and set(value["units"]) == units
+        and all(type(enabled) is bool for enabled in value["units"].values())
+        and unit in units
+        and value["units"][unit] is True
     )
 
 

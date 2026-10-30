@@ -597,3 +597,9 @@ M06-PR8 adds the offline Supabase staging command documented in the
 [staged Supabase procedure](docs/runbooks/independent-services.md#m06-supabase-staging-checks-and-procedure).
 It checks exact account/organization, existing usage evidence and required encrypted
 configuration keys through the shared execution validator. Activation stays pending.
+
+M06-PR9 separates OCI apply/import policies into independent schema-2 per-unit
+gates, all committed disabled. See the
+[network-adoption staging procedure](docs/runbooks/kubernetes-cutover.md#m06-oci-network-adoption-staging)
+for exact mapping, existing-target/plan prerequisites, native-import proof and
+paired-handoff boundaries. The shared OCI dependency lock is unchanged.

@@ -67,3 +67,8 @@ service-apply.json uses schema 2 with exactly cloudflare-edge and supabase-datab
 boolean unit gates. Keep both false until separately reviewed operational
 activation; never migrate a legacy global true into implicit approval for both.
 Each service also retains its own preview gate and full signed execution admission.
+
+oci-apply.json and resource-import.json use schema 2 with exactly oci-network and
+oci-oke boolean unit gates. Keep every entry false until separately reviewed
+operational activation. Import and apply remain independent actions; network
+activation must never implicitly enable OKE or release source ownership.

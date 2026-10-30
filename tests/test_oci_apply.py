@@ -92,7 +92,9 @@ def case(request, config, tmp_path):
             path.read_text(),
         )
     )
-    (tmp_path / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":true}')
+    (tmp_path / "config/oci-apply.json").write_text(
+        '{"schema_version":2,"units":{"oci-network":true,"oci-oke":true}}'
+    )
     unit = request.param
     foundation = load_foundation(tmp_path)
     account, _, inventory = test_oci.evidence()
