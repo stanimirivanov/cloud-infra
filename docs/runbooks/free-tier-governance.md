@@ -339,3 +339,107 @@ unchanged during a multi-request scan, or that unsigned JSON was not edited.
 Effective IAM/discovery coverage and trusted provenance still need independent
 review before any future operation. This implementation does not enable deployment,
 assert live eligibility, establish operational SLOs or install drift/cost monitors.
+
+## M06 account readiness
+
+M06-PR5 adds a combined offline readiness report for `oci-network`, `oci-oke`,
+`cloudflare-edge` and `supabase-database`. It reuses the existing audits without
+collecting telemetry, accessing credentials, changing quota profiles or enabling
+providers. Independent live entitlement and effective read-only IAM review remain
+acceptance prerequisites.
+
+From a clean committed checkout, supply the independently reviewed expected account:
+
+```sh
+uv run --locked infra governance check-readiness --unit oci-network --account-id ACCOUNT_ID
+uv run --locked infra governance check-readiness --unit oci-network --account-id ACCOUNT_ID --evidence .infra/account-readiness.json
+```
+
+`ACCOUNT_ID` is a placeholder, not a value to copy from unreviewed evidence. Use the
+existing provider account identity rules (OCI tenancy, Cloudflare account or
+Supabase user billing scope). Run separately for each unit. Without an index,
+evidence is pending; supplying an invalid bundle is an error, never a partial pass.
+
+The closed schema-1 index contains:
+
+```json
+{
+  "schema_version": 1,
+  "unit": "oci-network",
+  "commit": "CURRENT_REVIEWED_COMMIT",
+  "configuration": ".infra/account.json",
+  "observation": ".infra/inventory.json",
+  "proposal": ".infra/proposal.json"
+}
+```
+
+For OCI, `configuration` is a JSON object with the same fields/values as the
+existing reviewed account TOML; no new account schema is introduced. The existing
+inventory envelope binds the parsed account and tracked profile semantically, so
+JSON serialization does not change that binding. `observation` is the existing
+inventory payload and requires its adjacent `.envelope.json` sidecar. `proposal`
+is the existing normalized governance proposal; it must include the selected unit
+and may include both OCI units, preserving account-wide peak accounting. Unknown
+units are rejected. A passing account audit does not prove that a proposal matches
+a later saved resource plan; execution admission remains responsible for that.
+
+For Cloudflare/Supabase, use the corresponding unit, the existing service proposal
+JSON as `configuration`, the service-usage payload as `observation`, and JSON null
+for `proposal`. The configuration already contains the service's proposal/growth.
+The adjacent observation sidecar remains mandatory. Provider, account and unit
+must match the independent CLI expectation and current tracked profile.
+
+All paths are distinct canonical relative `.infra/*.json` paths, including the
+sidecar, with no symlinks or index aliases. Captures are limited to 1 MiB per file;
+larger legitimate inventories require a reviewed capture-limit extension, never
+truncation. Duplicate JSON keys, missing fields, extra index fields and unsafe
+paths fail. The checker retains the captured tracked profile bytes and input files,
+then rechecks them and clean Git identity before returning. Reports omit raw
+account identifiers, configuration, resources and usage.
+
+### Preserved audit gates
+
+OCI inventory must pass its existing commit/account/profile-bound envelope and
+complete coverage validation, followed by the entire governance audit: current
+verified entitlement and other-service review, home-region and account-wide
+inventory, covered resource families, reservations, complete usage, current
+watermarks, proposed changes and replacement peak capacity. Unknown usage is not
+zero. A collector response with an unknown authoritative watermark remains
+unacceptable; the report does not promote the OCI Usage API's query end into a
+completeness proof.
+
+Cloudflare/Supabase use the unchanged service evidence validator and semantic
+audit: independent account/scope bindings, complete unmanaged resources, Free
+plan eligibility, reviewed profile revision/date, original collection clocks and
+per-metric usage coverage. Supabase keeps the original organization billing-cycle
+anchor and separate storage-capacity/GB-hour guards. Reporting lag and missing
+values fail; Cloudflare DNS retains its null billing period and no usage meter.
+No profile dates, limits, enabled flags or provider terms are changed by this PR.
+
+Transport observations retain their existing 15-minute freshness window. Original
+eligibility/profile age limits, billing periods and usage watermarks also apply;
+a fresh outer index or observation clock cannot refresh older underlying evidence.
+The checker uses one captured clock across envelope and semantic validation.
+
+### Acceptance boundary
+
+A consistent bundle reports `account_evidence: account-evidence-consistent`.
+Without a bundle it reports `account_evidence: pending`; invalid input returns
+redacted `AREADY001`. Every report has `status: pending`, `account_ready: false`,
+`execution_authorized: false`, `activation_authorized: false` and
+`live_controls_verified: false`. The CLI exits 1 for pending or invalid evidence.
+This is an unsigned consistency report, not independent source authentication,
+financial assurance, a signed M06 acceptance record or an execution permit.
+
+The provider/account owner and independent reviewer must confirm actual Free
+entitlement and billing, out-of-scope services, effective read-only credential
+permissions, complete tenancy/organization visibility, original coverage
+watermarks and the intended growth/reservation assumptions. Retain their review
+with the original private evidence; do not replace it with this summary. Live
+collection under reviewed credentials and activation remain separate operational
+steps. No live provider calls or account acceptance occurred in this engineering PR.
+
+Focused gate:
+`uv run --locked pytest -q tests/test_account_readiness.py tests/test_governance.py tests/test_inventory_envelopes.py tests/test_service_envelopes.py tests/test_service_coverage.py`.
+The shared gate remains `uv run --locked infra verify`; no dependency or evidence
+schema migration is introduced.

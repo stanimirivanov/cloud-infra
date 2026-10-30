@@ -575,3 +575,9 @@ with an optional `--evidence .infra/backup-readiness.json` bundle. It checks exi
 pair/snapshot/off-host rehearsal evidence without repository access or writes;
 physical storage independence and key custody remain pending. See the
 [independent backup readiness procedure](docs/runbooks/pulumi-backend.md#m06-independent-backup-readiness).
+
+M06-PR5 adds `uv run --locked infra governance check-readiness --unit oci-network --account-id ACCOUNT_ID`
+with an optional `--evidence .infra/account-readiness.json` index. OCI, Cloudflare
+and Supabase reuse existing evidence/semantic audits; live entitlement and IAM
+acceptance remain pending. See the
+[account readiness procedure](docs/runbooks/free-tier-governance.md#m06-account-readiness).

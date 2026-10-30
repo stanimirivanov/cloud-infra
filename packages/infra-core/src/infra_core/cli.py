@@ -103,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         "governance", help="account-wide cost preflight; no deployment"
     )
     governance_commands = governance.add_subparsers(dest="governance_command", required=True)
+    account_readiness = governance_commands.add_parser(
+        "check-readiness", help="offline account evidence; no activation authority"
+    )
+    account_readiness.add_argument("--unit", required=True)
+    account_readiness.add_argument("--account-id", required=True)
+    account_readiness.add_argument("--evidence", type=Path)
     auditor = governance_commands.add_parser(
         "audit", help="audit normalized proposed changes against account evidence"
     )
@@ -440,6 +446,14 @@ def main(
                     indent=2,
                 )
             )
+        elif args.command == "governance" and args.governance_command == "check-readiness":
+            from infra_core.account_readiness import check as check_account_readiness
+
+            result = check_account_readiness(
+                root, args.evidence, unit=args.unit, account_id=args.account_id
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 1  # Independent live entitlement and IAM review remains pending.
         elif args.command == "governance":
             from infra_core.governance.audit import audit
             from infra_core.inventory.oci import OCIReader, collect
