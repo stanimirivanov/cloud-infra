@@ -40,7 +40,9 @@ def test_service_preflight_audits_existing_inputs_before_secret_lookup(
     config.write_text(
         config.read_text().replace("preview_enabled = false", "preview_enabled = true")
     )
-    (tmp_path / "config/service-apply.json").write_text('{"schema_version":1,"enabled":true}')
+    (tmp_path / "config/service-apply.json").write_text(
+        '{"schema_version":2,"units":{"cloudflare-edge":true,"supabase-database":true}}'
+    )
     context = test_preview_program.context.__wrapped__(service)
     config_keys = {context.contract.unit + ":token": {"secure": "v1:fixture"}}
     if proposal["provider"] == "supabase":
@@ -70,7 +72,9 @@ def prepare_lifecycle(tmp_path, monkeypatch, unit, fault, importing=False):
     private = tmp_path / ".infra"
     private.mkdir()
     (tmp_path / "config").mkdir()
-    (tmp_path / "config/service-apply.json").write_text('{"schema_version":1,"enabled":true}')
+    (tmp_path / "config/service-apply.json").write_text(
+        '{"schema_version":2,"units":{"cloudflare-edge":true,"supabase-database":true}}'
+    )
     if oci:
         (tmp_path / "config/oci-apply.json").write_text('{"schema_version":1,"enabled":true}')
     if importing:
