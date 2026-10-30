@@ -17,6 +17,7 @@ from typing import Any
 import infra_core
 import pulumi_supabase
 from infra_core.cutover import repository_state
+from infra_core.encrypted_configuration import validate as validate_encrypted_configuration
 from infra_core.evidence import MAX_TOTAL_BYTES
 from infra_core.foundation import load_foundation
 from infra_core.oci.config import FoundationConfig as OciConfig
@@ -110,13 +111,6 @@ def _contract(root: Path, context: Context) -> None:
 
 
 def _stack_config(context: Context, content: bytes) -> dict[str, Any]:
-    value = _json(content, 1024 * 1024)
-    require(
-        set(value) == {"encryptionsalt", "config"}
-        and type(value["encryptionsalt"]) is str
-        and value["encryptionsalt"].startswith("v1:")
-        and len(value["encryptionsalt"]) > 3
-    )
     keys: set[str] = set()
     if isinstance(context, ServicePreviewContext):
         keys.add(context.contract.unit + ":token")
@@ -125,16 +119,10 @@ def _stack_config(context: Context, content: bytes) -> dict[str, Any]:
                 context.contract.unit + ":databasePassword-" + r["key"]
                 for r in context.proposal["resources"]
             )
-    require(type(value["config"]) is dict and set(value["config"]) == keys)
-    for secret in value["config"].values():
-        require(
-            type(secret) is dict
-            and set(secret) == {"secure"}
-            and type(secret["secure"]) is str
-            and secret["secure"].startswith("v1:")
-            and len(secret["secure"]) > 3
-        )
-    return value
+    try:
+        return validate_encrypted_configuration(content, keys)
+    except ValueError:
+        raise RuntimeError(MESSAGE) from None
 
 
 def _prepare(

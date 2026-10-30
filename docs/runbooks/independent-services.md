@@ -602,3 +602,111 @@ operation gate can additionally exercise service transport/engine behavior witho
 cloud credentials. No live Cloudflare activation or acceptance was performed by
 this engineering PR; production configuration, evidence and authorization remain
 pending.
+
+## M06 Supabase staging checks and procedure
+
+M06-PR8 delivers checks and the staged procedure; activation remains pending.
+Neither service gate, preview flag, credential enrollment nor production project
+is changed. The Supabase stage uses its own schema-2 `supabase-database` apply
+entry from M06-PR7; Cloudflare enablement is never Supabase authorization.
+
+### Offline staging inputs
+
+Use a clean committed checkout and independently reviewed account and organization
+identities, rather than copying expectations from candidate evidence:
+
+```sh
+uv run --locked infra services check-staging --account-id ACCOUNT_ID --scope-id ORGANIZATION_ID --config .infra/supabase.json --evidence .infra/supabase-evidence.json --encrypted-configuration .infra/supabase-stack.json
+```
+
+The account/organization values above are placeholders. Configuration is the
+existing Supabase proposal schema; evidence and its adjacent `.envelope.json`
+sidecar retain the existing usage schema and original clocks. All four private
+inputs must be distinct canonical relative `.infra/*.json` files with no symlinks,
+each at most 1 MiB. The checker captures tracked foundation, service gates and
+quota profiles, then rechecks their bytes, all private inputs and clean Git
+identity before returning. It never calls a provider, accesses credentials,
+decrypts configuration, writes files or imports the Pulumi runtime.
+
+The existing service audit enforces the exact Supabase provider/unit, reviewed
+account and organization, Free eligibility, complete unmanaged project inventory,
+profile revision/date, billing-cycle anchor, metric coverage and projected growth.
+Storage capacity and cumulative GB-hours remain separate guards. Missing or late
+usage is never zero-filled or restamped. This checker introduces no new quotas,
+profile dates or provider-terms assumptions.
+
+The encrypted JSON configuration uses exactly `encryptionsalt` and `config`.
+The salt and every secure value must have a nonempty `v1:` suffix. `config` must
+contain exactly `supabase-database:token` and
+`supabase-database:databasePassword-<key>` for every proposed project key. Every
+value is a single-field `{"secure": "v1:..."}` object. Missing/extra entries,
+plaintext, duplicate fields and wrong namespaces fail. This is the same shared
+ciphertext-shape validator used by preview/apply, including Cloudflare and OCI
+callers; existing executor diagnostics remain unchanged. No ciphertext is decrypted
+or echoed. Matching shape cannot establish valid encryption, token scope, password
+strength, different passwords, actual key custody or successful readback.
+
+A successful input check reports `staging_evidence: inputs-consistent` and
+`status: pending`, with `activation_authorized`, `execution_authorized` and
+`live_controls_verified` false. The CLI exits 1 because operational acceptance is
+still pending. `preview_enabled` and `apply_enabled` only describe the currently
+tracked Supabase flags; even true values confer no authority. Invalid input fails
+with redacted `STAGE001`. Reports include input digests, not account/organization
+identities, proposal content, tokens, passwords or ciphertext. This report cannot
+replace the original private evidence or signed operation admission.
+
+### Separately authorized Supabase activation sequence
+
+1. Independently accept protected execution/custody, backend readiness, independent
+   backup, account readiness and writer exclusion for `supabase-database`. Confirm
+   the existing project-scoped stack, actual organization/user visibility and
+   organization-wide usage; a successful pending gap report is not acceptance.
+2. Review intended project keys, organization, names, region and supported project
+   properties using the existing proposal contract. Account-wide Free project
+   capacity and the target organization's actual billing cycle must be covered.
+   The existing factory uses the reviewed API endpoint and disables legacy API
+   keys according to its contract; do not widen it for staging convenience.
+3. Prepare the exact encrypted token/password configuration under independent
+   custody. Run the offline command above while activation remains disabled.
+   Independently verify actual token permissions, ownership, decryptability and
+   password handling; never put secret literals in chat, PRs or shell arguments.
+4. Separately review the Supabase-only apply entry and preview-flag enablement at
+   a new main commit. Leave unrelated service/unit settings as independently
+   reviewed; do not inherit Cloudflare approvals. Recollect/reapprove all evidence
+   whose commit, configuration or policy binding changed.
+5. Prepare the pinned parameterized Supabase provider/runtime with the existing
+   verified toolchain process, exact saved plan and action-specific signed
+   execution bundle. **Existing harness gap:** preview does not produce the
+   executor's saved plan; this PR adds no plan-authoring CLI. Do not proceed
+   without a separately reviewed plan-production procedure/artifact. Provider
+   acquisition and schema identity checks remain the executor's existing gates.
+6. Under the protected main workflow context, perform existing pre-credential
+   admission for the exact reviewed commit and bundle:
+
+   ```sh
+   uv run --locked infra apply --check --unit supabase-database --commit COMMIT --actor ACTOR --environment supabase-database-apply --bundle .infra/supabase-apply.json --journal .infra/operations/supabase-database.json
+   ```
+
+   The disabled baseline intentionally rejects this command. After separately
+   authorized enablement, all signatures, freshness, backend, plan, environment
+   and journal checks still apply. Only an explicit operational authorization
+   permits dispatching the existing protected service-apply workflow for Supabase.
+7. Retain its receipt, exact plan/approval bindings, durable journal and private
+   post-state evidence. Independently reconcile project identities, organization,
+   configuration and actual observed state. Project creation does not establish
+   application schema, migrations, database contents, RLS enforcement, backups of
+   database data or end-user availability. Those claims require separate scope
+   and evidence; Pulumi checkpoint recovery is not database-content recovery.
+
+Stop on quota/coverage uncertainty, plan gaps, unexpected identities/properties,
+deletes/replacements or indeterminate results. Retain the freeze and journals;
+never retry, reset history or compensate automatically. Disabling the Supabase
+entry blocks new admission but does not cancel an in-flight update, delete a
+project, restore database data or release writers. Any corrective action requires
+a separate reviewed operational decision. No live activation was performed here.
+
+Focused gate:
+`uv run --locked pytest -q tests/test_supabase_staging.py tests/test_preview_driver.py tests/test_service_apply.py`.
+The full gate is `uv run --locked infra verify`; existing isolated service runtime
+tests cover the shared execution validator. No dependency, proposal/evidence
+schema migration or activation change is introduced.
