@@ -603,3 +603,9 @@ gates, all committed disabled. See the
 [network-adoption staging procedure](docs/runbooks/kubernetes-cutover.md#m06-oci-network-adoption-staging)
 for exact mapping, existing-target/plan prerequisites, native-import proof and
 paired-handoff boundaries. The shared OCI dependency lock is unchanged.
+
+M06-PR10 adds `uv run --locked infra kubernetes check-staging --account-id TENANCY_OCID --cluster-id CLUSTER_OCID --config .infra/kubernetes.json --oci-config .infra/oci.json --network-outputs .infra/network-outputs.json --inventory .infra/cluster.json --resources .infra/manifests.json`.
+It checks recorded OKE network/cluster consistency through the existing validators,
+without live access or activation authority. See the
+[OKE staging procedure](docs/runbooks/kubernetes-cutover.md#m06-oke-staging-checks-and-procedure)
+for private input schemas, live acceptance and separate paired-handoff boundaries.
