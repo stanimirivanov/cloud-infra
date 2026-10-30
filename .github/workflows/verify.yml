@@ -43,7 +43,11 @@ jobs:
       - name: Verify operation protocols with disposable local state (no cloud)
         env:
           RUN_OPERATION_INTEGRATION: '1'
-        run: uv run --locked pytest -q -m operation_integration --basetemp .infra/pytest-operations -o cache_dir=.infra/pytest-cache
+        run: uv run --locked pytest -q -m operation_integration --ignore=tests/test_operations_integration.py --basetemp .infra/pytest-operations -o cache_dir=.infra/pytest-cache
+      - name: Rehearse interrupted operations and acceptance boundaries (no cloud)
+        env:
+          RUN_OPERATION_INTEGRATION: '1'
+        run: uv run --locked pytest -q tests/test_operations_integration.py -m operation_integration --basetemp .infra/pytest-operation-failures -o cache_dir=.infra/pytest-cache
       - name: Verify native provider release assets (no credentials or execution)
         shell: bash
         env:

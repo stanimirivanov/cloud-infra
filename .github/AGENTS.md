@@ -67,3 +67,9 @@ credential-free preflight, shared OCI/service operation concurrency and durable 
 locks/journals. Only the explicit admitted step receives backend writer and recovery
 credentials; keep provider Read credentials separate inside the driver. Never upload
 state, automatically retry imports or release writers from this workflow.
+
+M05 final acceptance rehearsals are an unconditional credential-free verification
+step under the existing operation_integration opt-in. Exclude that test file from
+the earlier protocol/engine step so CI executes each scenario once. Keep normal
+shared verification and native/disposable gates intact; failure rehearsals must
+never dispatch workflows, enable operational contracts or use live credentials.

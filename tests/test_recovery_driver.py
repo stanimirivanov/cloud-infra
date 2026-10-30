@@ -457,26 +457,8 @@ def test_default_disabled_and_check_never_loads_keys(monkeypatch, tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-@pytest.mark.parametrize(
-    "fault",
-    [
-        None,
-        "credentials",
-        "snapshot",
-        "key",
-        "pre-drift",
-        "source-change",
-        "peer-change",
-        "input-change",
-        "local-change",
-        "restore",
-        "publish",
-        "post-drift",
-        "post-input",
-        "state-mismatch",
-    ],
-)
-def test_frozen_lifecycle_outcomes_and_no_compensation(prepared, monkeypatch, fault):
+def prepare_lifecycle(prepared, monkeypatch, fault):
+    """Share only runtime scaffolding with cross-process failure rehearsals."""
     import hashlib
     from types import SimpleNamespace
 
@@ -605,6 +587,31 @@ def test_frozen_lifecycle_outcomes_and_no_compensation(prepared, monkeypatch, fa
             )
         return values
 
+    return credentials, events
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        None,
+        "credentials",
+        "snapshot",
+        "key",
+        "pre-drift",
+        "source-change",
+        "peer-change",
+        "input-change",
+        "local-change",
+        "restore",
+        "publish",
+        "post-drift",
+        "post-input",
+        "state-mismatch",
+    ],
+)
+def test_frozen_lifecycle_outcomes_and_no_compensation(prepared, monkeypatch, fault):
+    root, args, bundle, raw, journal, _ = prepared
+    credentials, events = prepare_lifecycle(prepared, monkeypatch, fault)
     report = r._recover(root, args, bundle, raw, journal, credentials)
     outcome = (
         "succeeded"
