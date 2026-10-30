@@ -29,6 +29,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("verify", help="run the credential-free Python and artifact checks")
+    providers = commands.add_parser("providers", help="inspect repository provider capabilities")
+    provider_commands = providers.add_subparsers(dest="provider_command", required=True)
+    provider_inspect = provider_commands.add_parser("inspect", help="read-only capability report")
+    provider_inspect.add_argument("--provider", help="select a known provider, e.g. oci or gcp")
     readiness = commands.add_parser(
         "readiness", help="read-only acceptance assertions; no authority"
     )
@@ -323,7 +327,11 @@ def main(
     args = build_parser().parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "readiness":
+        if args.command == "providers":
+            from infra_core.provider_capabilities import inspect as inspect_providers
+
+            print(json.dumps(inspect_providers(root, args.provider), indent=2))
+        elif args.command == "readiness":
             from infra_core.readiness import check as check_readiness
 
             result = check_readiness(root, args.evidence, unit=args.unit)
