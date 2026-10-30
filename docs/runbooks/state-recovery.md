@@ -162,3 +162,115 @@ They exercise synthetic local checkpoints/restic only, including encrypted impor
 wrong keys, empty configuration/output rehearsal, missing target refusal, signed
 admission failures, pre/post drift, changed inputs and interrupted writes. No live
 cloud operation or workflow dispatch is part of these checks.
+
+## M06 recovery staging checks and procedure
+
+M06-PR12 adds an offline compatibility check and the staged operational procedure.
+Activation remains pending. `config/state-recovery.json`, resource-operation gates,
+reviewer enrollment and workflow settings are unchanged. No restore, workflow
+dispatch, credential access or writer release is performed by this change.
+
+### Compare the current and selected historical pairs
+
+On the reviewed clean checkout, use four distinct bounded JSON files under ignored
+`.infra` and the independently reviewed unit:
+
+```sh
+uv run --locked infra backup check-recovery --unit oci-network --current-checkpoint .infra/current-checkpoint.json --current-configuration .infra/current-config.json --restore-checkpoint .infra/restore-checkpoint.json --restore-configuration .infra/restore-config.json
+```
+
+Use the original encrypted checkpoint and configuration bytes. The checker delegates
+salt/encryption-shape, existing-unit resource identity, protection/parent/provider
+and managed input/output comparison to the same contracts as the recovery executor.
+Pending operations, duplicate identities, deleted resources, changed managed
+properties and changed network root outputs fail closed. Conservative ciphertext
+comparison can reject semantically equal re-encrypted managed properties; do not
+decrypt or edit captured evidence to bypass that rejection. Engine manifest metadata
+may differ, as in the existing execution contract.
+
+Files are restricted to private `.infra` paths, each at most 1 MiB; symlinks,
+reused paths, malformed/duplicate JSON fields and nonfinite values are rejected.
+The clean commit, paths and exact captured bytes are rechecked before returning.
+The schema-1 report contains unit, commit and four input hashes with
+`pair_evidence: inputs-compatible`, `status: pending`, and false execution,
+activation, writer-release and live-control authority. Exit zero means compatibility
+of these supplied bytes only; invalid inputs exit nonzero with redacted `RESTAGE001`
+diagnostics. No plaintext, IDs, resource properties or private paths are printed.
+
+This is not complete executor admission. It does not prove the current pair is the
+live backend state, authenticate a historical snapshot, validate the full provider
+graph, check live OCI dependency outputs, access restic, accept a key or reconcile
+with providers. An empty/missing target cannot be bootstrapped by this command.
+Use the existing backup-readiness check for exact snapshot/rehearsal consistency;
+physical independence and key custody still require separate acceptance. No report
+can be substituted for the action-specific signed recovery request.
+
+### Staged recovery acceptance
+
+1. Independently accept protected execution, qualified backend, existing stack
+   identities, independent backup destination/access and separate key custody.
+   Review recovery objectives per unit and the intended historical snapshot. This
+   is checkpoint/configuration recovery only: database/application data recovery,
+   missing-stack bootstrap and resource rollback remain outside this capability.
+2. Freeze all source and target writers externally, including administrators and
+   other automation. For either OCI unit freeze both network and OKE. Preserve
+   canonical journals, lock custody and current ownership records. Confirm there
+   are no active or unresolved operations; a local lock is not distributed fencing.
+3. Export the **current** encrypted pair after the freeze and capture its current
+   safety backup. Separately retrieve/select the exact historical pair to restore.
+   Never substitute the historical receipt for the safety backup or restamp its
+   original export clock. Run the pair check above, then the existing backup check:
+
+   ```sh
+   uv run --locked infra backup check-readiness --unit oci-network --repository-id REPOSITORY_SHA256 --recovery-host-id HOST_SHA256 --evidence .infra/backup-readiness.json
+   ```
+
+   Independently verify the same selected snapshot was rehearsed on the recovery
+   host with wrong-key rejection, correct-key readback and measured objectives.
+   The host must differ from the backup source. Access to a mounted local repository
+   does not itself prove physical independence or separately available credentials.
+4. Review historical provider credentials sealed in the old checkpoint and effective
+   provider Read IAM; preserve S3 writer separation from disposable observers.
+   For services retain the successful apply ownership history. For OCI retain the
+   authenticated original paired-handoff subject, decision, approval/signatures
+   and owner checkpoint. Missing historical keys or changed trust/foundation need
+   a separately reviewed migration, never a recovery bypass.
+5. Only under separate operational authorization, review enabling the recovery gate,
+   relevant preview prerequisites and protected recovery environment. Recollect
+   commit-bound artifacts after that reviewed main change. Prepare the fresh
+   recovery request, current safety evidence, freeze/credential review, canonical
+   plan and two independent role signatures. Reserve the exact new immutable
+   configuration destination and receipt path without overwriting prior output.
+6. In the real protected workflow context, run its existing credential-free check:
+
+   ```sh
+   uv run --locked infra state-recovery --check --unit oci-network --commit COMMIT --actor ACTOR --environment oci-network-recovery --bundle .infra/recovery.json --journal .infra/operations/oci-network.json
+   ```
+
+   The disabled baseline intentionally denies this command. Do not manufacture
+   workflow context locally. After separate approval, the existing workflow is the
+   execution path: one state import, pinned runtime, independent pair retrieval/key
+   checks and mandatory no-op pre/post reconciliation. It never applies resources.
+7. Keep the freeze after a succeeded receipt. Independently reconcile the exact
+   encrypted readback and journal head, unchanged OCI peer/dependency, measured
+   elapsed objective and immutable configuration publication hash/path. Separately
+   review activation of the recovered configuration and each writer; successful
+   checkpoint import does not authorize either. Capture and retain a new recovery
+   backup under the existing custody policy before resuming ordinary operations.
+8. For failed prelaunch checks preserve the original evidence and diagnose before
+   preparing another request. If import may have launched, configuration publication
+   fails, the receipt is missing or the journal remains running/indeterminate,
+   retain the freeze and inspect the actual backend privately. Do not retry,
+   truncate history, overwrite output or compensate automatically. Reverting code
+   cannot undo state recovery, and disabling admission cannot cancel in-flight work.
+
+Retain independently reviewed live evidence for the existing M06 production-recovery
+acceptance gate. Local synthetic rehearsal proves protocol behavior only, not live
+provider semantics, key custody, achieved production objectives or writer exclusion.
+
+Focused checks:
+`uv run --locked pytest -q tests/test_recovery_staging.py tests/test_backup_readiness.py tests/test_recovery_driver.py tests/test_recovery_rejection.py`.
+The shared gate is `uv run --locked infra verify`; packaging uses
+`uv build --all-packages`. The existing opt-in local recovery engine/rehearsal suites
+remain available for credential-free synthetic verification. This addition changes
+no execution, approval, journal or checkpoint schema and adds no dependency.

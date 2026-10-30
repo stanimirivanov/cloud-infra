@@ -615,3 +615,9 @@ It inspects canonical durable incident state without initialization, locking,
 collection or delivery; missing/stale/unfinished state and outbox gaps stay visible.
 See the [monitoring commissioning procedure](docs/runbooks/scheduled-monitoring.md#m06-monitoring-readiness-and-staged-commissioning).
 Scheduling, delivery and live acceptance remain pending.
+
+M06-PR12 adds `uv run --locked infra backup check-recovery --unit oci-network --current-checkpoint .infra/current-checkpoint.json --current-configuration .infra/current-config.json --restore-checkpoint .infra/restore-checkpoint.json --restore-configuration .infra/restore-config.json`.
+It compares captured pairs using the recovery executor's contracts, with no keys,
+repository access or state writes. See the
+[recovery staging procedure](docs/runbooks/state-recovery.md#m06-recovery-staging-checks-and-procedure)
+for separate backup, owner/freeze, live reconciliation and writer-release obligations.

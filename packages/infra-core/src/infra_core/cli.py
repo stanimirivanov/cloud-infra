@@ -154,6 +154,17 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("unit", "repository-id", "recovery-host-id"):
         backup_readiness.add_argument("--" + name, required=True)
     backup_readiness.add_argument("--evidence", type=Path)
+    recovery_staging = backup_commands.add_parser(
+        "check-recovery", help="offline pair compatibility; recovery pending"
+    )
+    recovery_staging.add_argument("--unit", required=True)
+    for name in (
+        "current-checkpoint",
+        "current-configuration",
+        "restore-checkpoint",
+        "restore-configuration",
+    ):
+        recovery_staging.add_argument("--" + name, type=Path, required=True)
     backup_capture = backup_commands.add_parser(
         "capture", help="write to an existing local repository"
     )
@@ -382,6 +393,22 @@ def main(
             if reviewed_commit(root) != commit:
                 raise ValueError("EXT023: checkout changed during service audit")
             print(json.dumps(result, indent=2))
+        elif args.command == "backup" and args.backup_command == "check-recovery":
+            from infra_core.recovery_staging import check as check_recovery_staging
+
+            print(
+                json.dumps(
+                    check_recovery_staging(
+                        root,
+                        unit=args.unit,
+                        current_checkpoint=args.current_checkpoint,
+                        current_configuration=args.current_configuration,
+                        restore_checkpoint=args.restore_checkpoint,
+                        restore_configuration=args.restore_configuration,
+                    ),
+                    sort_keys=True,
+                )
+            )
         elif args.command == "backup" and args.backup_command == "check-readiness":
             from infra_core.backup_readiness import check as check_backup_readiness
 
