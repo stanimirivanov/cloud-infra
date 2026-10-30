@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
         "check-administration", help="offline GitHub settings snapshot consistency"
     )
     administration_check.add_argument("--evidence", type=Path, required=True)
+    enrollment = security_commands.add_parser(
+        "check-enrollment", help="read-only trust and runner enrollment gaps; no authority"
+    )
+    enrollment.add_argument("--evidence", type=Path)
     backend = commands.add_parser("backend", help="inspect or explicitly qualify backend behavior")
     backend_commands = backend.add_subparsers(dest="backend_command", required=True)
     backend_commands.add_parser("inspect", help="show configuration and disabled deployment state")
@@ -275,6 +279,11 @@ def main(
             if args.security_command == "workflows":
                 check_workflows(root)
                 print("PASS: workflow syntax/expressions; no workflow steps executed")
+            elif args.security_command == "check-enrollment":
+                from infra_core.enrollment import check as check_enrollment
+
+                print(json.dumps(check_enrollment(root, args.evidence), sort_keys=True))
+                return 1  # Independent enrollment remains pending even with valid observations.
             else:
                 from infra_core.administration import MAX_BYTES, private_path
                 from infra_core.administration import check as check_administration
