@@ -439,8 +439,8 @@ unit, commit, actor, environment, bundle and journal, and exactly one of --check
 with the exact main commit and unit-apply environment. Core-only callers cannot
 execute updates. Normal deploy and preview dispatch keep their existing boundaries.
 
-config/service-apply.json ships disabled. Activation requires a separately reviewed
-tracked change to that switch, the service's existing preview flag and enrolled
+config/service-apply.json ships with both service entries disabled. Activation requires a
+separately reviewed tracked change to the selected service entry, the service's existing preview flag and enrolled
 operations-policy.json. No flag, key or GitHub setting is enabled by this PR.
 
 The private schema-1 bundle has paths, backend_account_id, cli_archive,
@@ -500,3 +500,105 @@ All external writers/recovery/import workflows must share reviewed exclusion rul
 No raw events, decrypted values or state are uploaded. Normal cleanup deletes only
 the owned temporary workspace; force-killed runners require secure cleanup while
 preserving the durable journal. No live apply was run as routine verification.
+
+## M06 Cloudflare staged activation preparation
+
+M06-PR7 prepares Cloudflare activation without enabling either service. The previous
+single service apply switch covered both Cloudflare and Supabase. Schema 2 now
+requires an explicit boolean for each service:
+
+```json
+{
+  "schema_version": 2,
+  "units": {
+    "cloudflare-edge": false,
+    "supabase-database": false
+  }
+}
+```
+
+**BREAKING configuration migration:** schema-1 service apply files, including
+`enabled: true`, are rejected. Migrate the tracked file and deployed checker code
+together; do not interpret the legacy global value as both services being approved.
+Only the two exact unit names are accepted, and both values must be booleans.
+Selecting a disabled or unknown service fails before bundle/credential access.
+Parent preflight and the owned program's repeated service admission select the
+same unit. OCI apply and resource-import policy schemas remain unchanged.
+
+Enabling `cloudflare-edge` in a later reviewed change will not enable
+`supabase-database`. Both still require their own preview gate, signed exact-input
+approvals, journal, protected environment and all existing execution checks.
+This switch is a necessary gate, not a standalone authorization. This PR adds no
+keys, DNS records, account data, live flag values or workflow dispatch.
+
+### Cloudflare activation sequence for a separately authorized operation
+
+1. Independently accept the M06 protected-runner/trust, backend, backup, account
+   and writer-exclusion prerequisites for `cloudflare-edge`. Their pending gap
+   reports are not acceptance. Confirm the exact existing project-scoped stack,
+   Cloudflare account and zone, effective token scope, encrypted configuration,
+   retained journals and independent operator/approver/requester identities.
+2. Review the intended DNS change and existing unmanaged records using the current
+   supported proposal/evidence contracts. Use fresh complete zone evidence and
+   the actual Free-plan profile; do not refresh timestamps or change limits to
+   pass. The scope of record names, types, contents, TTL and proxy behavior belongs
+   in private reviewed configuration, not an invented production example here.
+3. In a separately reviewed tracked change, enable only
+   `units.cloudflare-edge` in `config/service-apply.json` and the Cloudflare
+   preview flag in `config/pulumi.toml`. Keep the Supabase entry and preview flag
+   false. Enroll operation trust only after independent identity/custody review;
+   no other service or resource gate is implied by this change.
+4. At the resulting reviewed main commit, prepare the exact private execution
+   bundle, encrypted configuration, original checkpoint, complete backup and
+   action-specific signatures. Flag/configuration/commit changes invalidate old
+   approvals and evidence bindings: recollect and reapprove rather than patching
+   signatures or restamping observations. Use existing admission freshness limits.
+5. Produce and independently review the exact saved plan with the existing pinned
+   factories/toolchain and mandatory policies. **Harness gap:** the existing
+   preview CLI does not save the executor's required plan, and this PR adds no
+   plan-authoring CLI. A separately reviewed plan-production procedure/artifact is
+   required before proceeding; do not substitute preview JSON or fabricate a plan.
+6. Under the protected main workflow context, run the existing admission check:
+
+   ```sh
+   uv run --locked infra apply --check --unit cloudflare-edge --commit COMMIT --actor ACTOR --environment cloudflare-edge-apply --bundle .infra/cloudflare-apply.json --journal .infra/operations/cloudflare-edge.json
+   ```
+
+   `COMMIT` and `ACTOR` are placeholders for the actual reviewed identities.
+   This command is expected to reject the disabled baseline. After separately
+   authorized enablement, it still needs enrolled trust, fresh environment controls
+   and the exact frozen bundle. It is not a bypass for main/owner dispatch checks.
+7. Only after explicit operational authorization, dispatch the existing protected
+   service-apply workflow for `cloudflare-edge` and that exact commit. It executes
+   shared verification, pre-credential admission, mandatory-policy preview and
+   the single saved-plan update using the dedicated runner and durable journal.
+   Never select Supabase as part of the Cloudflare stage.
+8. Retain the operation receipt, exact plan/approval hashes, journal head and
+   private post-state evidence. Independently reconcile the intended DNS records,
+   checkpoint and actual externally observed DNS behavior before accepting this
+   stage. Successful workflow/journal status alone is not independent service
+   health or proof of all unknown provider values. Monitoring activation and the
+   later Supabase stage remain separate work.
+
+### Stop conditions and rollback limits
+
+Stop on missing prerequisites, plan-authoring gaps, expired evidence, unexpected
+records, deletion/replacement, drift, incomplete provider output or a failed
+check. A launched operation with an uncertain result remains `indeterminate`;
+retain writer exclusion, journals, backups and original evidence. Do not retry,
+reset history, automatically roll back DNS or infer that failure means no effect.
+A missing receipt after journal success also requires reconciliation, not replay.
+
+Returning only `units.cloudflare-edge` to false through a reviewed change blocks
+new Cloudflare admission; it does not cancel an in-flight operation or undo DNS
+records. Reverting this PR requires restoring matching schema-1 code/config with
+the global switch disabled; never roll back to an enabled global policy. Any DNS
+correction or writer release needs a separate reviewed operational decision.
+
+Focused gates:
+`uv run --locked pytest -q tests/test_service_activation.py tests/test_service_apply.py tests/test_oci_apply.py tests/test_import_driver.py`.
+The shared gate is `uv run --locked infra verify`. The existing local synthetic
+operation gate can additionally exercise service transport/engine behavior without
+cloud credentials. No live Cloudflare activation or acceptance was performed by
+this engineering PR; production configuration, evidence and authorization remain
+pending.

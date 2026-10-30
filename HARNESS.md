@@ -587,3 +587,8 @@ with optional `--evidence .infra/writer-freeze.json`. It checks external freeze
 assertions against canonical journals without locking, initializing or releasing
 writers. Distributed exclusion remains pending; see the
 [writer-exclusion procedure](docs/runbooks/operational-readiness.md#m06-writer-exclusion-readiness).
+
+M06-PR7 separates service apply activation into schema-2 per-unit gates, both
+committed disabled. Cloudflare preparation and its saved-plan production gap are
+covered in the [staged activation procedure](docs/runbooks/independent-services.md#m06-cloudflare-staged-activation-preparation).
+Enabling Cloudflare never implicitly enables Supabase; OCI/import gates are unchanged.

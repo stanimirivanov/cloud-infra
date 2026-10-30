@@ -63,7 +63,9 @@ def _hash(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _enabled(root: Path, oci: bool = False, importing: bool = False) -> None:
+def _enabled(
+    root: Path, oci: bool = False, importing: bool = False, *, unit: str | None = None
+) -> None:
     value = operations.read_json(
         root
         / (
@@ -74,6 +76,19 @@ def _enabled(root: Path, oci: bool = False, importing: bool = False) -> None:
             else "config/service-apply.json"
         )
     )
+    if not oci and not importing:
+        require(
+            type(value) is dict
+            and set(value) == {"schema_version", "units"}
+            and type(value["schema_version"]) is int
+            and value["schema_version"] == 2
+            and type(value["units"]) is dict
+            and set(value["units"]) == {"cloudflare-edge", "supabase-database"}
+            and all(type(enabled) is bool for enabled in value["units"].values())
+            and unit in value["units"]
+            and value["units"][unit] is True
+        )
+        return
     require(
         value == {"schema_version": 1, "enabled": True}
         and type(value["schema_version"]) is int
@@ -84,7 +99,7 @@ def _enabled(root: Path, oci: bool = False, importing: bool = False) -> None:
 def _service(
     root: Path, unit: str, commit: str, raw: dict[str, bytes]
 ) -> tuple[ServicePreviewContext, bytes]:
-    _enabled(root)
+    _enabled(root, unit=unit)
     require(unit in {"cloudflare-edge", "supabase-database"})
     foundation = load_foundation(root)
     context = ServicePreviewContext(
@@ -201,7 +216,7 @@ def _names(oci: bool, unit: str, importing: bool = False) -> set[str]:
 def _load(
     root: Path, args: argparse.Namespace, oci: bool = False, importing: bool = False
 ) -> tuple[dict[str, Any], dict[str, bytes], bytes]:
-    _enabled(root, oci, importing)
+    _enabled(root, oci, importing, unit=args.unit)
     names = _names(oci, args.unit, importing)
     require(_private(root, args.journal) == root / ".infra/operations" / (args.unit + ".json"))
     bundle = operations.read_json(_private(root, args.bundle))

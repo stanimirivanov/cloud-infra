@@ -62,3 +62,8 @@ state-recovery.json is a separate disabled checkpoint-recovery gate. Activation
 requires operational review of signed admission, independent backup/rehearsal,
 historical ownership trust, writer freeze and recovery credential custody. It must
 never imply resource rollback, missing-stack creation or writer-release authority.
+
+service-apply.json uses schema 2 with exactly cloudflare-edge and supabase-database
+boolean unit gates. Keep both false until separately reviewed operational
+activation; never migrate a legacy global true into implicit approval for both.
+Each service also retains its own preview gate and full signed execution admission.
