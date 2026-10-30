@@ -557,3 +557,9 @@ codes. Current disabled/empty reviewer policy cannot authenticate acceptance;
 M06-PR2 owns enrollment. Focused checks use
 `uv run --locked pytest -q tests/test_readiness.py`; the shared gate and
 `uv build --all-packages` cover this offline, dependency-free addition.
+
+M06-PR2 adds `uv run --locked infra security check-enrollment` with an optional
+`--evidence .infra/enrollment.json` index. It reports pending repository trust,
+protected-environment and runner custody gaps without network calls or writes;
+consistent observations never complete enrollment. See the
+[enrollment procedure](docs/runbooks/github-administration.md#m06-repository-trust-and-runner-enrollment-checks).

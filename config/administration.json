@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "repository": "stanimirivanov/oci-oke-terraform",
+  "repository": "stanimirivanov/cloud-infra",
   "repository_id": 1323328453,
   "environment": "pulumi-backend-qualification",
   "workflow": {"id": 395674516, "path": ".github/workflows/verify.yml"},

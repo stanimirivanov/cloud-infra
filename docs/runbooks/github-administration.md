@@ -190,3 +190,98 @@ and [workflow runs](https://docs.github.com/en/rest/actions/workflow-runs?apiVer
 and [PR reviews](https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request)
 REST contracts through stdlib plus the existing gh executable. This adapts the API
 pattern without copying an implementation or adding a Python dependency.
+
+## M06 repository trust and runner enrollment checks
+
+M06-PR2 delivers checks with enrollment **pending**, as requested by the owner.
+The verified repository is `stanimirivanov/cloud-infra`, numeric ID `1323328453`;
+verification workflow ID `395674516` and check App ID `15368` are unchanged.
+The old repository name in the administrative policy is corrected. This is
+**BEHAVIOR-ADJACENT**: previously bound administrative snapshots and signatures
+must be recollected against the new policy bytes, never rewritten or restamped.
+
+From a clean committed checkout, inspect the enrollment gaps without a token,
+network calls, file writes or operational credentials:
+
+```sh
+uv run --locked infra security check-enrollment
+uv run --locked infra security check-enrollment --evidence .infra/enrollment.json
+```
+
+The optional private index has this closed schema (an empty index is valid):
+
+```json
+{"schema_version": 1, "administration": null, "environments": {}}
+```
+
+Replace `administration` with a canonical relative `.infra/*.json` path to the
+schema-5 output of `infra security collect-administration`. Add environment-name
+keys mapped to distinct private JSON paths in `environments`. Those files use the
+existing schema-1 `infra_core.administration.collect_operation_environment` API
+and its validator; collection is an explicit read-only administrator action with
+separately configured GitHub authentication. The enrollment checker itself never
+collects anything. There is no automatic runner-custody collector in this PR.
+Keep raw evidence private and do not upload it to public CI.
+
+Administrative evidence must pass the existing complete checks for current main,
+required check/App identities, successful verification, merged PR and final-head
+reviews. Each supplied environment observation must bind the same repository and
+current clean commit, expire after 15 minutes, require non-self reviewers, explicitly
+disable administrator bypass and select only branch main. Missing observations
+are `pending`; supplied invalid evidence fails with redacted `ENROLL001`, rather
+than being silently treated as absent. Symlinks, duplicate JSON fields, reused
+artifact paths, unknown environments and paths outside `.infra` are rejected.
+The checker rechecks checkout identity and captured file bytes before returning.
+
+Coverage includes backend qualification, all four previews, all four apply,
+monitor and recovery environments, both OCI imports, `oci-handoff`,
+`recovery-rehearsal` and `monitor-watchdog`. Service import policy slots are
+reserved and unsupported; they are not enrollment requirements. Regression tests
+compare this inventory and runner groups with the actual workflow declarations.
+
+Operation trust remains disabled with no enrolled reviewers or invented age
+limits. When enabled through a later independently reviewed change, the checker
+reuses the admission policy validator and requires distinct operator/approver
+principals with distinct keys and complete role coverage. This is configuration
+consistency only. Requester/operator/approver independence still belongs to each
+signed operation's admission; this report cannot replace it. Cutover reviewer
+policy bytes remain bound through the existing administrative snapshot contract;
+independent cutover identity enrollment is also still required.
+
+Every report has `status: pending`, `enrollment_complete: false`,
+`execution_authorized: false`, `activation_authorized: false` and
+`live_controls_verified: false`. The CLI exits 1 for a pending report as well as
+invalid input, so it cannot become a green activation gate. Valid observations
+are labeled `observed-controls-consistent`, not enrolled. The report is unsigned
+and is not an M06 readiness acceptance record; future independent acceptance must
+bind the original observations and their clocks, not promote this gap summary.
+
+### Independent enrollment review still required
+
+An administrator and independent reviewer must record public principal/key
+identities, actual permissions, role separation and private-key custody outside
+Git. GitHub reviewer IDs and signing principals are not assumed to identify the
+same human. Review team membership, last-push independence, administrator bypass,
+secret visibility and the effective repository/workflow restrictions separately.
+Never send private keys or credentials in issues, PRs or chat.
+
+For `service-operations`, verify only this repository's reviewed main workflows
+can reach the runner, no untrusted PR jobs or workspaces share it, operation
+journals and the monitoring outbox survive restart, and collection, drift and
+delivery credentials remain separate. For `recovery`, verify the same access
+restriction plus host isolation, independent backup access, durable recovery
+journals and separation of read-only observers from state writers. Record host
+custodian, runner/group identities, storage ownership and recovery procedures in
+private reviewed evidence. A runner label or workflow group declaration alone
+does not prove isolation or custody. Do not automatically initialize lost journals.
+
+The read-only GitHub inspection during this PR found only the legacy
+`oci-infrastructure` environment, with no protection rules or deployment branch
+policy. Required operational environments were absent. This is a historical gap
+observation, not current acceptance evidence; recollect after administrator-owned
+configuration and independent review. No environment, runner, key, secret, policy
+enablement or production resource is created by this PR.
+
+Focused regression gate:
+`uv run --locked pytest -q tests/test_enrollment.py tests/test_administration.py tests/test_operation_admission.py`.
+Run the complete `uv run --locked infra verify` gate before delivery.
