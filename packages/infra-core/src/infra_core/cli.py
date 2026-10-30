@@ -135,6 +135,12 @@ def build_parser() -> argparse.ArgumentParser:
         "backup", help="explicit encrypted pair backup; no resource operations"
     )
     backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+    backup_readiness = backup_commands.add_parser(
+        "check-readiness", help="offline independent-backup evidence; no restore authority"
+    )
+    for name in ("unit", "repository-id", "recovery-host-id"):
+        backup_readiness.add_argument("--" + name, required=True)
+    backup_readiness.add_argument("--evidence", type=Path)
     backup_capture = backup_commands.add_parser(
         "capture", help="write to an existing local repository"
     )
@@ -331,6 +337,18 @@ def main(
             if reviewed_commit(root) != commit:
                 raise ValueError("EXT023: checkout changed during service audit")
             print(json.dumps(result, indent=2))
+        elif args.command == "backup" and args.backup_command == "check-readiness":
+            from infra_core.backup_readiness import check as check_backup_readiness
+
+            result = check_backup_readiness(
+                root,
+                args.evidence,
+                unit=args.unit,
+                repository_id=args.repository_id,
+                recovery_host_id=args.recovery_host_id,
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 1  # Independent storage and custody acceptance remains pending.
         elif args.command == "backup" and args.backup_command == "rehearse":
             from infra_core.recovery_rehearsal import rehearse
 

@@ -569,3 +569,9 @@ with an optional `--evidence .infra/backend-readiness.json` index. It validates
 qualification, posture and existing-stack observations offline; independent IAM,
 key custody and recovery-access acceptance remains pending. See the
 [backend readiness procedure](docs/runbooks/pulumi-backend.md#m06-backend-readiness-checks).
+
+M06-PR4 adds `uv run --locked infra backup check-readiness --unit oci-network --repository-id REPOSITORY_SHA256 --recovery-host-id HOST_SHA256`
+with an optional `--evidence .infra/backup-readiness.json` bundle. It checks existing
+pair/snapshot/off-host rehearsal evidence without repository access or writes;
+physical storage independence and key custody remain pending. See the
+[independent backup readiness procedure](docs/runbooks/pulumi-backend.md#m06-independent-backup-readiness).
