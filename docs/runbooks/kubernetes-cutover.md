@@ -913,3 +913,131 @@ Focused gate:
 The full gate is `uv run --locked infra verify`. Existing opt-in import transport
 and service runtime tests remain credential-free. No dependency, journal-format,
 ownership-bundle or operation-approval schema change is introduced.
+
+## M06 OKE staging checks and procedure
+
+M06-PR10 delivers offline checks and a staged OKE procedure. Activation remains
+pending: neither OCI apply/import policy nor preview configuration is changed.
+Network success does not authorize OKE, install Kubernetes controls or release
+source ownership. The schema-2 per-unit gates from the preceding network stage
+remain the execution boundary, alongside the existing signed admission checks.
+
+### Offline cluster staging packet
+
+Run the checker on the reviewed clean checkout with five distinct private JSON
+files beneath ignored `.infra`:
+
+```sh
+uv run --locked infra kubernetes check-staging --account-id TENANCY_OCID --cluster-id CLUSTER_OCID --config .infra/kubernetes.json --oci-config .infra/oci.json --network-outputs .infra/network-outputs.json --inventory .infra/cluster.json --resources .infra/manifests.json
+```
+
+`TENANCY_OCID` and `CLUSTER_OCID` must come from independent identity review, not
+be copied from untrusted observations simply to make the check pass. Inputs are:
+
+| Input | Existing schema consumed |
+| --- | --- |
+| `--config` | JSON representation of `config/kubernetes.example.toml`: `cluster`, `reserved`, `namespaces` |
+| `--oci-config` | JSON representation of the reviewed OCI configuration: `foundation`, `image`; same schema used by OCI operation proposals |
+| `--network-outputs` | Exact committed `network_stack_identity` and `network` interface, with reviewed account, region, compartment, CIDRs and typed distinct IDs |
+| `--inventory` | Existing normalized Kubernetes inventory described above; original observation clock, node IDs, complete usage and network-policy assertion |
+| `--resources` | Existing closed `v1`/`List` desired manifest bundle, including all four canonical controls per namespace |
+
+Use the captured reviewed values, preserving original clocks. JSON representation
+is an explicit input format for this command; the existing Kubernetes render/audit
+commands continue to consume TOML configuration. No converter, collector or cluster
+installer is introduced. Each file is bounded to 1 MiB; duplicate JSON keys,
+nonfinite values, symlinks, paths outside `.infra`, reused paths and malformed
+schemas are rejected. Exact bytes and clean commit are rechecked before returning.
+Private paths, identities and raw validator diagnostics are not printed.
+
+The checker binds tenancy/cluster expectations, OCI and cluster region, and the
+Pod Security minor to the reviewed OCI Kubernetes version. It delegates network
+interface validation and the full Kubernetes audit, including the 15-minute
+observation window, complete usage, system/headroom reservation, canonical
+admission/isolation controls and conservative rollout peaks. Unsupported objects,
+missing controls, unsafe manifests and exhausted envelopes fail closed.
+
+A successful command exits zero for **input consistency only**. Its schema-1
+report always has `status: pending`, `unit: oci-oke`, current commit, five exact
+input hashes, the canonical network output digest and false activation, execution
+and live-control authority fields. Invalid evidence exits nonzero with `STAGE002`.
+The observations are unsigned assertions: hashing them does not authenticate their
+source, prove the cluster uses those subnets, bind a live network checkpoint or
+establish actual admission/CNI enforcement. Existing account readiness, runtime
+dependency admission and independent acceptance remain mandatory. No kubeconfig,
+SDK, client, credential, backend or network access is used by this command.
+
+### OKE adoption and acceptance sequence
+
+1. Complete the [network stage](#m06-oci-network-adoption-staging) and independently
+   review M06 protected execution, backend, account, backup and OCI-group writer
+   exclusion. Keep source and target writers frozen throughout adoption. Retain
+   the successful network journal/receipt, equivalent post-import checkpoint and
+   exact committed outputs; OKE cannot synthesize or silently update its dependency.
+2. Prepare the OKE ownership bundle against the existing target stack with exact
+   protected parent/provider metadata and reviewed cluster/node-pool IDs. Use
+   `uv run --locked infra ownership prepare --evidence .infra/oke-ownership.json`.
+   Resolve native OCI import compatibility and property equivalence independently.
+   Missing stack/metadata bootstrap and executor saved-plan production remain
+   existing capability gaps; do not fabricate outputs or use apply as a fallback.
+3. Review the pinned Basic OKE configuration, supported cluster/node versions,
+   ARM image and placement, private API/worker/pod topology and account-wide
+   capacity including retained resources and conservative peak/headroom. Existing
+   account/inventory audits remain required; the staging checker is not a billing
+   or resource-ownership audit. Neither this PR nor the OKE factory deploys the
+   rendered namespace controls, CNI policy engine or application workloads.
+4. Prepare fresh normalized cluster evidence and reviewed manifests; run the
+   offline staging packet check above. Independently demonstrate live node/subnet
+   membership, ARM image scheduling and actual admission rejection of forbidden
+   resources. Verify policy-engine compatibility and account for its system usage;
+   demonstrate ingress and egress isolation with all applicable allow policies.
+   Default deny also blocks DNS: any required exception needs separate design and
+   tests. Passing recorded `network_policy_enforced` is not a live probe.
+5. Only after separate operational authorization, review a tracked change enabling
+   OKE import and its preview flag. Keep ordinary OCI apply disabled for adoption;
+   review disabling completed network import admission. Recollect commit-bound
+   evidence and signatures at that resulting main commit. Check admission using:
+
+   ```sh
+   uv run --locked infra resource-import --check --unit oci-oke --commit COMMIT --actor ACTOR --environment oci-oke-import --bundle .infra/oke-import.json --journal .infra/operations/oci-oke.json
+   ```
+
+   The committed disabled baseline intentionally rejects this command. The existing
+   protected import workflow is the later execution path; this PR does not dispatch
+   it. OKE import requires successful network apply or an equivalent network import,
+   matching receipt/journal head and exact live committed dependency. Ordinary OKE
+   apply retains its stricter network-apply prerequisite; import success must not
+   be represented as apply success to bypass it. Both units share OCI serialization.
+6. After separately authorized adoption, reconcile every native identity/property,
+   mandatory no-op post-import preview, succeeded OKE journal/receipt and unchanged
+   committed network dependency. Preserve the source checkpoints. Capture the
+   current target encrypted pair and independently rehearse recovery. Observe
+   cluster health and repeat live acceptance for the resulting configuration;
+   an engine success or static manifest check is not workload availability proof.
+7. Only then prepare the existing paired owner-handoff evidence for **both** units:
+   network import precedes OKE launch, scoped receipts/checkpoints and network
+   dependencies agree, independent backups/rehearsals are current, and the
+   continuous idle freeze and independently reviewed source-release assertions
+   satisfy the separate signed handoff contract. Source release is a distinct
+   owner action, not an effect of this checker or an import receipt. Use the
+   existing read-only decision command after those prerequisites:
+
+   ```sh
+   uv run --locked infra cutover handoff --evidence .infra/owner-handoff.json --actor ACTOR --environment oci-handoff
+   ```
+
+   An admitted owner decision still does not activate any writer. Routine apply,
+   monitoring and writer release require their own reviewed authorization.
+
+Stop on missing live acceptance, stale or changed evidence, dependency drift,
+unsupported imports, unexpected deletes/replacements or non-equivalent outputs.
+An interrupted/uncertain import stays indeterminate; preserve freeze, checkpoints,
+backups and journals for independent reconciliation, with no automatic retry or
+compensation. Disabling a gate blocks new admission but cannot cancel an active
+operation or reverse state changes. The new offline checker can be reverted without
+state migration; no live activation, topology change or ownership transfer is claimed.
+
+Focused gate:
+`uv run --locked pytest -q tests/test_oke_staging.py tests/test_kubernetes.py tests/test_oci_dependency.py tests/test_oci_apply.py tests/test_import_driver.py tests/test_ownership_handoff.py`.
+The full gate remains `uv run --locked infra verify`, with
+`uv build --all-packages` for workspace packaging.

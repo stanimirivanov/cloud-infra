@@ -137,6 +137,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for name in ("config", "inventory", "resources"):
         kube_audit.add_argument("--" + name, type=Path, required=True)
+    kube_staging = kube_commands.add_parser(
+        "check-staging", help="offline OKE staging inputs; activation pending"
+    )
+    for name in ("config", "oci-config", "network-outputs", "inventory", "resources"):
+        kube_staging.add_argument("--" + name, type=Path, required=True)
+    for name in ("account-id", "cluster-id"):
+        kube_staging.add_argument("--" + name, required=True)
     backup = commands.add_parser(
         "backup", help="explicit encrypted pair backup; no resource operations"
     )
@@ -451,6 +458,24 @@ def main(
                         indent=2,
                     )
                 )
+        elif args.command == "kubernetes" and args.kubernetes_command == "check-staging":
+            from infra_core.oke_staging import check as check_oke_staging
+
+            print(
+                json.dumps(
+                    check_oke_staging(
+                        root,
+                        args.config,
+                        args.oci_config,
+                        args.network_outputs,
+                        args.inventory,
+                        args.resources,
+                        account_id=args.account_id,
+                        cluster_id=args.cluster_id,
+                    ),
+                    indent=2,
+                )
+            )
         elif args.command == "kubernetes":
             from infra_core.kubernetes.audit import audit as audit_kubernetes
             from infra_core.kubernetes.config import load_config as load_kubernetes
