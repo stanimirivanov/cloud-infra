@@ -211,3 +211,124 @@ The adapter follows the documented GitHub REST contracts for
 [issues](https://docs.github.com/en/rest/issues/issues) and
 [comments](https://docs.github.com/en/rest/issues/comments). Grouping/deduplication
 and recovery adapt the approved Alertmanager pattern without deploying a service.
+
+## M06 monitoring readiness and staged commissioning
+
+M06-PR11 delivers checks and the staged procedure; activation remains pending.
+`config/monitoring-runner.json` still disables monitoring and delivery, with actor,
+host and heartbeat enrollment unset. This change does not modify repository
+variables, run workflows, initialize state, collect observations or send issues.
+
+### Offline durable-state check
+
+On a clean reviewed checkout, inspect each unit with:
+
+```sh
+uv run --locked infra monitoring check-readiness --unit oci-network --binding-sha256 EXPECTED_SCOPE_SHA256 --heartbeat-seconds 1800
+```
+
+The unit must be one of the four existing deployment units. Independently review
+the expected scope binding and heartbeat threshold; do not copy a digest from a
+possibly misplaced state file just to make it pass. The existing scheduler catalog
+computes that binding with `operations.digest` over the mapping containing `unit`,
+`scopes` and numeric `repository_id`; `scopes` contains `cost` and `health`, each the
+canonical digest of its respective index's `scope` object. Canonical digests use
+sorted compact JSON as defined by `operations.digest`. Confirm the account and
+OCI region or service zone/organization relationship before approving the binding.
+This command accepts that independently reviewed digest, not arbitrary producer
+indexes; it does not re-audit those producers or discover their live scopes.
+
+The heartbeat threshold must be an integer from 1 to 3600 seconds. The example
+1800 seconds is illustrative, not an accepted detection objective. The check uses
+the earlier of the retained `next_due_at` and observation time plus the supplied
+threshold, so a looser new threshold cannot erase a previously missed deadline.
+No observation time or deadline is refreshed by reading it.
+
+Only `.infra/monitoring/state/UNIT.json` is read. The existing incident validator
+checks the bounded closed state/outbox schema; private paths, parent symlinks,
+duplicate JSON keys, oversize files, future lifecycle/event clocks and mismatched
+unit/binding are rejected with redacted `MONREADY001` diagnostics. Clean commit
+and exact captured bytes (or continuing absence) are rechecked before returning.
+A normal report contains hashes, lifecycle/severity and pending-event count, never
+finding IDs, raw scopes, event bodies or private paths. No lock file is created.
+This is a point-in-time inspection of an atomic snapshot, not writer exclusion or
+authentication against same-user tampering.
+
+The schema-1 report always says `status: pending` and denies execution, activation
+and live-control verification. Its `gaps` distinguish missing/unobserved state,
+unfinished run, missing/overdue heartbeat, unavailable sources, unknown findings,
+active incidents, pending outbox and delivery errors. Exit zero means the supplied
+snapshot has no such gaps; it does **not** mean commissioning is accepted. Gaps or
+invalid input exit nonzero. Missing state is not created. An empty initialized
+state is unobserved, never healthy. A fresh normal state still leaves custody,
+watchdog, recipient and actual delivery acceptance pending.
+
+### Staged operational procedure
+
+1. Independently accept repository protection, the durable runner's identity and
+   storage custody, enrolled schedule/notification actors, provider Read IAM and
+   isolated credentials. Review all four cost/health scopes, original producer
+   clocks, thresholds and the heartbeat objective. Preserve per-unit state and
+   operation journals across checkout and runner restarts; verify off-host retention
+   and restore access. A host digest or repository check cannot prove custody.
+2. Prepare the existing private monitor indexes and fresh producer evidence.
+   Review a sustainable external process for fresh drift approvals, backup,
+   checkpoint and operation UUID on every cycle. Missing or expired approval must
+   stay unknown; never reuse signatures or weaken admission to make a schedule run.
+   Verify the environment controls for each unit-monitor job and monitor-watchdog.
+3. In a separately authorized tracked/configuration change, enroll the actual host,
+   actors and cadence and enable observations only. Keep tracked delivery and
+   `MONITOR_DELIVERY_ENABLED` false. Enabling the workflow additionally requires
+   `MONITORING_ENABLED=true`; neither variable is changed by this PR. Recollect
+   commit-bound evidence after the reviewed configuration change.
+4. If state has never existed, use the existing owner-only initialization dispatch
+   once for absent units. Inspect the resulting unobserved state, then run a normal
+   report-only cycle and the offline command above for each unit. Existing or lost
+   state is never overwritten/recreated to clear incidents. A missing file after
+   commissioning requires restore and reconciliation, not initialization.
+5. Independently observe report-only normal, warning/critical, unknown and recovery
+   behavior. Verify absent sources cannot clear known incidents, unchanged findings
+   do not create repeated transitions, and positive fresh evidence is required for
+   recovery. Do not inject synthetic evidence into production as real observations;
+   use the existing credential-free suites for mechanics and separately authorize
+   any live operational rehearsal.
+6. Review the dedicated bot's exact user ID/login and effective repository Issues
+   write/metadata/Actions read access, token custody and recipient subscriptions.
+   GitHub issues in this repository remain the only sink. In a separate authorized
+   delivery stage, enable both delivery gates and verify an actual recipient sees
+   the baseline/open, meaningful change and recovery on the bot-owned marker.
+   A successful REST write or an issue number is not proof of human receipt.
+   The checker itself never performs this probe or posts a test issue.
+7. Rehearse a dedicated-runner outage and a missing/failed persistence step while
+   observing the independent GitHub-hosted watchdog. Queued, skipped, failed and
+   replayed attempts must not refresh a heartbeat; recovery requires a real new
+   persistence step. Verify the local stale deadline is also visible on resumption.
+   GitHub platform/API outages can disable both watchdog and sink; an independent
+   external service is still needed for an out-of-GitHub availability guarantee.
+8. Rehearse delivery failure and lost acknowledgement with reviewed incident-state
+   retention. Reconcile remote event markers before retrying; preserve pending
+   events and delivery errors until acknowledgement. Duplicate owned markers,
+   outbox saturation or bounded enumeration exhaustion require operator review.
+   Closing an issue manually does not resolve a local incident. Never claim
+   exactly-once delivery or empty an outbox to make readiness pass.
+9. Retain the private reports, exact state/configuration hashes and independently
+   reviewed live evidence for the existing M06 acceptance record. Scheduled
+   observation, recipient acceptance and resource/writer activation are distinct
+   decisions; no monitoring result grants apply/import/recovery authority.
+
+### Stop and rollback
+
+Stop commissioning on scope mismatch, interrupted stages, uncertain persistence,
+lost state, stale/unknown observations or failed recipient/watchdog acceptance.
+Disable new scheduling/delivery admission as appropriate while preserving journals,
+state files, pending events and remote markers for reconciliation. Disabling flags
+cannot cancel in-flight work, retract sent messages or acknowledge pending events.
+Do not change scopes or bot identities without reviewing retained local/remote
+state and marker ownership. Reverting this read-only checker requires no state
+migration and does not replace the existing runtime schema or gates.
+
+Focused verification:
+`uv run --locked pytest -q tests/test_monitoring_readiness.py tests/test_incidents.py tests/test_monitor_delivery.py tests/test_monitoring.py`.
+Run `uv run --locked infra verify` and `uv build --all-packages` for the shared gate
+and packaging. Tests use private synthetic files and fake delivery responses; no
+notification, workflow dispatch or live observation is part of verification.

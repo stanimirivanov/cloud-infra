@@ -253,6 +253,12 @@ def build_parser() -> argparse.ArgumentParser:
     drift_mode.add_argument("--allow-local-writes", action="store_true")
     monitoring = commands.add_parser("monitoring", help="offline operational observations")
     monitoring_commands = monitoring.add_subparsers(dest="monitoring_command", required=True)
+    monitor_readiness = monitoring_commands.add_parser(
+        "check-readiness", help="offline durable-state checks; activation pending"
+    )
+    for name in ("unit", "binding-sha256"):
+        monitor_readiness.add_argument("--" + name, required=True)
+    monitor_readiness.add_argument("--heartbeat-seconds", type=int, required=True)
     findings = monitoring_commands.add_parser(
         "findings", help="read captured cost/capacity evidence"
     )
@@ -681,6 +687,17 @@ def main(
                     config, json.loads((root / args.receipt).read_text(encoding="utf-8"))
                 )
                 print("PASS: OCI receipt binding/freshness only; deployment remains disabled")
+        elif args.command == "monitoring" and args.monitoring_command == "check-readiness":
+            from infra_core.monitoring_readiness import check as check_monitoring_readiness
+
+            result = check_monitoring_readiness(
+                root,
+                unit=args.unit,
+                binding_sha256=args.binding_sha256,
+                heartbeat_seconds=args.heartbeat_seconds,
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 1 if result["gaps"] else 0
         elif args.command == "monitoring":
             from infra_core.operational_findings import check as check_findings
 

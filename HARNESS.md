@@ -609,3 +609,9 @@ It checks recorded OKE network/cluster consistency through the existing validato
 without live access or activation authority. See the
 [OKE staging procedure](docs/runbooks/kubernetes-cutover.md#m06-oke-staging-checks-and-procedure)
 for private input schemas, live acceptance and separate paired-handoff boundaries.
+
+M06-PR11 adds `uv run --locked infra monitoring check-readiness --unit oci-network --binding-sha256 EXPECTED_SCOPE_SHA256 --heartbeat-seconds 1800`.
+It inspects canonical durable incident state without initialization, locking,
+collection or delivery; missing/stale/unfinished state and outbox gaps stay visible.
+See the [monitoring commissioning procedure](docs/runbooks/scheduled-monitoring.md#m06-monitoring-readiness-and-staged-commissioning).
+Scheduling, delivery and live acceptance remain pending.
