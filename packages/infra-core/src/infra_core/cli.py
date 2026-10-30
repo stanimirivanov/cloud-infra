@@ -29,6 +29,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", type=Path, help="checkout root or a directory within it")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("verify", help="run the credential-free Python and artifact checks")
+    readiness = commands.add_parser(
+        "readiness", help="read-only acceptance assertions; no authority"
+    )
+    readiness.add_argument(
+        "--unit",
+        required=True,
+        choices=["oci-network", "oci-oke", "cloudflare-edge", "supabase-database"],
+    )
+    readiness.add_argument("--evidence", type=Path, required=True)
     security = commands.add_parser("security", help="security sensors and read-only collection")
     security_commands = security.add_subparsers(dest="security_command", required=True)
     security_commands.add_parser("workflows", help="check workflow syntax with verified actionlint")
@@ -256,7 +265,13 @@ def main(
     args = build_parser().parse_args(argv)
     try:
         root = find_repository(args.root)
-        if args.command == "security":
+        if args.command == "readiness":
+            from infra_core.readiness import check as check_readiness
+
+            result = check_readiness(root, args.evidence, unit=args.unit)
+            print(json.dumps(result, sort_keys=True))
+            return 0 if result["status"] == "accepted" else 1
+        elif args.command == "security":
             if args.security_command == "workflows":
                 check_workflows(root)
                 print("PASS: workflow syntax/expressions; no workflow steps executed")

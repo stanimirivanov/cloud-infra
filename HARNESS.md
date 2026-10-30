@@ -541,3 +541,19 @@ remains supported. CI runs the existing protocol/engine cases excluding this fil
 then this required failure suite, once each without credentials. The shared gate
 checks wiring and skips opt-in cases. Shared verification, workflow checking and
 workspace package builds remain required; no executable/dependency or live test is added.
+
+## Read-only operational readiness (M06-PR1)
+
+`uv run --locked infra readiness --unit oci-network --evidence .infra/readiness.json`
+reports authenticated reviewer assertions for the ten M05 acceptance gates. Exact
+record/evidence/configuration/policy hashes, current clean commit, two distinct
+reviewer roles and signed expiry windows determine missing/stale/failed/accepted
+results. Every result denies execution and activation authority; live controls
+are not independently verified. Existing operation approvals remain separate.
+
+See [the acceptance contract](docs/runbooks/operational-readiness.md) for the private
+index, fixed gate/stage schema, signature payload type, report precedence and exit
+codes. Current disabled/empty reviewer policy cannot authenticate acceptance;
+M06-PR2 owns enrollment. Focused checks use
+`uv run --locked pytest -q tests/test_readiness.py`; the shared gate and
+`uv build --all-packages` cover this offline, dependency-free addition.
