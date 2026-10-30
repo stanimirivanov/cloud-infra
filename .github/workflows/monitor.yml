@@ -1,0 +1,124 @@
+name: Protected monitoring
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Reviewed main commit equal to this dispatch commit
+        type: string
+        required: true
+      initialize:
+        description: Explicit one-time initialization on the enrolled durable runner; never use after state loss
+        type: boolean
+        default: false
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: >-
+      vars.MONITORING_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || (github.actor == github.repository_owner && github.sha == inputs.commit))
+    uses: ./.github/workflows/verify.yml
+  observe:
+    name: Observe (${{ matrix.unit }})
+    needs: verify
+    if: >-
+      vars.MONITORING_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || (github.actor == github.repository_owner && github.sha == inputs.commit))
+    strategy:
+      fail-fast: false
+      matrix:
+        unit: [oci-network, oci-oke, cloudflare-edge, supabase-database]
+    concurrency:
+      group: pulumi-operation-${{ github.repository }}-${{ startsWith(matrix.unit, 'oci-') && 'oci-dependency' || matrix.unit }}
+      cancel-in-progress: false
+    runs-on:
+      group: service-operations
+      labels: [self-hosted, linux, x64]
+    environment: ${{ matrix.unit }}-monitor
+    timeout-minutes: 20
+    env:
+      MONITOR_ALLOW_INITIALIZE: ${{ inputs.initialize }}
+      MONITOR_UNIT: ${{ matrix.unit }}
+      MONITOR_ENVIRONMENT: ${{ matrix.unit }}-monitor
+      MONITOR_INDEX: ${{ vars.MONITOR_INDEX }}
+      MONITOR_DELIVERY_ENABLED: ${{ vars.MONITOR_DELIVERY_ENABLED }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          clean: false # Preserve the durable incident outbox and operation journals.
+      - run: python3 .github/scripts/install-tools.py
+      - run: uv sync --locked --all-groups
+        id: setup
+      - name: Initialize new durable state only on explicit owner dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.initialize
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --initialize
+      - name: Check protected context and signed drift admission without cloud credentials
+        id: preflight
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --check
+      - name: Observe admitted isolated drift
+        if: steps.preflight.outputs.drift_admitted == 'true'
+        id: drift
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          OCI_USER_OCID: ${{ startsWith(matrix.unit, 'oci-') && secrets.OCI_USER_OCID || '' }}
+          OCI_FINGERPRINT: ${{ startsWith(matrix.unit, 'oci-') && secrets.OCI_FINGERPRINT || '' }}
+          OCI_PRIVATE_KEY_PATH: ${{ startsWith(matrix.unit, 'oci-') && vars.OCI_PRIVATE_KEY_PATH || '' }}
+        run: uv run --locked python .github/scripts/monitor.py --drift
+      - name: Persist admitted monitoring snapshot
+        if: steps.preflight.outcome == 'success' && steps.preflight.outputs.duplicate != 'true' && (steps.drift.outcome == 'success' || steps.drift.outcome == 'skipped')
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --collect
+      - name: Deliver pending incident transitions
+        if: always() && steps.setup.outcome == 'success' && vars.MONITOR_DELIVERY_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+          MONITOR_DELIVERY_TOKEN: ${{ secrets.MONITOR_DELIVERY_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --deliver
+  watchdog:
+    needs: verify
+    if: >-
+      vars.MONITORING_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || (github.actor == github.repository_owner && github.sha == inputs.commit))
+    concurrency:
+      group: monitoring-watchdog-${{ github.repository }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    environment: monitor-watchdog
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    env:
+      MONITOR_ENVIRONMENT: monitor-watchdog
+      MONITOR_DELIVERY_ENABLED: ${{ vars.MONITOR_DELIVERY_ENABLED }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - run: python3 .github/scripts/install-tools.py
+      - run: uv sync --locked --all-groups
+      - name: Observe successful persistence heartbeats independently of dedicated runners
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --watchdog
+      - name: Deliver watchdog state transitions
+        if: vars.MONITOR_DELIVERY_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+          MONITOR_DELIVERY_TOKEN: ${{ secrets.MONITOR_DELIVERY_TOKEN }}
+        run: uv run --locked python .github/scripts/monitor.py --watchdog --allow-delivery

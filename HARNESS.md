@@ -485,3 +485,20 @@ for private inputs, check/observe modes, process cleanup and acceptance limits.
 Focused checks use `uv run --locked pytest -q tests/test_health.py tests/test_operational_findings.py`.
 The shared gate runs loopback fixtures only; no external endpoint, credential,
 Kubernetes client or new integration marker is needed. Scheduling/delivery remain PR14.
+
+## Scheduled monitoring and incident delivery (M05-PR14)
+
+The default-disabled protected monitor composes the existing drift, operational
+findings and health adapters into grouped incidents with a durable local outbox.
+Fresh signed drift admission remains mandatory. Provider execution and credential-free
+health collection use separate steps; a GitHub-hosted watchdog checks persistence
+heartbeats independently of the durable runner. No remediation or resource activation
+is introduced. GitHub issue delivery is separately gated and initially report-only.
+
+See [the scheduling/outbox contract](docs/runbooks/scheduled-monitoring.md) for actor/host
+and recipient enrollment, explicit first initialization, preserved state, unknowns,
+retry/acknowledgement limits and missing-run guarantees. config/monitoring-runner.json
+ships disabled with no enrolled actors/host or heartbeat target. Focused checks use
+`uv run --locked pytest -q tests/test_incidents.py tests/test_monitor_delivery.py tests/test_monitoring.py`.
+The shared gate uses fake GitHub responses and existing local fixtures only; no
+notifications, workflow dispatch or live observations are part of verification.

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "delivery_enabled": false,
+  "repository": "stanimirivanov/cloud-infra",
+  "repository_id": 1323328453,
+  "heartbeat_seconds": null,
+  "notification_actor_id": null,
+  "notification_actor_login": null,
+  "scheduled_actor_id": null,
+  "scheduled_actor_login": null,
+  "state_host_sha256": null
+}
