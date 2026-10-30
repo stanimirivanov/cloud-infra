@@ -427,3 +427,109 @@ readback, independence and RPO/RTO measurements remain unchanged. The separate
 [owner handoff gate](kubernetes-cutover.md#signed-owner-handoff-m05-pr10) requires
 these scope bindings and rejects old unscoped reports; it never restores production
 state. No recovery credentials or raw machine identifiers are added to reports.
+
+## M06 backend readiness checks
+
+M06-PR3 combines the existing remote qualification receipt and bucket posture
+checks with an explicit observation of the four existing project-scoped stacks.
+It is an offline gap report, not stack bootstrap, credential admission or backend
+acceptance. No deployment flag, bucket policy, namespace or stack is changed.
+
+From a clean committed checkout, use an independently reviewed expected tenancy:
+
+```sh
+uv run --locked infra backend check-readiness --account-id OCID
+uv run --locked infra backend check-readiness --account-id OCID --evidence .infra/backend-readiness.json
+```
+
+Without an index, every evidence component reports `pending`. The optional closed
+schema-1 index has exactly these fields; each path may instead be null:
+
+```json
+{
+  "schema_version": 1,
+  "qualification": ".infra/qualification.json",
+  "posture": ".infra/backend-posture.json",
+  "stacks": ".infra/backend-stacks.json"
+}
+```
+
+`posture` requires its existing `.envelope.json` sidecar. Every artifact must be
+a distinct canonical relative `.infra/*.json` path without symlinks. Captures are
+limited to 1 MiB per file. Duplicate fields, path aliases (including the sidecar),
+unknown index fields and malformed evidence fail with redacted `BREADY001`.
+Captured bytes and the clean checkout identity are rechecked before returning.
+Account identifiers and raw observations are not included in the report.
+
+The qualification component calls the existing schema-3 receipt validator:
+remote `oci-s3` kind, current configuration digest and CLI version, all encryption,
+locking and independent-recovery checks, measured recovery metrics and the
+configured TTL are required. A local test receipt cannot establish remote
+readiness. Qualification receipts bind configuration, not a commit or signing
+identity; their provenance still needs independent review. This PR adds an optional
+clock argument to the validator so the combined check uses one captured clock;
+existing callers retain the same wall-clock behavior.
+
+The posture component calls the existing payload/envelope validator against the
+independently supplied account, current clean commit and loaded configuration.
+Its original collection clocks must remain within one hour. Private/versioned,
+Standard, writable storage with no PARs, retention rules or lifecycle policy is
+still required by the existing contract. A separately reviewed retention design
+must respect this contract or explicitly change it; do not claim acceptance by
+adding an unchecked retention boolean.
+
+### Existing-stack observation contract
+
+The stack file is an **unsigned operator observation**, not a live Pulumi listing
+or evidence that this checker decrypted production state. Its closed schema is:
+
+- `schema_version`: integer 1.
+- `account_id`: the independently expected tenancy.
+- `commit`: current reviewed clean checkout commit.
+- `configuration_sha256`: the foundation configuration digest reported by
+  `uv run --locked infra backend inspect`.
+- `backend`: the exact configured backend URL, also reported by that command.
+- `collection_started_at` and `collection_completed_at`: original timezone-aware
+  ISO timestamps, ordered and no more than one hour old.
+- `stacks`: exactly four records, one per configured unit. Each record contains
+  only `unit`, `stack_identity`, `exists`, `secrets_provider`, `pending_operations`.
+
+For each of `oci-network`, `oci-oke`, `cloudflare-edge`, and `supabase-database`,
+`stack_identity` must be `organization/free-infrastructure/` followed by the unit
+name, `exists` must be true, `secrets_provider` must be `passphrase`, and
+`pending_operations` must be integer zero. Missing stacks, ambiguous or duplicate
+identities, other projects/backends, unknown encryption and pending operations
+block consistency. Never substitute a qualification stack or initialize a missing
+production stack merely to fill this record.
+
+The backend custodian must inspect the exact existing stacks using separately
+reviewed read-only access and preserve the original observation context privately.
+No stack-observation collector is added here. Do not place checkpoints, encrypted
+configuration, passphrases or raw account evidence in the repository or PR. A
+consistent assertion is labeled `operator-observations-consistent`; no semantic
+claim about actual ciphertext, effective IAM or live resource ownership follows.
+
+### Acceptance boundary and remaining review
+
+The report always has `status: pending`, `backend_ready: false`,
+`execution_authorized: false`, `activation_authorized: false` and
+`live_controls_verified: false`. The CLI exits 1 for pending or invalid input.
+Missing evidence is pending; supplied stale, unsafe or mismatched evidence is an
+error. Consistent qualification/posture are labeled `observed-controls-consistent`.
+The report cannot serve as a successful readiness acceptance record by itself.
+Independent review must bind the original evidence and clocks, not restamp this
+summary or equate a synthetic qualification with production-stack recovery.
+
+Before live acceptance, the backend/key custodian and independent reviewer must
+review the effective S3 identity and least privilege, exact backend namespace and
+exclusion of external state, all four existing stack identities, passphrase/key
+custody, independently available recovery access, retained version history and
+storage budget. Write tests, qualification workflow dispatch and stack creation
+remain separate explicitly authorized operational actions. No such live action
+was performed by this engineering PR; missing live evidence remains pending.
+
+Focused verification uses
+`uv run --locked pytest -q tests/test_backend_readiness.py tests/test_backend.py tests/test_backend_envelopes.py tests/test_operations_evidence.py`.
+The shared gate remains `uv run --locked infra verify`. This adds no dependency or
+receipt/posture schema migration; reverting the checker removes only the new
+reporting interface and cannot undo an operational action.

@@ -344,7 +344,9 @@ def _rehearse_recovery(
     }
 
 
-def validate_receipt(config: FoundationConfig, receipt: dict[str, Any]) -> None:
+def validate_receipt(
+    config: FoundationConfig, receipt: dict[str, Any], *, now: datetime | None = None
+) -> None:
     expected_checks = {
         "encrypted-config",
         "encrypted-checkpoint",
@@ -395,7 +397,7 @@ def validate_receipt(config: FoundationConfig, receipt: dict[str, Any]) -> None:
         completed = datetime.fromisoformat(receipt["completed_at"])
     except ValueError:
         raise QualificationError("qualification receipt has an invalid timestamp") from None
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
     if (
         completed.tzinfo is None
         or completed > now

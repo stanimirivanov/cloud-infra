@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     posture_collect.add_argument("--oci-config", type=Path, required=True)
     posture_collect.add_argument("--oci-profile", default="DEFAULT")
     posture_collect.add_argument("--output", type=Path, default=Path(".infra/backend-posture.json"))
+    backend_readiness = backend_commands.add_parser(
+        "check-readiness", help="offline backend readiness gaps; no activation authority"
+    )
+    backend_readiness.add_argument("--account-id", required=True)
+    backend_readiness.add_argument("--evidence", type=Path)
     for operation in ("preview", "deploy"):
         deployment = commands.add_parser(
             operation, help="readiness check; resource operations are disabled"
@@ -485,7 +490,17 @@ def main(
                 )
         elif args.command == "backend":
             config = load_foundation(root)
-            if args.backend_command == "collect-posture":
+            if args.backend_command == "check-readiness":
+                from infra_core.backend_readiness import check as check_backend_readiness
+
+                print(
+                    json.dumps(
+                        check_backend_readiness(root, args.evidence, account_id=args.account_id),
+                        sort_keys=True,
+                    )
+                )
+                return 1  # Independent backend acceptance remains pending.
+            elif args.backend_command == "collect-posture":
                 from infra_core.inventory.oci import OCIReader
 
                 destination = (root / args.output).resolve()

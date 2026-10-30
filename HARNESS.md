@@ -563,3 +563,9 @@ M06-PR2 adds `uv run --locked infra security check-enrollment` with an optional
 protected-environment and runner custody gaps without network calls or writes;
 consistent observations never complete enrollment. See the
 [enrollment procedure](docs/runbooks/github-administration.md#m06-repository-trust-and-runner-enrollment-checks).
+
+M06-PR3 adds `uv run --locked infra backend check-readiness --account-id OCID`
+with an optional `--evidence .infra/backend-readiness.json` index. It validates
+qualification, posture and existing-stack observations offline; independent IAM,
+key custody and recovery-access acceptance remains pending. See the
+[backend readiness procedure](docs/runbooks/pulumi-backend.md#m06-backend-readiness-checks).
