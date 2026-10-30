@@ -81,5 +81,44 @@ def _drift(root: Path, args: argparse.Namespace) -> None:
     execute(root, args, credentials)
 
 
+def _recovery(root: Path, args: argparse.Namespace) -> None:
+    from infra_core.recovery_contracts import require
+
+    from infra_program.recovery_driver import execute
+
+    require(
+        os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and os.environ.get("GITHUB_REF") == "refs/heads/main"
+        and os.environ.get("GITHUB_SHA") == args.commit
+        and bool(args.actor)
+        and args.actor
+        == os.environ.get("GITHUB_ACTOR")
+        == os.environ.get("GITHUB_REPOSITORY_OWNER")
+        and args.environment == args.unit + "-recovery"
+    )
+
+    def credentials() -> dict[str, str]:
+        names = {
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "RECOVERY_PASSPHRASE",
+            "RECOVERY_BACKUP_PASSWORD",
+        }
+        if args.unit.startswith("oci-"):
+            names |= {"OCI_USER_OCID", "OCI_FINGERPRINT", "OCI_PRIVATE_KEY_PATH"}
+        if os.environ.get("AWS_SESSION_TOKEN"):
+            names.add("AWS_SESSION_TOKEN")
+        return {name: os.environ[name] for name in names}
+
+    execute(root, args, credentials)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    return core_main(argv, preview=_preview, apply=_apply, resource_import=_import, drift=_drift)
+    return core_main(
+        argv,
+        preview=_preview,
+        apply=_apply,
+        resource_import=_import,
+        drift=_drift,
+        state_recovery=_recovery,
+    )

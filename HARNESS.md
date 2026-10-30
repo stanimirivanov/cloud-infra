@@ -502,3 +502,19 @@ ships disabled with no enrolled actors/host or heartbeat target. Focused checks 
 `uv run --locked pytest -q tests/test_incidents.py tests/test_monitor_delivery.py tests/test_monitoring.py`.
 The shared gate uses fake GitHub responses and existing local fixtures only; no
 notifications, workflow dispatch or live observations are part of verification.
+
+## Authorized state recovery (M05-PR15)
+
+The separate default-disabled `infra state-recovery --help` adapter restores an exact
+approved checkpoint/configuration pair under an external writer freeze. It requires
+fresh schema-2 admission, a current safety backup, authenticated owner provenance,
+independent rehearsal and pre/post isolated reconciliation. It never applies resources,
+creates a stack, compensates a failed import or releases writers. See
+[the recovery contract](docs/runbooks/state-recovery.md) for private inputs, conservative
+identity/property limits, immutable config publication and indeterminate outcomes.
+
+Focused checks: `uv run --locked pytest -q tests/test_recovery_driver.py tests/test_recovery_rehearsal.py`.
+The shared gate remains `uv run --locked infra verify`. Explicit disposable local-engine
+verification uses `RUN_OPERATION_INTEGRATION=1 uv run --locked pytest -q -m operation_integration`;
+this includes actual encrypted import/readback, wrong-key rejection, empty-config
+rehearsal and exact restic snapshot retrieval. No live recovery is part of verification.

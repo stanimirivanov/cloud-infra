@@ -218,22 +218,91 @@ def _rehearse(
         )
         wrong = secrets.token_urlsafe(32)
         require(wrong != key)
+        # Empty config/output maps do not instantiate a secrets manager on reads.
+        # Verify the existing salt using an isolated config copy, never source data.
+        key_check = work / "key-check.json"
+        key_check.write_bytes((work / "stack-config.json").read_bytes())
+        challenge = [
+            "config",
+            "set",
+            "recovery-key-check",
+            "synthetic-recovery-key-check",
+            "--secret",
+            "--config-file",
+            str(key_check),
+            "--stack",
+            unit.stack,
+        ]
+        pulumi_run(challenge, wrong, "wrong-0", rejected=True)
+        pulumi_run(challenge, key, "correct-0")
+        canary = json.loads(
+            pulumi_run(
+                [
+                    "config",
+                    "--json",
+                    "--show-secrets",
+                    "--config-file",
+                    str(key_check),
+                    "--stack",
+                    unit.stack,
+                ],
+                key,
+                "correct-0",
+            )
+        )
+        require(
+            type(canary) is dict
+            and any(
+                type(v) is dict
+                and v.get("secret") is True
+                and v.get("value") == "synthetic-recovery-key-check"
+                for v in canary.values()
+            )
+        )
+
+        def encrypted(value: object) -> bool:
+            if isinstance(value, dict):
+                return value.get(backup.SIGNATURE) == backup.ENCRYPTED_VALUE_SIGNATURE or any(
+                    encrypted(v) for v in value.values()
+                )
+            return isinstance(value, list) and any(encrypted(v) for v in value)
+
+        root_outputs = [
+            r.get("outputs", {})
+            for r in read_json(work / "checkpoint.json")["deployment"]["resources"]
+            if r["type"] == "pulumi:pulumi:Stack"
+        ]
         commands = [
             ["config", "--json", "--show-secrets", "--stack", unit.stack],
             ["stack", "output", "--json", "--show-secrets", "--stack", unit.stack],
         ]
         for index, args in enumerate(commands):
-            pulumi_run(args, wrong, f"wrong-{index}", rejected=True)
+            if (index == 0 and read_json(work / "stack-config.json")["config"]) or (
+                index == 1 and encrypted(root_outputs)
+            ):
+                pulumi_run(args, wrong, f"wrong-{index}", rejected=True)
         for index, args in enumerate(commands):
             result = json.loads(pulumi_run(args, key, f"correct-{index}"))
-            require(type(result) is dict and bool(result))
-            if index == 0:
+            require(type(result) is dict)
+            if index == 0 and read_json(work / "stack-config.json")["config"]:
                 require(
                     any(
                         type(v) is dict and v.get("secret") is True and "value" in v
                         for v in result.values()
                     )
                 )
+        require(
+            type(
+                json.loads(
+                    pulumi_run(
+                        ["stack", "export", "--show-secrets", "--stack", unit.stack],
+                        key,
+                        "correct-1",
+                    )
+                )
+            )
+            is dict
+        )
         duration = time.perf_counter() - started
         report = dict(
             schema_version=2,

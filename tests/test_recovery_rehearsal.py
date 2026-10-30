@@ -57,6 +57,12 @@ def recovery(bundle, monkeypatch):
                 raw = files[Path(argv[-1]).name]
             return SimpleNamespace(returncode=0, stdout=raw, stderr=b"")
         wrong = "wrong-" in kw["env"]["PULUMI_HOME"]
+        if "--config-file" in argv and "--show-secrets" in argv:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=b'{"key":{"secret":true,"value":"synthetic-recovery-key-check"}}',
+                stderr=b"",
+            )
         return SimpleNamespace(
             returncode=1 if wrong else 0,
             stdout=b'{"key":{"secret":true,"value":"fixture"}}',
@@ -152,7 +158,8 @@ def test_wrong_key_unrecognized_failure_is_not_crypto_evidence(recovery, monkeyp
 @pytest.mark.skipif(
     os.environ.get("RUN_OPERATION_INTEGRATION") != "1", reason="opt-in local recovery"
 )
-def test_real_encrypted_pair_rehearsal(bundle, monkeypatch):
+@pytest.mark.parametrize("empty", [False, True])
+def test_real_encrypted_pair_rehearsal(bundle, monkeypatch, empty):
     args, value = bundle
     root, request, checkpoint, settings, repository, _, password, _ = args
     cli, restic = r._tool(ROOT, "pulumi"), r._tool(ROOT, "restic")
@@ -188,7 +195,9 @@ def test_real_encrypted_pair_rehearsal(bundle, monkeypatch):
         )
     )
     (source / "__main__.py").write_text(
-        'import pulumi\npulumi.export("fixture", pulumi.Config().require_secret("sentinel"))\n'
+        "import pulumi\n"
+        if empty
+        else 'import pulumi\npulumi.export("fixture", pulumi.Config().require_secret("sentinel"))\n'
     )
 
     def run(arguments):
@@ -202,9 +211,11 @@ def test_real_encrypted_pair_rehearsal(bundle, monkeypatch):
         ).stdout
 
     run(["stack", "init", "oci-network", "--secrets-provider", "passphrase"])
-    run(["config", "set", "sentinel", "fixture-value", "--secret", "--stack", "oci-network"])
+    if not empty:
+        run(["config", "set", "sentinel", "fixture-value", "--secret", "--stack", "oci-network"])
     run(["up", "--yes", "--skip-preview", "--stack", "oci-network"])
     config = yaml.safe_load((source / "Pulumi.oci-network.yaml").read_text())
+    config.setdefault("config", {})
     state = json.loads(run(["stack", "export", "--stack", "oci-network"]))
     checkpoint.write_text(json.dumps(state))
     settings.write_text(json.dumps(config))

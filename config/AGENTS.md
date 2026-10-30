@@ -57,3 +57,8 @@ contains no usable evidence. handoff/oci selects a separately protected environm
 in the operation policy and reuses reviewed public roles only. Enabling this gate
 or enrolling keys requires explicit independent operational review. Never make an
 example assert source release, writer exclusion or target-owner authority.
+
+state-recovery.json is a separate disabled checkpoint-recovery gate. Activation
+requires operational review of signed admission, independent backup/rehearsal,
+historical ownership trust, writer freeze and recovery credential custody. It must
+never imply resource rollback, missing-stack creation or writer-release authority.

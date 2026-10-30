@@ -87,3 +87,11 @@ recovery and external source release under a continuous idle freeze. Never turn
 cutover.check into authority. Handoff output cannot activate a writer or resource
 operation, edit source state or advance a journal. Enforce action-specific DSSE
 roles and current scoped receipts; operator attestations are not live IAM discovery.
+
+M05 state recovery is a separate default-disabled adapter with action-specific signed
+admission and an external writer freeze. Only the closed state writer may import the
+selected encrypted checkpoint; observers use disposable backends with read-only
+provider credentials and no S3 writer credentials. Preserve current/restore identity
+and managed-property equality, independent rehearsal, immutable recovered configuration,
+pre/post reconciliation and indeterminate launched outcomes. Never release writers,
+create missing stacks, apply resources or retry/compensate an import automatically.
