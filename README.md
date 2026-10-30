@@ -10,8 +10,10 @@ The [M04 closeout](docs/m04-closeout.md) separates implemented preview engineeri
 from administrator-owned live acceptance; all tracked preview flags remain false.
 The [M05 closeout](docs/m05-closeout.md) reconciles protected operations, monitoring
 and recovery capabilities with failure rehearsals and a separate live acceptance
-checklist. Operational activation remains disabled; engineering closeout requires
-M05-PR16 CI and merge.
+checklist; its final implementation merged in PR #156.
+The [M06 closeout](docs/m06-closeout.md) maps the delivered readiness checks and staged
+procedures to those ten acceptance gates. Operational acceptance and activation
+remain pending; M06-PR13 engineering closeout requires its own CI and merge.
 
 ## Development
 
