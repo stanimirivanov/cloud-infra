@@ -214,6 +214,21 @@ def build_parser() -> argparse.ArgumentParser:
     health_mode = health.add_mutually_exclusive_group(required=True)
     health_mode.add_argument("--check", action="store_true")
     health_mode.add_argument("--observe", action="store_true")
+    recovery = commands.add_parser(
+        "state-recovery", help="explicit checkpoint recovery; writers remain frozen"
+    )
+    recovery.add_argument(
+        "--unit",
+        choices=["oci-network", "oci-oke", "cloudflare-edge", "supabase-database"],
+        required=True,
+    )
+    for name in ("commit", "actor", "environment"):
+        recovery.add_argument("--" + name, required=True)
+    for name in ("bundle", "journal"):
+        recovery.add_argument("--" + name, type=Path, required=True)
+    recovery_mode = recovery.add_mutually_exclusive_group(required=True)
+    recovery_mode.add_argument("--check", action="store_true")
+    recovery_mode.add_argument("--allow-state-writes", action="store_true")
     return parser
 
 
@@ -236,6 +251,7 @@ def main(
     apply: Callable[[Path, argparse.Namespace], None] | None = None,
     resource_import: Callable[[Path, argparse.Namespace], None] | None = None,
     drift: Callable[[Path, argparse.Namespace], None] | None = None,
+    state_recovery: Callable[[Path, argparse.Namespace], None] | None = None,
 ) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -549,6 +565,10 @@ def main(
             result = check_findings(root, args.evidence)
             print(json.dumps(result, sort_keys=True))
             return 1 if result["status"] == "unknown" else 0
+        elif args.command == "state-recovery":
+            if state_recovery is None:
+                raise ValueError("RESTORE001: explicit recovery composition required")
+            state_recovery(root, args)
         elif args.command == "drift":
             if drift is None:
                 raise ValueError("DRIFT001: explicit observation composition required")

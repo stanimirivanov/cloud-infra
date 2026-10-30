@@ -1,0 +1,66 @@
+name: Protected state recovery
+on:
+  workflow_dispatch:
+    inputs:
+      unit:
+        description: Existing frozen state unit; recovery never creates a stack
+        type: choice
+        required: true
+        options: [oci-network, oci-oke, cloudflare-edge, supabase-database]
+      commit:
+        description: Signed main commit equal to this dispatch commit
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: pulumi-operation-${{ github.repository }}-${{ startsWith(inputs.unit, 'oci-') && 'oci-dependency' || inputs.unit }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    uses: ./.github/workflows/verify.yml
+  recover:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.sha == inputs.commit
+    runs-on:
+      group: recovery
+      labels: [self-hosted, linux, x64]
+    environment: ${{ inputs.unit }}-recovery
+    timeout-minutes: 20
+    env:
+      RECOVERY_UNIT: ${{ inputs.unit }}
+      RECOVERY_COMMIT: ${{ inputs.commit }}
+      RECOVERY_ENVIRONMENT: ${{ inputs.unit }}-recovery
+      RECOVERY_BUNDLE: ${{ vars.STATE_RECOVERY_BUNDLE }}
+      RECOVERY_JOURNAL: ${{ vars.STATE_RECOVERY_JOURNAL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          clean: false # Preserve the prepared journal and immutable recovery evidence.
+      - run: python3 .github/scripts/install-tools.py
+      - run: uv sync --locked --all-groups
+      - name: Check signed recovery and freeze before admitting cloud credentials
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+        run: >-
+          uv run --locked infra state-recovery --check --unit "$RECOVERY_UNIT" --commit "$RECOVERY_COMMIT"
+          --actor "$GITHUB_ACTOR" --environment "$RECOVERY_ENVIRONMENT"
+          --bundle "$RECOVERY_BUNDLE" --journal "$RECOVERY_JOURNAL"
+      - name: Restore the approved pair; never release writers
+        env:
+          GH_TOKEN: ${{ secrets.OPERATION_OBSERVATION_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.RECOVERY_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RECOVERY_S3_SECRET_KEY }}
+          RECOVERY_PASSPHRASE: ${{ secrets.RECOVERY_PASSPHRASE }}
+          RECOVERY_BACKUP_PASSWORD: ${{ secrets.RECOVERY_BACKUP_PASSWORD }}
+          OCI_USER_OCID: ${{ startsWith(inputs.unit, 'oci-') && secrets.OCI_RECOVERY_USER_OCID || '' }}
+          OCI_FINGERPRINT: ${{ startsWith(inputs.unit, 'oci-') && secrets.OCI_RECOVERY_FINGERPRINT || '' }}
+          OCI_PRIVATE_KEY_PATH: ${{ startsWith(inputs.unit, 'oci-') && vars.OCI_RECOVERY_PRIVATE_KEY_PATH || '' }}
+        run: >-
+          uv run --locked infra state-recovery --allow-state-writes --unit "$RECOVERY_UNIT" --commit "$RECOVERY_COMMIT"
+          --actor "$GITHUB_ACTOR" --environment "$RECOVERY_ENVIRONMENT"
+          --bundle "$RECOVERY_BUNDLE" --journal "$RECOVERY_JOURNAL"

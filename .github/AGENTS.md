@@ -60,3 +60,10 @@ credentials. Cost/health collection and the hosted watchdog stay credential-free
 apart from scoped GitHub read access; notification tokens belong to delivery steps.
 Keep the local incident outbox, host enrollment, explicit initialization and original
 heartbeat watermark intact. Missing state/steps are unknown, never a fresh baseline.
+
+Manual state-recovery uses separate unit-recovery environments and the protected
+recovery runner after main/owner/exact-SHA shared verification. Preserve signed
+credential-free preflight, shared OCI/service operation concurrency and durable local
+locks/journals. Only the explicit admitted step receives backend writer and recovery
+credentials; keep provider Read credentials separate inside the driver. Never upload
+state, automatically retry imports or release writers from this workflow.
