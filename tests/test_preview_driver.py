@@ -23,7 +23,7 @@ from infra_program.preview_program import (
     OkePreviewContext,
     ServicePreviewContext,
 )
-from preview_graph_helpers import service_events
+from preview_graph_helpers import oci_events, service_events
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
@@ -228,6 +228,16 @@ def execution(case, monkeypatch):
                 if state.fault == "graph":
                     graph[6][1]["metadata"]["new"]["inputs"]["name"] = "substituted"
                 records = graph + records
+            else:
+                graph = oci_events(
+                    context.contract.unit,
+                    context.configuration,
+                    context.account,
+                    json.loads(case[3]) if case[3] is not None else None,
+                )
+                if state.fault == "graph":
+                    graph[6][1]["metadata"]["new"]["inputs"]["paidAddon"] = "substituted"
+                records = graph + records
             self.wire = SimpleNamespace(
                 records=[
                     driver._encoded({"sequence": n, "timestamp": now, kind: value})
@@ -367,8 +377,10 @@ def test_invalid_configuration_inputs_are_rejected_before_tools(case, execution,
     assert not execution.selected and execution.work is None
 
 
-@pytest.mark.parametrize("case", ["cloudflare-edge", "supabase-database"], indirect=True)
-def test_service_graph_substitution_blocks_receipt(case, execution):
+@pytest.mark.parametrize(
+    "case", ["cloudflare-edge", "supabase-database", "oci-network", "oci-oke"], indirect=True
+)
+def test_graph_substitution_blocks_receipt(case, execution):
     execution.fault = "graph"
     with pytest.raises(RuntimeError, match="PREVIEW005"):
         execute(case)

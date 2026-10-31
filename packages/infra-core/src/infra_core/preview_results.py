@@ -8,10 +8,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, NoReturn
 
 from infra_core.evidence import MAX_ARTIFACT_BYTES, MAX_TOTAL_BYTES
+from infra_core.oci_preview_graph import OciPreviewGraph
 from infra_core.preview_contracts import PreviewContract
 from infra_core.service_preview_graph import ServicePreviewGraph
 
 POLICY_SOURCES = (
+    "packages/infra-core/src/infra_core/oci/graph.py",
+    "packages/infra-core/src/infra_core/oci/config.py",
+    "packages/infra-core/src/infra_core/network_outputs.py",
+    "packages/infra-core/src/infra_core/governance/resources.py",
+    "packages/infra-core/src/infra_core/oci_preview_graph.py",
     "packages/infra-core/src/infra_core/service_preview_graph.py",
     "packages/infra-core/src/infra_core/preview_results.py",
     "config/quotas/profiles.toml",
@@ -37,7 +43,7 @@ OPERATIONS = set(
     ).split()
 )
 _FIXED = {
-    "schema_version": 2,
+    "schema_version": 3,
     "operation": "preview",
     "status": "succeeded",
     "deployment_authorized": False,
@@ -113,18 +119,30 @@ def _scope(contract: PreviewContract, artifacts: Mapping[str, bytes]) -> dict[st
     )
 
 
-def _service_graph(
-    contract: PreviewContract, artifacts: Mapping[str, bytes]
-) -> ServicePreviewGraph | None:
-    if contract.unit.startswith("oci-"):
-        return None
+def _graph(contract: PreviewContract, artifacts: Mapping[str, bytes]) -> ServicePreviewGraph:
     proposal = _parse(artifacts["proposal"], MAX_ARTIFACT_BYTES)
     _require(set(proposal) == {"configuration", "stack_configuration"})
-    return ServicePreviewGraph(
-        contract.unit,
-        proposal["configuration"],
-        _parse(artifacts["provider_toolchain"], MAX_ARTIFACT_BYTES),
-    )
+    pins = _parse(artifacts["provider_toolchain"], MAX_ARTIFACT_BYTES)
+    if contract.unit.startswith("oci-"):
+        return OciPreviewGraph(
+            contract.unit,
+            proposal["configuration"],
+            _parse(artifacts["account"], MAX_ARTIFACT_BYTES),
+            _parse(artifacts["profile"], MAX_ARTIFACT_BYTES),
+            pins,
+            _parse(artifacts["dependency_outputs"], MAX_ARTIFACT_BYTES)
+            if contract.unit == "oci-oke"
+            else None,
+        )
+    return ServicePreviewGraph(contract.unit, proposal["configuration"], pins)
+
+
+def _graph_stamps(graph: ServicePreviewGraph) -> dict[str, Any]:
+    oci = isinstance(graph, OciPreviewGraph)
+    return {
+        "oci_graph": graph.stamp() if oci else None,
+        "service_graph": None if oci else graph.stamp(),
+    }
 
 
 def _counts(value: Any) -> None:
@@ -160,8 +178,8 @@ def validate_preview_result(
 ) -> dict[str, Any]:
     """Validate against independent expectations; a forged matching receipt is still unsigned."""
     data, expected = _parse(encoded, MAX_RESULT_BYTES), _scope(contract, artifacts)
-    graph = _service_graph(contract, artifacts)
-    expected["service_graph"] = graph.stamp() if graph is not None else None
+    graph = _graph(contract, artifacts)
+    expected.update(_graph_stamps(graph))
     _require(
         set(data)
         == set(expected)
@@ -218,7 +236,7 @@ def create_preview_result(
     callers must preserve the CLI 3.272.0 wire observations instead of synthesizing them.
     """
     data = _scope(contract, artifacts)
-    graph = _service_graph(contract, artifacts)
+    graph = _graph(contract, artifacts)
     _require(type(exit_code) is int and exit_code == 0, "PREVIEW004")
     start_second = int(_time(started_at).timestamp())
     end_second = int(_time(completed_at).timestamp())
@@ -244,7 +262,7 @@ def create_preview_result(
         kind = next(iter(kinds))
         body = event[kind]
         _require(type(body) is dict, "PREVIEW004")
-        if graph is not None and kind in {"resourcePreEvent", "resOutputsEvent"}:
+        if kind in {"resourcePreEvent", "resOutputsEvent"}:
             _require(summary is None, "PREVIEW009")
             graph.observe(kind, body)
         if kind == "diagnosticEvent":
@@ -292,10 +310,9 @@ def create_preview_result(
             terminal = True
     _require(terminal and summary is not None and checks > 0, "PREVIEW004")
     assert summary is not None
-    if graph is not None:
-        graph.finish()
+    graph.finish()
     data.update(
-        service_graph=graph.stamp() if graph is not None else None,
+        **_graph_stamps(graph),
         started_at=started_at,
         completed_at=completed_at,
         resource_changes=summary["resourceChanges"],

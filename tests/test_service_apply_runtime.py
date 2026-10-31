@@ -186,6 +186,8 @@ def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
                 "oci-oke",
                 "--save-plan",
                 str(work / "reference-plan.json"),
+                "--event-log",
+                str(work / "reference-events.jsonl"),
                 "--policy-pack",
                 str(ROOT / "policies"),
                 "--policy-pack-config",
@@ -208,3 +210,26 @@ def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
             r for r in resources.values() if r["goal"]["type"] == "pulumi:providers:pulumi"
         )
         assert provider["goal"]["name"] == "default" and provider["goal"]["protect"] is False
+
+        # Qualify built-in provider and read events without an OCI plugin or account.
+        from dataclasses import asdict
+
+        from infra_core.oci_preview_graph import OciPreviewGraph
+
+        account, selected_profile, _ = test_oci.evidence()
+        matcher = OciPreviewGraph(
+            "oci-oke",
+            json.loads(json.dumps(asdict(config))),
+            account,
+            selected_profile,
+            json.loads((ROOT / "config/provider-toolchain.json").read_bytes()),
+            outputs,
+        )
+        observed_kinds = set()
+        for line in (work / "reference-events.jsonl").read_bytes().splitlines():
+            event = json.loads(line)
+            for kind in ("resourcePreEvent", "resOutputsEvent"):
+                if kind in event:
+                    matcher.observe(kind, event[kind])
+                    observed_kinds.add(event[kind]["metadata"]["type"])
+        assert observed_kinds == kinds | {"pulumi:pulumi:StackReference"}

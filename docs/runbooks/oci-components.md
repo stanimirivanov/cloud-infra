@@ -370,3 +370,43 @@ from the credential-free synthetic/local verification evidence.
 The shared runtime currently enforces a 300-second total command deadline. Long OCI
 provisioning may exceed it and must remain indeterminate pending reconciliation;
 review execution deadlines before live activation. Do not retry a timed-out update.
+
+
+## OCI preview graph correspondence (M07-PR5)
+
+Receipt schema 3 requires complete engine pre/output observations for the existing
+network or OKE graph compiled from the captured configuration. The shared matcher
+checks exact stack/component/resource identities, parents, protection, explicit
+provider/region/tenancy, pinned provider version, and all governed inputs. It
+compares A1 shape, node count, memory and boot storage against the reviewed graph
+and selected profile capacity. Existing account-wide preflight and mandatory
+policies remain required; per-resource comparison cannot establish free billing.
+
+OCI `oci_graph` contains only graph SHA-256/count, selected-profile SHA-256 and,
+for OKE, the committed network-output SHA-256 (`service_graph` is null). Matching
+also checks the exact read-only network StackReference, built-in provider,
+stack identity and observed committed outputs. The pinned engine emits the external
+read with no protection bit and its built-in provider with no parent; these exact
+forms are qualified locally. All managed OCI resources still require protection.
+No raw account values or outputs
+are retained in the receipt. Compiler, config, dependency and resource classifier
+sources join the policy binding. No provider dependency is added: the matcher
+adapts the same Apache-2.0 pinned Pulumi engine event pattern as the service matcher.
+
+Intra-stack symbolic references must equal concrete IDs observed for their expected
+resource. The engine event format does not prove per-property dependencies; unknown
+IDs/placeholders cannot establish correspondence and cause a redacted `PREVIEW010`
+failure with no receipt. In particular, first-create previews with unresolved IDs
+cannot produce a successful receipt. Wrong/extra/missing resources, changed refs,
+profile/account mismatches and substituted dependency outputs also fail closed.
+
+Regenerate schema-1/2 receipts and downstream approvals with fresh evidence and
+reviewed code; never restamp an old receipt. Rollback requires compatible code and
+regenerated evidence. No resource/state migration, activation, standalone VM,
+replacement handling or saved-plan apply admission is introduced. Receipts remain
+unsigned consistency observations with both authorization fields false.
+
+Focused verification:
+`uv run --locked pytest -q tests/test_preview_results.py tests/test_preview_driver.py tests/test_ownership_handoff.py`.
+The existing opt-in local CLI qualification in `tests/test_service_apply_runtime.py`
+checks built-in provider and read events without an OCI plugin or cloud credentials.

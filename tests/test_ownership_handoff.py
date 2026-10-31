@@ -24,6 +24,7 @@ from infra_core.network_outputs import network_digest
 from infra_core.preview_contracts import describe_preview
 from infra_core.preview_results import POLICY_SOURCES, create_preview_result
 from infra_core.review_signatures import preauth
+from preview_graph_helpers import oci_events
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
@@ -266,6 +267,19 @@ def bundle(tmp_path, config, monkeypatch):
                 1,
             ),
             event("cancelEvent", {}, 2),
+        ]
+        events = [
+            event(kind, body, n)
+            for n, (kind, body) in enumerate(
+                oci_events("oci-" + prefix, config, account, outputs if prefix == "oke" else None)
+                + [
+                    (
+                        next(k for k in json.loads(record) if k.endswith("Event")),
+                        next(v for k, v in json.loads(record).items() if k.endswith("Event")),
+                    )
+                    for record in events
+                ]
+            )
         ]
         preview = create_preview_result(
             contract,
