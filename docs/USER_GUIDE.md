@@ -26,6 +26,31 @@ account/service without provider-enforced limits covering every billable meter.
 Free services can pause or reclaim resources; this guide is an operator procedure,
 not a provider availability or durability guarantee.
 
+### Inspect implemented provider capabilities
+
+```sh
+uv run --locked infra providers inspect
+uv run --locked infra providers inspect --provider oci
+uv run --locked infra providers inspect --provider gcp
+```
+
+This read-only command emits schema-version-1 JSON with `kind=provider-capabilities`.
+It reads validated foundation configuration and closed repository metadata; it
+makes no provider calls and writes no files. `sdk_binding` names the declared
+Pulumi package, not proof that a plugin is installed or usable. Classification,
+collection and component lists describe only the implemented subsets, with
+limitations alongside them. Current OCI, Cloudflare and Supabase support is partial.
+AWS, GCP, Neon, Fly.io (`flyio`), Render, Vercel and Netlify are reported unsupported.
+Unknown provider names fail with `CAP002`; inconsistent metadata fails with `CAP001`.
+
+Each unit exposes its configured preview flag, stack and dependencies.
+`foundation_enabled` is false because the foundation loader rejects any other value.
+These flags do not summarize separate apply/import/recovery gates or live account
+readiness. `execution_authorized`, `activation_authorized`, `live_controls_verified`
+and `sdk_installation_checked` remain false, even if a preview flag is configured
+true. A successful inspection means the report was generated, not that the selected
+provider can deploy. No credentials or backend locator are included in the report.
+
 ## 2. Accounts and regional prerequisites
 
 Create only accounts actually needed. Account creation does not authorize a
