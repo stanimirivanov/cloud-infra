@@ -710,3 +710,36 @@ Focused gate:
 The full gate is `uv run --locked infra verify`; existing isolated service runtime
 tests cover the shared execution validator. No dependency, proposal/evidence
 schema migration or activation change is introduced.
+
+## Service preview graph correspondence (M07-PR4)
+
+Preview receipt schema 2 adds `service_graph`: a SHA-256 and resource count for
+Cloudflare/Supabase, or null for OCI pending its separate graph-matching slice.
+Service receipts require complete engine pre/output observations for the exact
+stack, existing Independent component, explicit provider and each proposed child.
+URNs, parent/provider relationships, protection, custom/component kind and all
+reviewed nonsecret inputs must match. Unknown or extra resources, duplicate pre
+observations, missing observations, replacements and substitutions fail with the
+redacted `PREVIEW009` diagnostic. The driver emits no receipt after a mismatch.
+
+The matcher adapts the pinned Pulumi 3.272.0
+[engine event format](https://github.com/pulumi/pulumi/blob/v3.272.0/pkg/engine/events.go)
+and [wire serializer](https://github.com/pulumi/pulumi/blob/v3.272.0/pkg/backend/display/events.go)
+(Apache-2.0); no dependency or copied implementation is added. Provider version,
+empty download override and reviewed `__defaults` metadata have explicit handling.
+Secret inputs must carry the engine's blinded secret/ciphertext marker. Secret
+values and resource outputs are excluded from comparison and never exported.
+Provider references must identify the exact reviewed provider URN; known IDs
+must agree with observed provider state. IDs may be unknown during preview. Unknown governed input values fail.
+
+The receipt contains only the matched graph's digest/count, preserving the existing
+input/event hashes and false authorization fields. It is unsigned consistency
+evidence, not proof of source authenticity, account entitlement or live readiness.
+Aggregate service preflight and mandatory policy checks remain required. This
+slice does not strengthen OCI graph comparison or saved-plan apply admission.
+
+Compatibility: schema-1 receipts are rejected for all units. Regenerate receipts
+and downstream approvals with fresh evidence and the reviewed code; never restamp
+old receipts. Matcher and receipt source files are included in policy source
+bindings. Rollback requires matching contracts and regenerated evidence; no state,
+resource identity, provider binding, secret key or activation flag is migrated.
