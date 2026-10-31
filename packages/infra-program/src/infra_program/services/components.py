@@ -7,7 +7,6 @@ import pulumi_cloudflare as cloudflare
 import pulumi_supabase as supabase
 from infra_core.governance.contracts import require
 from infra_core.service_evidence import validate_service_evidence
-from infra_core.services.governance import DNS
 
 _PERMIT = object()
 
@@ -26,52 +25,10 @@ class Services(pulumi.ComponentResource):
         super().__init__(
             "infrastructure:services:Independent", unit, {}, pulumi.ResourceOptions(protect=True)
         )
-        self.provider: pulumi.ProviderResource
-        secret_token: pulumi.Output[str] = pulumi.Output.secret(token)
         if proposal["provider"] == "cloudflare":
-            self.provider = cloudflare.Provider(
-                unit + "-provider",
-                api_token=secret_token,
-                base_url="https://api.cloudflare.com/client/v4",
-                opts=pulumi.ResourceOptions(parent=self, protect=True),
-            )
+            self.provider, self.resources = _register_cloudflare(self, proposal, token)
         else:
-            self.provider = supabase.Provider(
-                unit + "-provider",
-                access_token=secret_token,
-                endpoint="https://api.supabase.com",
-                opts=pulumi.ResourceOptions(parent=self, protect=True),
-            )
-        self.resources: dict[str, pulumi.CustomResource] = {}
-        for item in proposal["resources"]:
-            props = item["props"]
-            opts = pulumi.ResourceOptions(parent=self, provider=self.provider, protect=True)
-            name = unit + "-" + item["key"]
-            resource: pulumi.CustomResource
-            if item["type"] == DNS:
-                resource = cloudflare.DnsRecord(
-                    name,
-                    zone_id=props["zoneId"],
-                    name=props["name"],
-                    type=props["type"],
-                    ttl=props["ttl"],
-                    content=props["content"],
-                    proxied=props["proxied"],
-                    opts=opts,
-                )
-            else:
-                secret_password: pulumi.Output[str] = pulumi.Output.secret(passwords[item["key"]])
-                resource = supabase.Project(
-                    name,
-                    organization_id=props["organizationId"],
-                    name=props["name"],
-                    region=props["region"],
-                    instance_size=props["instanceSize"],
-                    legacy_api_keys_enabled=props["legacyApiKeysEnabled"],
-                    database_password=secret_password,
-                    opts=opts,
-                )
-            self.resources[item["key"]] = resource
+            self.provider, self.resources = _register_supabase(self, proposal, token, passwords)
         self.register_outputs(
             {
                 "schema_version": 1,
@@ -81,6 +38,68 @@ class Services(pulumi.ComponentResource):
                 "ids": {key: resource.id for key, resource in self.resources.items()},
             }
         )
+
+
+def _register_cloudflare(
+    parent: Services,
+    proposal: dict[str, Any],
+    token: pulumi.Output[str],
+) -> tuple[pulumi.ProviderResource, dict[str, pulumi.CustomResource]]:
+    """Compose the validated DNS subset under the existing component identity."""
+    unit = proposal["unit"]
+    secret_token: pulumi.Output[str] = pulumi.Output.secret(token)
+    provider = cloudflare.Provider(
+        unit + "-provider",
+        api_token=secret_token,
+        base_url="https://api.cloudflare.com/client/v4",
+        opts=pulumi.ResourceOptions(parent=parent, protect=True),
+    )
+    resources: dict[str, pulumi.CustomResource] = {}
+    for item in proposal["resources"]:
+        props = item["props"]
+        resources[item["key"]] = cloudflare.DnsRecord(
+            unit + "-" + item["key"],
+            zone_id=props["zoneId"],
+            name=props["name"],
+            type=props["type"],
+            ttl=props["ttl"],
+            content=props["content"],
+            proxied=props["proxied"],
+            opts=pulumi.ResourceOptions(parent=parent, provider=provider, protect=True),
+        )
+    return provider, resources
+
+
+def _register_supabase(
+    parent: Services,
+    proposal: dict[str, Any],
+    token: pulumi.Output[str],
+    passwords: dict[str, pulumi.Output[str]],
+) -> tuple[pulumi.ProviderResource, dict[str, pulumi.CustomResource]]:
+    """Compose validated Free projects with a separate secret password per key."""
+    unit = proposal["unit"]
+    secret_token: pulumi.Output[str] = pulumi.Output.secret(token)
+    provider = supabase.Provider(
+        unit + "-provider",
+        access_token=secret_token,
+        endpoint="https://api.supabase.com",
+        opts=pulumi.ResourceOptions(parent=parent, protect=True),
+    )
+    resources: dict[str, pulumi.CustomResource] = {}
+    for item in proposal["resources"]:
+        props = item["props"]
+        secret_password: pulumi.Output[str] = pulumi.Output.secret(passwords[item["key"]])
+        resources[item["key"]] = supabase.Project(
+            unit + "-" + item["key"],
+            organization_id=props["organizationId"],
+            name=props["name"],
+            region=props["region"],
+            instance_size=props["instanceSize"],
+            legacy_api_keys_enabled=props["legacyApiKeysEnabled"],
+            database_password=secret_password,
+            opts=pulumi.ResourceOptions(parent=parent, provider=provider, protect=True),
+        )
+    return provider, resources
 
 
 def register_services(

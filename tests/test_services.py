@@ -584,7 +584,22 @@ with patch.object(pulumi.Config, 'require_secret', tracked_lookup), \
 assert lookups == (['token', 'databasePassword-app'] if config['provider'] == 'supabase'
                    else ['token'])
 assert not observed
+# Exercise more than one child and per-project password without changing prior negative cases.
+second = deepcopy(config['resources'][0])
+second['key'] = 'other'
+second['props']['name'] = ('other.example.com' if config['provider'] == 'cloudflare'
+                         else 'other-db')
+config['resources'].append(second)
+if config['provider'] == 'supabase':
+    passwords['other'] = pulumi.Output.secret('synthetic-other-password')
+    values[config['unit'] + ':databasePassword-other'] = 'synthetic-other-password'
+set_all_config(values, secret_keys=list(values))
 real_init = pulumi.Resource.__init__
+real_outputs = pulumi.ComponentResource.register_outputs
+exported = []
+def record_outputs(self, outputs):
+    exported.append((self, outputs))
+    return real_outputs(self, outputs)
 options = []
 def record(self, typ, name, custom, props=None, opts=None, *args, **kwargs):
     assert opts.protect is True
@@ -597,7 +612,8 @@ def mutating_lookup(self, key):
     return real_require(self, key)
 
 with patch.object(pulumi.Config, 'require_secret', mutating_lookup), \
-     patch.object(pulumi.Resource, '__init__', record):
+     patch.object(pulumi.Resource, '__init__', record), \
+     patch.object(pulumi.ComponentResource, 'register_outputs', record_outputs):
     component = (register_services_from_config(config, evidence, profile)
                  if ingestion == 'configuration'
                  else register_services(config, evidence, profile, token, passwords))
@@ -609,8 +625,51 @@ profile.update(original_profile)
 @pulumi.runtime.test
 def verify():
     resource = component.resources['app']
-    def check(_):
-        assert len(observed) == 3, observed.keys()
+    def check(resolved):
+        unit = config['unit']
+        component_type = 'infrastructure:services:Independent'
+        provider_type = 'pulumi:providers:' + config['provider']
+        # The mock monitor qualifies each URN with only its immediate parent type.
+        prefix = 'urn:pulumi:offline::external-test::'
+        assert resolved[0] == prefix + 'pulumi:pulumi:Stack$' + component_type + '::' + unit
+        assert resolved[1] == (
+            prefix + component_type + '$' + provider_type + '::' + unit + '-provider'
+        )
+        assert resolved[2] == {
+            key: (prefix + component_type + '$' + config['resources'][0]['type']
+                  + '::' + unit + '-' + key)
+            for key in ('app', 'other')
+        }
+        assert len(exported) == 1 and exported[0][0] is component
+        assert resolved[3] == {
+            'schema_version': 1, 'account_id': config['account_id'],
+            'scope_id': config['scope_id'], 'provider': config['provider'],
+            'ids': {key: unit + '-' + key + '-id' for key in ('app', 'other')},
+        }
+        assert set(observed) == {unit, unit + '-provider', unit + '-app', unit + '-other'}
+        assert observed[unit].typ == component_type
+        assert observed[unit].inputs == {}
+        assert observed[unit + '-provider'].typ == provider_type
+        expected_provider_fields = ({'apiToken', 'baseUrl'} if config['provider'] == 'cloudflare'
+                                    else {'accessToken', 'endpoint'})
+        assert set(observed[unit + '-provider'].inputs) == expected_provider_fields
+        endpoint = ('https://api.cloudflare.com/client/v4' if config['provider'] == 'cloudflare'
+                    else 'https://api.supabase.com')
+        endpoint_key = 'baseUrl' if config['provider'] == 'cloudflare' else 'endpoint'
+        assert observed[unit + '-provider'].inputs[endpoint_key] == endpoint
+        assert len(options) == 4
+        for proposal_item in config['resources']:
+            child = observed[unit + '-' + proposal_item['key']]
+            assert child.typ == proposal_item['type']
+            props = dict(child.inputs)
+            if config['provider'] == 'supabase':
+                password = props.pop('databasePassword')
+                assert rpc.is_rpc_secret(password)
+                expected = ('synthetic-password' if proposal_item['key'] == 'app'
+                            else 'synthetic-other-password')
+                assert rpc.unwrap_rpc_secret(password) == expected
+            assert props == proposal_item['props']
+            assert child.provider == observed[unit + '-app'].provider
         item = config['resources'][0]
         args = observed[config['unit'] + '-app']
         actual = dict(args.inputs)
@@ -638,6 +697,9 @@ def verify():
                 assert opts.parent is component
             if typ == item['type']:
                 assert opts.provider is component.provider
+            else:
+                assert opts.provider is None
+            assert opts.protect is True
         print(json.dumps({'provider': config['provider'], 'resources': len(observed)}))
     secrets = [pulumi.Output.is_secret(token)]
     if config['provider'] == 'supabase':
@@ -647,8 +709,18 @@ def verify():
         secrets += [pulumi.Output.is_secret(component.provider.api_token)]
     def checked(values):
         assert all(values[1:]), values
-        check(values[0])
-    return pulumi.Output.all(resource.id, *secrets).apply(checked)
+        try:
+            check(values[0])
+        except AssertionError:
+            import traceback
+            traceback.print_exc()
+            raise
+    graph = pulumi.Output.all(
+        component.urn, component.provider.urn,
+        pulumi.Output.from_input({key: child.urn for key, child in component.resources.items()}),
+        pulumi.Output.from_input(exported[0][1]),
+    )
+    return pulumi.Output.all(graph, *secrets).apply(checked)
 verify()
 """,
         encoding="utf-8",
@@ -668,6 +740,7 @@ verify()
         timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads(result.stdout)["resources"] == 3
+    assert json.loads(result.stdout)["resources"] == 4
     assert "synthetic-token" not in result.stdout + result.stderr
     assert "synthetic-password" not in result.stdout + result.stderr
+    assert "synthetic-other-password" not in result.stdout + result.stderr
