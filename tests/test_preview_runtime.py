@@ -41,6 +41,7 @@ def prepared(tmp_path, monkeypatch):
     (root / "config/toolchain.json").write_text(json.dumps(pins))
     work = root / "work"
     work.mkdir()
+    (work / "policy.json").write_bytes(b"{}")
     return root, archive, work
 
 
@@ -100,6 +101,7 @@ def test_environment_injection_is_rejected(prepared, key):
             dict(environment(work), **{key: "injected"}),
             "organization/free-infrastructure/cloudflare-edge",
             ROOT / "policies",
+            policy_configuration=b"{}",
         )
 
 
@@ -125,6 +127,7 @@ def test_command_gate_rejects_every_non_preview_operation(prepared, monkeypatch,
         environment(work),
         "organization/free-infrastructure/oci-network",
         ROOT / "policies",
+        policy_configuration=b"{}",
     )
     monkeypatch.setattr(runtime.subprocess, "Popen", lambda *a, **kw: pytest.fail("executed"))
     args = (
@@ -141,7 +144,12 @@ def test_select_and_sdk_preview_arguments_without_execution(prepared, monkeypatc
     cli = runtime.cli_runtime(root, archive, work / "bin")
     env = environment(work)
     command = runtime.Command(
-        cli, work, env, "organization/free-infrastructure/oci-network", ROOT / "policies"
+        cli,
+        work,
+        env,
+        "organization/free-infrastructure/oci-network",
+        ROOT / "policies",
+        policy_configuration=b"{}",
     )
     calls = []
 
@@ -174,6 +182,7 @@ def test_select_and_sdk_preview_arguments_without_execution(prepared, monkeypatc
     monkeypatch.setattr(runtime.Stack, "_setup_event_log", setup)
     preview = dict(
         policy_packs=[str(ROOT / "policies")],
+        policy_pack_configs=[str(work / "policy.json")],
         parallel=1,
         color="never",
         suppress_outputs=True,
@@ -203,6 +212,7 @@ def test_timeout_terminates_owned_process_and_redacts_error(prepared, monkeypatc
         environment(work),
         "organization/free-infrastructure/oci-network",
         ROOT / "policies",
+        policy_configuration=b"{}",
     )
     actions = []
 
@@ -247,6 +257,7 @@ def test_tree_kill_failure_still_reaps_owned_process(prepared, monkeypatch, fail
         environment(work),
         "organization/free-infrastructure/oci-network",
         ROOT / "policies",
+        policy_configuration=b"{}",
     )
     state = SimpleNamespace(alive=True, waits=0, killed=False)
 
@@ -290,3 +301,48 @@ def test_materialize_supabase_home_preserves_cache_and_parameterization(cache):
     settings = pt.materialize_home(root, home, target, supabase=True)
     assert settings["PULUMI_DYNAMIC_TF_PLUGIN_CACHE_DIR"] == str(target / "dynamic_tf_plugins")
     pt.verified_supabase_environment(root, target)
+
+
+@pytest.mark.parametrize("fault", ["missing", "tampered", "omitted-flag"])
+def test_policy_configuration_file_and_flag_are_required(prepared, monkeypatch, fault):
+    root, archive, work = prepared
+    cli = runtime.cli_runtime(root, archive, work / "bin")
+    command = runtime.Command(
+        cli,
+        work,
+        environment(work),
+        "organization/free-infrastructure/oci-network",
+        ROOT / "policies",
+        policy_configuration=b"{}",
+    )
+    command.uri = "tcp://127.0.0.1:12345"
+    args = [
+        "preview",
+        "--policy-pack",
+        str(ROOT / "policies"),
+        "--policy-pack-config",
+        str(work / "policy.json"),
+        "--parallel",
+        "1",
+        "--color",
+        "never",
+        "--suppress-outputs",
+        "--suppress-progress",
+        "--config-file",
+        str(work / "stack.yaml"),
+        "--exec-kind",
+        "auto.local",
+        "--event-log",
+        command.uri,
+        "--stack",
+        command.stack,
+    ]
+    if fault == "missing":
+        (work / "policy.json").unlink()
+    elif fault == "tampered":
+        (work / "policy.json").write_bytes(b'{"unexpected":true}')
+    else:
+        del args[3:5]
+    monkeypatch.setattr(runtime.subprocess, "Popen", lambda *a, **kw: pytest.fail("executed"))
+    with pytest.raises(RuntimeError, match="PREVIEW005"):
+        command.run(args, str(work), {})

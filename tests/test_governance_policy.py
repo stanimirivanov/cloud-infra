@@ -6,8 +6,10 @@ import signal
 import subprocess
 import sys
 import tempfile
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import grpc
 import pytest
@@ -25,6 +27,16 @@ def test_policy_pack_is_mandatory(monkeypatch):
     pack = governance.policy_pack()
     assert pack["enforcement_level"] == EnforcementLevel.MANDATORY
     assert pack["policies"][0].enforcement_level == EnforcementLevel.MANDATORY
+    violations = []
+    pack["policies"][0].validate(
+        SimpleNamespace(
+            resource_type="infrastructure:oci:Network",
+            props={},
+            get_config=lambda: {},
+        ),
+        lambda message, urn: violations.append(message),
+    )
+    assert any("GOV031" in message for message in violations)
 
 
 @pytest.mark.backend_integration
@@ -99,6 +111,23 @@ def _preview(tmp_path):
     output = result.stdout + result.stderr
     assert "GOV022" in output, output
     assert "mandatory" in output.lower(), output
+    # A reviewed component needs no cloud provider, but must receive explicit OCI context.
+    (project / "__main__.py").write_text(
+        'import pulumi\npulumi.ComponentResource("infrastructure:oci:Network", "network")\n'
+    )
+    args = ["preview", "--stack", "synthetic", "--policy-pack", str(ROOT / "policies")]
+    denied = run(args, success=False)
+    assert denied.returncode != 0 and "GOV031" in denied.stdout + denied.stderr
+    config = project / "policy.json"
+    profile = _profile("oci-free")
+    config.write_text(
+        json.dumps(
+            governance.policy_configuration(
+                {"profile": profile["id"], "profile_revision": profile["revision"]}, profile
+            )
+        )
+    )
+    run([*args, "--policy-pack-config", str(config)])
 
 
 @pytest.mark.backend_integration
@@ -179,8 +208,43 @@ def test_real_policy_protocol_accepts_controls_and_denies_loadbalancer(
                     },
                 },
             }
+            assert (
+                "GOV031"
+                in analyze("oci:ContainerEngine/nodePool:NodePool", pool).diagnostics[0].message
+            )
+            profile = _profile("oci-free")
+            properties = struct_pb2.Struct()
+            properties.update({"ociProfile": governance._profile_settings(profile)})
+            stub.Configure(
+                proto.ConfigureAnalyzerRequest(
+                    policyConfig={
+                        "reviewed-resource-costs": proto.PolicyConfig(
+                            enforcementLevel=proto.MANDATORY, properties=properties
+                        ),
+                    }
+                ),
+                timeout=15,
+            )
             response = analyze("oci:ContainerEngine/nodePool:NodePool", pool)
             assert not response.diagnostics, response
+            pool["nodeShapeConfig"] = {"ocpus": 2, "memoryInGbs": 12}
+            assert (
+                "GOV030"
+                in analyze("oci:ContainerEngine/nodePool:NodePool", pool).diagnostics[0].message
+            )
+            properties = struct_pb2.Struct()
+            properties.update({"ociProfile": governance._profile_settings(_profile("oci-paid-a1"))})
+            stub.Configure(
+                proto.ConfigureAnalyzerRequest(
+                    policyConfig={
+                        "reviewed-resource-costs": proto.PolicyConfig(
+                            enforcementLevel=proto.MANDATORY, properties=properties
+                        ),
+                    }
+                ),
+                timeout=15,
+            )
+            assert not analyze("oci:ContainerEngine/nodePool:NodePool", pool).diagnostics
             external = [
                 (
                     "cloudflare:index/dnsRecord:DnsRecord",
@@ -227,3 +291,83 @@ def test_real_policy_protocol_accepts_controls_and_denies_loadbalancer(
             host.kill()
             host.communicate(timeout=10)
         reader.shutdown(wait=True)
+
+
+def _profile(name):
+    return tomllib.loads((ROOT / "config/quotas/profiles.toml").read_text())["profiles"][name]
+
+
+@pytest.mark.parametrize("name,denied", [("oci-free", True), ("oci-paid-a1", False)])
+def test_mandatory_callback_uses_selected_capacity(name, denied):
+    import test_oci
+    from infra_core.oci.graph import foundation_graph, wire
+
+    cfg = test_oci.config.__wrapped__()
+    pool = next(
+        r for r in foundation_graph(cfg) if r.kind == "oci:ContainerEngine/nodePool:NodePool"
+    )
+    props = wire(pool.props)
+    props["nodeShapeConfig"] = {"ocpus": 2, "memoryInGbs": 12}
+    violations = []
+    governance.validate_profiled_resource(
+        SimpleNamespace(
+            resource_type=pool.kind,
+            props=props,
+            get_config=lambda: {"ociProfile": governance._profile_settings(_profile(name))},
+        ),
+        lambda message, urn: violations.append(message),
+    )
+    assert bool(violations) is denied
+    assert not violations or "GOV030" in violations[0]
+
+
+@pytest.mark.parametrize("fault", ["missing", "unknown", "revision", "digest", "extra", "boolean"])
+def test_missing_or_mismatched_profile_context_fails_closed(fault):
+    settings = governance._profile_settings(_profile("oci-free"))
+    if fault == "unknown":
+        settings["id"] = "gcp-free"
+    elif fault == "revision":
+        settings["revision"] += 1
+    elif fault == "boolean":
+        settings["revision"] = True
+    elif fault == "digest":
+        settings["sha256"] = "0" * 64
+    elif fault == "extra":
+        settings["capacity"] = {"ocpus": 100}
+    violations = []
+    governance.validate_profiled_resource(
+        SimpleNamespace(
+            resource_type="infrastructure:oci:Network",
+            props={},
+            get_config=lambda: {} if fault == "missing" else {"ociProfile": settings},
+        ),
+        lambda message, urn: violations.append(message),
+    )
+    assert any("GOV031" in message for message in violations)
+
+
+def test_policy_configuration_requires_independent_account_selection():
+    profile = _profile("oci-free")
+    for account in (
+        {},
+        {"profile": "oci-paid-a1", "profile_revision": 1},
+        {"profile": "oci-free", "profile_revision": 99},
+    ):
+        with pytest.raises(ValueError, match="GOV031"):
+            governance.policy_configuration(account, profile)
+
+
+def test_rehashed_profile_with_raised_limits_is_rejected():
+    profile = _profile("oci-free")
+    profile["capacity"]["ocpus"] = 100
+    settings = governance._profile_settings(profile)
+    violations = []
+    governance.validate_profiled_resource(
+        SimpleNamespace(
+            resource_type="infrastructure:oci:Network",
+            props={},
+            get_config=lambda: {"ociProfile": settings},
+        ),
+        lambda message, urn: violations.append(message),
+    )
+    assert any("GOV031" in message for message in violations)

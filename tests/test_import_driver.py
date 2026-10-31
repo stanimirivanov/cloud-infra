@@ -334,6 +334,7 @@ def test_import_child_is_preview_only_in_owned_journal_stages(case, monkeypatch,
     for name, raw in {
         "plan.json": case.inputs["plan"],
         "stack.yaml": case.inputs["encrypted_configuration"],
+        "policy.json": service_apply.preview._policy_configuration(case.context),
     }.items():
         (case.root / name).write_bytes(raw)
     payload = dict(

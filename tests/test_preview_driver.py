@@ -159,6 +159,7 @@ def execution(case, monkeypatch):
         def preview(self, **options):
             assert options == dict(
                 policy_packs=[str(ROOT / "policies")],
+                policy_pack_configs=[str(state.work / "policy.json")],
                 parallel=1,
                 color="never",
                 suppress_outputs=True,
@@ -189,6 +190,8 @@ def execution(case, monkeypatch):
                 keys = list(value["config"])
                 value["config"][keys[0] if keys else "unreviewed:token"] = "plaintext"
                 (state.work / "stack.yaml").write_bytes(driver._encoded(value))
+            if state.fault == "policy-config":
+                (state.work / "policy.json").write_bytes(b"{} ")
             if state.fault == "input":
                 value = json.loads(state.request)
                 value["context"]["profile"]["enabled"] = False
@@ -272,6 +275,7 @@ def test_all_units_bind_inputs_run_owned_bootstrap_and_cleanup(case, execution):
         "config",
         "input",
         "request",
+        "policy-config",
         "failure",
         "source",
         "runtime",

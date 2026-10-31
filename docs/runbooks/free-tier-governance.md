@@ -443,3 +443,37 @@ Focused gate:
 `uv run --locked pytest -q tests/test_account_readiness.py tests/test_governance.py tests/test_inventory_envelopes.py tests/test_service_envelopes.py tests/test_service_coverage.py`.
 The shared gate remains `uv run --locked infra verify`; no dependency or evidence
 schema migration is introduced.
+
+
+## Selected-profile mandatory policy (M07-PR3)
+
+The mandatory `reviewed-resource-costs` callback now requires `ociProfile` policy
+configuration for OCI resources, providers and components. Its closed object has
+`id`, integer `revision` and `sha256`: the digest of the complete selected profile
+serialized as sorted, compact JSON. The policy host checks it against the tracked
+profile and applies that profile's resource-local capacity ceilings. Missing,
+unknown or mismatched context reports `GOV031`; exceeding selected capacity reports
+`GOV030`. The existing maximum-profile checks remain an additional local bound.
+The auxiliary `validate_resource` classifier alone does not perform profile admission;
+the mandatory pack calls `validate_profiled_resource`.
+
+After account-wide preflight, the owned executor derives `policy.json` from the
+captured account selection and profile. It supplies the file using the pinned
+SDK's `policy_pack_configs` / CLI `--policy-pack-config` interface, checks its bytes
+before preview launch, rechecks it in the child bootstrap and checks owned files
+again at completion. Policy-bearing apply/import-preview/recovery observers carry
+the same derived file. Service-only execution uses an explicit empty policy config.
+No profile context is read from environment variables, and operators must not hand
+edit this generated file to select a larger entitlement.
+
+The policy checks source/profile consistency, not account eligibility or source
+authenticity. Aggregate capacity, retained resources, replacement overlap, usage
+coverage and monthly forecasts still require the existing account-wide preflight.
+Unknown engine properties and outside writers remain separate limits.
+
+Compatibility: preview policy source bindings now include
+`config/quotas/profiles.toml`. Existing receipts and approvals with old source
+bindings must be regenerated from a clean reviewed commit and fresh evidence;
+never edit hashes or reuse old receipts after a configuration change. No evidence
+schema, quota profile, encryption key, state identity or activation flag changes.
+Rolling back code does not undo any previously launched cloud/state operation.

@@ -609,6 +609,7 @@ def _recover(
                 **{
                     "Pulumi.yaml": project,
                     "stack.yaml": raw["restore_configuration"],
+                    "policy.json": preview._policy_configuration(context),
                     "context.json": preview._request(
                         root, context, artifacts, raw.get("dependency_outputs")
                     ),
