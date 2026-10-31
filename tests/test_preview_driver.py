@@ -23,6 +23,7 @@ from infra_program.preview_program import (
     OkePreviewContext,
     ServicePreviewContext,
 )
+from preview_graph_helpers import service_events
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
@@ -222,6 +223,11 @@ def execution(case, monkeypatch):
                 ("summaryEvent", summary),
                 ("cancelEvent", {}),
             ]
+            if isinstance(context, ServicePreviewContext):
+                graph = service_events(context.proposal)
+                if state.fault == "graph":
+                    graph[6][1]["metadata"]["new"]["inputs"]["name"] = "substituted"
+                records = graph + records
             self.wire = SimpleNamespace(
                 records=[
                     driver._encoded({"sequence": n, "timestamp": now, kind: value})
@@ -359,3 +365,11 @@ def test_invalid_configuration_inputs_are_rejected_before_tools(case, execution,
     with pytest.raises(RuntimeError, match="PREVIEW005"):
         execute((context, ciphertext, credentials, dependency))
     assert not execution.selected and execution.work is None
+
+
+@pytest.mark.parametrize("case", ["cloudflare-edge", "supabase-database"], indirect=True)
+def test_service_graph_substitution_blocks_receipt(case, execution):
+    execution.fault = "graph"
+    with pytest.raises(RuntimeError, match="PREVIEW005"):
+        execute(case)
+    assert not execution.work.exists()
