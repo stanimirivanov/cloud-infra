@@ -27,11 +27,7 @@ def encoded(value: Any) -> bytes:
 
 class ServicePreviewGraph:
     def __init__(self, unit: str, configuration: dict[str, Any], pins: dict[str, Any]):
-        self.expected: dict[str, dict[str, Any]] = {}
-        self.pre: set[str] = set()
-        self.post: set[str] = set()
-        self.provider_ids: set[str] = set()
-        self.references: set[str] = set()
+        self._initialize()
         try:
             provider = {"cloudflare-edge": "cloudflare", "supabase-database": "supabase"}[unit]
             require(configuration["unit"] == unit and configuration["provider"] == provider)
@@ -88,6 +84,22 @@ class ServicePreviewGraph:
         except (KeyError, TypeError, ValueError):
             raise ValueError(MESSAGE) from None
 
+    def _initialize(self) -> None:
+        self.expected: dict[str, dict[str, Any]] = {}
+        self.pre: set[str] = set()
+        self.post: set[str] = set()
+        self.provider_ids: dict[str, set[str]] = {}
+        self.references: dict[str, set[str]] = {}
+
+    def normalize_inputs(self, urn: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        return inputs
+
+    def external(self, urn: str) -> bool:
+        return False
+
+    def operations(self, urn: str) -> set[str]:
+        return {"create", "same", "update"}
+
     def add(
         self,
         urn: str,
@@ -120,7 +132,7 @@ class ServicePreviewGraph:
             metadata = body["metadata"]
             urn = metadata["urn"]
             require(type(urn) is str and urn in self.expected and body.get("planning") is True)
-            require(metadata["op"] in {"create", "same", "update"})
+            require(metadata["op"] in self.operations(urn))
             expected = self.expected[urn]
             state = metadata["new"]
             require(metadata["type"] == state["type"] == expected["type"] and state["urn"] == urn)
@@ -128,8 +140,9 @@ class ServicePreviewGraph:
                 require(
                     type(state.get(key, False)) is bool and state.get(key, False) == expected[key]
                 )
-            for key in ("delete", "retainOnDelete", "taint", "external"):
+            for key in ("delete", "retainOnDelete", "taint"):
                 require(state.get(key, False) is False)
+            require(state.get("external", False) is self.external(urn))
             require(state.get("initErrors", []) == [])
             require(state.get("parent", "") == expected["parent"])
             reference = state.get("provider", "")
@@ -140,7 +153,9 @@ class ServicePreviewGraph:
                     and reference.rpartition("::")[0] == expected["provider"]
                     and bool(reference.rpartition("::")[2])
                 )
-                self.references.add(reference.rpartition("::")[2])
+                self.references.setdefault(expected["provider"], set()).add(
+                    reference.rpartition("::")[2]
+                )
             else:
                 require(reference == "")
             require(type(state.get("inputs", {})) is dict)
@@ -149,17 +164,18 @@ class ServicePreviewGraph:
             require(
                 type(defaults) is list and all(type(v) is str and v in inputs for v in defaults)
             )
-            if urn == self.provider:
+            if expected["type"].startswith("pulumi:providers:"):
                 identifier = state.get("id", "")
                 require(type(identifier) is str)
                 if identifier and identifier != UNKNOWN:
-                    self.provider_ids.add(identifier)
+                    self.provider_ids.setdefault(urn, set()).add(identifier)
+            if urn == self.provider:
                 require(
                     inputs.pop("version", self.version) == self.version
                     and inputs.pop("pluginDownloadURL", "") == ""
                 )
             # Only the pinned engine's redacted secret representation is accepted.
-            require(encoded(inputs) == encoded(expected["inputs"]))
+            require(encoded(self.normalize_inputs(urn, inputs)) == encoded(expected["inputs"]))
             if kind == "resourcePreEvent":
                 require(urn not in self.pre)
                 self.pre.add(urn)
@@ -171,6 +187,7 @@ class ServicePreviewGraph:
 
     def finish(self) -> None:
         require(self.pre == self.post == set(self.expected))
-        require(len(self.provider_ids) <= 1)
-        if self.provider_ids:
-            require(self.references - {UNKNOWN} <= self.provider_ids)
+        for identifiers in self.provider_ids.values():
+            require(len(identifiers) <= 1)
+        for provider, references in self.references.items():
+            require(references - {UNKNOWN} <= self.provider_ids.get(provider, set()))

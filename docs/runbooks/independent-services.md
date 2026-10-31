@@ -713,8 +713,9 @@ schema migration or activation change is introduced.
 
 ## Service preview graph correspondence (M07-PR4)
 
-Preview receipt schema 2 adds `service_graph`: a SHA-256 and resource count for
-Cloudflare/Supabase, or null for OCI pending its separate graph-matching slice.
+Preview receipt schema 3 retains `service_graph`: a SHA-256 and resource count for
+Cloudflare/Supabase, or null for OCI. OCI uses `oci_graph` as described in
+[OCI preview correspondence](oci-components.md#oci-preview-graph-correspondence-m07-pr5).
 Service receipts require complete engine pre/output observations for the exact
 stack, existing Independent component, explicit provider and each proposed child.
 URNs, parent/provider relationships, protection, custom/component kind and all
@@ -736,9 +737,9 @@ The receipt contains only the matched graph's digest/count, preserving the exist
 input/event hashes and false authorization fields. It is unsigned consistency
 evidence, not proof of source authenticity, account entitlement or live readiness.
 Aggregate service preflight and mandatory policy checks remain required. This
-slice does not strengthen OCI graph comparison or saved-plan apply admission.
+slice does not strengthen saved-plan apply admission.
 
-Compatibility: schema-1 receipts are rejected for all units. Regenerate receipts
+Compatibility: schema-1 and schema-2 receipts are rejected for all units. Regenerate receipts
 and downstream approvals with fresh evidence and the reviewed code; never restamp
 old receipts. Matcher and receipt source files are included in policy source
 bindings. Rollback requires matching contracts and regenerated evidence; no state,
