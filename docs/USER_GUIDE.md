@@ -444,8 +444,10 @@ its adjacent `.envelope.json` sidecar. Existing read-only collection library API
 are `infra_core.inventory.cloudflare.collect_zone` and
 `infra_core.inventory.supabase.collect_management`; capture/join helpers live in
 `infra_core.service_evidence`. Their exact inputs and required operator supplements
-are in [independent services](runbooks/independent-services.md). There is no general
-service-collection CLI. Do not write a fake supplement from example values.
+are in [independent services](runbooks/independent-services.md). Cloudflare has an
+explicit [collection command](runbooks/independent-services.md#cloudflare-collection-command-m07-pr6)
+using an independent review and private token file; Supabase collection remains a
+library API. Do not write a fake supplement from example values.
 
 Cloudflare checks every existing DNS record, including unmanaged records outside
 the supported creation types. Supabase requires all relevant Free projects,

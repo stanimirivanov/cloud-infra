@@ -215,13 +215,20 @@ def build_parser() -> argparse.ArgumentParser:
     cutover_handoff.add_argument("--evidence", type=Path, required=True)
     cutover_handoff.add_argument("--actor", required=True)
     cutover_handoff.add_argument("--environment", required=True)
-    services = commands.add_parser("services", help="offline independent-service preflight")
+    services = commands.add_parser(
+        "services", help="service preflight and explicit read-only collection"
+    )
     services_commands = services.add_subparsers(dest="services_command", required=True)
     service_audit = services_commands.add_parser(
         "audit", help="validate and render additive proposal"
     )
     service_audit.add_argument("--config", type=Path, required=True)
     service_audit.add_argument("--evidence", type=Path, required=True)
+    collection = services_commands.add_parser(
+        "collect-cloudflare", help="explicit read-only zone evidence; no deployment authority"
+    )
+    for name in ("config", "review", "token-file", "output"):
+        collection.add_argument("--" + name, type=Path, required=True)
     staging = services_commands.add_parser(
         "check-staging", help="offline Supabase inputs; activation pending"
     )
@@ -364,6 +371,14 @@ def main(
                     with private_path(root, args.evidence).open("rb") as stream:
                         payload = stream.read(MAX_BYTES + 1)
                     print(json.dumps(check_administration(root, payload), indent=2))
+        elif args.command == "services" and args.services_command == "collect-cloudflare":
+            from infra_core.service_collection import collect_cloudflare
+
+            collect_cloudflare(root, args.config, args.review, args.token_file, args.output)
+            print(
+                "PASS: Cloudflare evidence collected; entitlement remains independently reviewed; "
+                "deployment disabled"
+            )
         elif args.command == "services" and args.services_command == "check-staging":
             from infra_core.supabase_staging import check as check_supabase_staging
 

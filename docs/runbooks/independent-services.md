@@ -66,6 +66,86 @@ Pagination is not a transactional snapshot or proof of token visibility; confirm
 effective scope and concurrent-change controls before live acceptance. Whole-process
 deadlines belong to protected orchestration. Quotas and deployment freeze are unchanged.
 
+
+### Cloudflare collection command (M07-PR6)
+
+After separately authorizing read-only access, use `infra services collect-cloudflare --help`
+to join the existing collector and independent review. It adds no provider dependency,
+API writes, DNS types, entitlement discovery or deployment authority. Proposal schema 2,
+review schema 1, payload schema 4 and the existing unsigned sidecar remain unchanged.
+
+Work from a clean reviewed commit. Put the completed proposal, independent review and
+credential under ignored `.infra` without symlinks. The command loads the tracked
+`cloudflare-free` profile; no caller-supplied quota override is accepted. Review must
+match proposal account/zone and expected domain, current profile revision, Free plan,
+other-service review and an original verification timestamp no older than 30 days.
+API success cannot set these fields. The closed review JSON contains exactly:
+
+```json
+{
+  "schema_version": 1,
+  "account_id": "REPLACE_WITH_32_HEX_ACCOUNT_ID",
+  "scope_id": "REPLACE_WITH_32_HEX_ZONE_ID",
+  "scope_name": "example.com",
+  "profile_revision": 1,
+  "verified": false,
+  "verified_at": "REPLACE_WITH_ORIGINAL_VERIFICATION_TIMESTAMP",
+  "plan": "free",
+  "other_services_reviewed": false,
+  "source": "REPLACE_WITH_INDEPENDENT_REVIEW_REFERENCE"
+}
+```
+
+Complete the independent checks before setting either review flag true. This template
+intentionally fails validation. Do not turn a collection timestamp into a new review.
+The token needs only Zone Read and DNS Read for the exact reviewed zone. Have your
+protected credential mechanism write `.infra/cloudflare-read.token`, owned by the
+current user, owner-readable with no group/other permissions (normally 0600 or 0400),
+containing just the bearer token and optionally
+one final newline. Symlinks, hardlinked credentials, nonregular files and group/other
+permissions are rejected. No token value, environment fallback or endpoint override
+is accepted through CLI arguments. Keep proposals/reviews owner-private as well.
+
+Create the output directory first, then select a new filename for each attempt:
+
+```shell
+umask 077
+mkdir -p .infra/cloudflare-evidence
+uv run --locked infra services collect-cloudflare \
+  --config .infra/cloudflare.json \
+  --review .infra/cloudflare-review.json \
+  --token-file .infra/cloudflare-read.token \
+  --output .infra/cloudflare-evidence/run-001.json
+uv run --locked infra services audit \
+  --config .infra/cloudflare.json \
+  --evidence .infra/cloudflare-evidence/run-001.json
+```
+
+All four paths must stay under this checkout's `.infra`; output must be a new `.json`
+file in an existing directory, distinct from every input and its derived sidecar.
+The command validates review/scope before credential use and network calls, then
+rechecks captured inputs and clean commit before publication. Both output files
+are mode 0600. The sidecar is published first and payload last using no-overwrite
+links on the same filesystem. Existing evidence is preserved, including orphan
+sidecars; choose a fresh name rather than deleting prior evidence automatically.
+On a caught write/collection failure, no usable new pair is published and only this
+invocation's created outputs are removed. A killed process can leave a private
+staging directory or sidecar alone; inspect it privately before manual cleanup.
+Two-file publication is not a filesystem transaction or a power-loss durability claim.
+
+Exit 0 means collection and evidence checks succeeded. Exit 1 gives redacted
+`COLLECT001`; neither raw provider errors nor tokens are printed. Missing/expired
+review, scope mismatch, incomplete pagination, changed inputs/checkout or destination
+conflicts require correction and a fresh collection. Preserve original review and API
+clocks. The collector's existing request/page/byte/freshness limits still apply;
+this CLI adds no whole-process deadline. Use an independently bounded protected
+runner for live collection. Pagination cannot prove transactional consistency,
+complete token visibility, invoice safety or source authenticity. Results remain
+unsigned consistency evidence and never enable a preview or deployment gate.
+
+Focused gate:
+`uv run --locked pytest -q tests/test_service_collection.py tests/test_cloudflare_collection.py tests/test_service_envelopes.py`.
+
 ```text
 config/{cloudflare,supabase}.example.json        Additive service inputs
 config/service-evidence.example.json            Deliberately invalid evidence
