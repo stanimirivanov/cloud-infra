@@ -369,6 +369,7 @@ def _run(
                 UV_CACHE_DIR=str(work / "uv-cache"),
             )
             owned = {
+                "policy.json": preview._policy_configuration(context),
                 "stack.yaml": raw["encrypted_configuration"],
                 "plan.json": raw["plan"],
                 "Pulumi.yaml": preview._encoded(
@@ -527,6 +528,7 @@ def program_from_request() -> None:
             root, args, data["bundle"], raw, bytes.fromhex(data["journal_snapshot"]), oci, importing
         )
         require(Path(data["journal"]) == root / ".infra/operations" / (args.unit + ".json"))
+        require(Path("policy.json").read_bytes() == preview._policy_configuration(context))
         identity = f"{pulumi.get_organization()}/{pulumi.get_project()}/{pulumi.get_stack()}"
         dry_run = pulumi.runtime.is_dry_run()
         require(identity == context.contract.stack_identity and type(dry_run) is bool)

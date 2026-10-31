@@ -11,6 +11,7 @@ from infra_core.evidence import MAX_ARTIFACT_BYTES, MAX_TOTAL_BYTES
 from infra_core.preview_contracts import PreviewContract
 
 POLICY_SOURCES = (
+    "config/quotas/profiles.toml",
     "policies/__main__.py",
     "policies/PulumiPolicy.yaml",
     "packages/infra-program/src/infra_program/governance.py",

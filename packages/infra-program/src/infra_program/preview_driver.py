@@ -34,7 +34,7 @@ from infra_core.provider_tools import (
 from infra_core.service_evidence import validate_service_evidence
 from pulumi import automation as auto
 
-from infra_program.governance import preflight
+from infra_program.governance import policy_configuration, preflight
 from infra_program.oci.dependencies import network_digest, validate_network
 from infra_program.preview_program import (
     NetworkPreviewContext,
@@ -182,6 +182,14 @@ def _prepare(
     return context, artifacts, settings
 
 
+def _policy_configuration(context: Context) -> bytes:
+    return _encoded(
+        {}
+        if isinstance(context, ServicePreviewContext)
+        else policy_configuration(context.account, context.profile)
+    )
+
+
 def _request(
     root: Path, context: Context, artifacts: dict[str, bytes], dependency: bytes | None
 ) -> bytes:
@@ -260,6 +268,7 @@ def program_from_request() -> None:
         )
         require(preview_input_digests(contract, artifacts) == request["input_digests"])
         _versions(root, context, artifacts)
+        require(_read(Path("policy.json"), 65536) == _policy_configuration(context))
         dispatch_preview(context)
     except Exception:
         raise RuntimeError(MESSAGE) from None
@@ -344,6 +353,7 @@ def _run(
         )
         request, config = _request(root, context, artifacts, dependency), _encoded(settings)
         owned = {
+            "policy.json": _policy_configuration(context),
             "context.json": request,
             "stack.yaml": config,
             "Pulumi.yaml": _encoded(
@@ -360,7 +370,12 @@ def _run(
         for name, content in owned.items():
             (work / name).write_bytes(content)
         adapter = Command(
-            runtime, work, environment, context.contract.stack_identity, root / "policies"
+            runtime,
+            work,
+            environment,
+            context.contract.stack_identity,
+            root / "policies",
+            policy_configuration=owned["policy.json"],
         )
         adapter.deadline = deadline
         require(time.monotonic() < deadline)
@@ -371,6 +386,7 @@ def _run(
         stack = Stack.select(context.contract.stack_identity, workspace)
         stack.preview(
             policy_packs=[str(root / "policies")],
+            policy_pack_configs=[str(work / "policy.json")],
             parallel=1,
             color="never",
             suppress_outputs=True,

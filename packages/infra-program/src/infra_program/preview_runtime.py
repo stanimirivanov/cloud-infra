@@ -123,7 +123,14 @@ def _cli_runtime(root: Path, archive: Path, target: Path) -> CliRuntime:
 
 class Command(auto.PulumiCommand):
     def __init__(
-        self, runtime: CliRuntime, work: Path, env: dict[str, str], stack: str, policy: Path
+        self,
+        runtime: CliRuntime,
+        work: Path,
+        env: dict[str, str],
+        stack: str,
+        policy: Path,
+        *,
+        policy_configuration: bytes,
     ) -> None:
         # Deliberately do not call SDK init: it inherits env and runs an unbounded version command.
         runtime.verify()
@@ -188,6 +195,8 @@ class Command(auto.PulumiCommand):
             require(
                 env["PULUMI_DYNAMIC_TF_PLUGIN_CACHE_DIR"] == str(work / "home/dynamic_tf_plugins")
             )
+        require(type(policy_configuration) is bytes and 0 < len(policy_configuration) <= 65536)
+        self.policy_configuration = policy_configuration
         self.deadline = time.monotonic() + 300
         self.uri = ""
 
@@ -218,6 +227,8 @@ class Command(auto.PulumiCommand):
             "preview",
             "--policy-pack",
             self.policy,
+            "--policy-pack-config",
+            str(self.work / "policy.json"),
             "--parallel",
             "1",
             "--color",
@@ -244,6 +255,8 @@ class Command(auto.PulumiCommand):
                 for k, v in additional_env.items()
             )
         )
+        if args[0] == "preview":
+            require((self.work / "policy.json").read_bytes() == self.policy_configuration)
         remaining = self.deadline - time.monotonic()
         require(remaining > 0)
         argv = [self.command, *args, "--non-interactive"]
@@ -307,6 +320,7 @@ class Stack(auto.Stack):
             and set(kwargs)
             == {
                 "policy_packs",
+                "policy_pack_configs",
                 "parallel",
                 "color",
                 "suppress_outputs",

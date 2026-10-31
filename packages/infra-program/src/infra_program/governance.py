@@ -1,12 +1,16 @@
 """Governance adapters; no Pulumi resource registration is allowed before audit."""
 
+import hashlib
+import json
 import math
+import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from infra_core.governance.audit import audit
-from infra_core.governance.contracts import GovernanceError
+from infra_core.governance.contracts import GovernanceError, number
 from infra_core.governance.resources import CAPACITY, footprint
 from infra_core.inventory_evidence import validate_inventory_evidence
 from infra_core.kubernetes.resources import validate_resource as validate_kubernetes
@@ -16,6 +20,7 @@ from infra_core.services.governance import DNS, PROJECT
 from infra_core.services.governance import validate_resource as validate_service
 from pulumi_policy import (
     EnforcementLevel,
+    PolicyConfigSchema,
     PolicyPack,
     ReportViolation,
     ResourceValidationArgs,
@@ -142,6 +147,67 @@ def validate_resource(args: ResourceValidationArgs, report: ReportViolation) -> 
         report(str(error), None)
 
 
+def _profile_settings(profile: dict[str, Any]) -> dict[str, Any]:
+    digest = hashlib.sha256(
+        json.dumps(profile, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    ).hexdigest()
+    return {"id": profile["id"], "revision": profile["revision"], "sha256": digest}
+
+
+def _selected_profile(settings: Any) -> dict[str, Any]:
+    profiles = tomllib.loads(
+        (Path(__file__).resolve().parents[4] / "config/quotas/profiles.toml").read_text()
+    )["profiles"]
+    if not isinstance(settings, Mapping) or set(settings) != {"id", "revision", "sha256"}:
+        raise GovernanceError("GOV031: explicit selected OCI profile context required")
+    name = settings["id"]
+    if not isinstance(name, str) or name not in {"oci-free", "oci-paid-a1"}:
+        raise GovernanceError("GOV031: unreviewed selected OCI profile")
+    profile: dict[str, Any] = profiles[name]
+    if (
+        type(settings["revision"]) is not int
+        or dict(settings) != _profile_settings(profile)
+        or profile["enabled"] is not True
+        or profile["provider"] != "oci"
+    ):
+        raise GovernanceError("GOV031: selected OCI profile binding mismatch")
+    return profile
+
+
+def policy_configuration(account: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    """Called after preflight; bind the independently selected account profile."""
+    settings = _profile_settings(profile)
+    if (
+        account.get("profile") != settings["id"]
+        or account.get("profile_revision") != settings["revision"]
+    ):
+        raise GovernanceError("GOV031: account and selected OCI profile disagree")
+    return {"reviewed-resource-costs": {"enforcementLevel": "mandatory", "ociProfile": settings}}
+
+
+def validate_profiled_resource(args: ResourceValidationArgs, report: ReportViolation) -> None:
+    """Mandatory pack entry point; local maximum checks remain an additional layer."""
+    validate_resource(args, report)
+    if not (
+        args.resource_type.startswith("oci:")
+        or args.resource_type == PROVIDER
+        or args.resource_type in COMPONENTS
+    ):
+        return
+    try:
+        config = _properties(args.get_config())
+        if set(config) != {"ociProfile"}:
+            raise GovernanceError("GOV031: explicit selected OCI profile context required")
+        profile = _selected_profile(config["ociProfile"])
+        if args.resource_type not in COMPONENTS and args.resource_type != PROVIDER:
+            modeled = footprint(args.resource_type, _properties(args.props), planned=True)
+            for metric in CAPACITY:
+                if modeled[metric] > number(profile["capacity"][metric], "profile capacity"):
+                    raise GovernanceError(f"GOV030: {metric} resource exceeds selected OCI profile")
+    except GovernanceError as error:
+        report(str(error), None)
+
+
 def policy_pack() -> PolicyPack:
     return PolicyPack(
         name="always-free-governance",
@@ -151,7 +217,12 @@ def policy_pack() -> PolicyPack:
                 name="reviewed-resource-costs",
                 description="Fail closed on unknown or paid resource configurations",
                 enforcement_level=EnforcementLevel.MANDATORY,
-                validate=validate_resource,
+                validate=validate_profiled_resource,
+                config_schema=PolicyConfigSchema(
+                    properties={
+                        "ociProfile": {"type": "object"},
+                    }
+                ),
             )
         ],
     )

@@ -260,6 +260,7 @@ def test_owned_oci_bootstrap_admits_before_factory(case, monkeypatch, dry_run, f
     for name, content in {
         "plan.json": raw["plan"],
         "stack.yaml": raw["encrypted_configuration"],
+        "policy.json": apply.preview._policy_configuration(context),
     }.items():
         (root / name).write_bytes(content)
     data = dict(

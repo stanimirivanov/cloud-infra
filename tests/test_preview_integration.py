@@ -48,7 +48,12 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
     cli = runtime.cli_runtime(root, archive, work / "bin")
     env = fixtures.environment(work)
     command = runtime.Command(
-        cli, work, env, "organization/free-infrastructure/" + unit, ROOT / "policies"
+        cli,
+        work,
+        env,
+        "organization/free-infrastructure/" + unit,
+        ROOT / "policies",
+        policy_configuration=b"{}",
     )
     command.deadline = time.monotonic() + 20
     workspace = runtime.auto.LocalWorkspace(
@@ -107,6 +112,7 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
         nonlocal receipt
         result = stack.preview(
             policy_packs=[str(ROOT / "policies")],
+            policy_pack_configs=[str(work / "policy.json")],
             parallel=1,
             color="never",
             suppress_outputs=True,

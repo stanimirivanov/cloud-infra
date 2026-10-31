@@ -215,6 +215,8 @@ class Runtime:
             self.stack,
             "--policy-pack",
             str(self.policy),
+            "--policy-pack-config",
+            str(self.work / "policy.json"),
             "--parallel",
             "1",
             "--suppress-outputs",

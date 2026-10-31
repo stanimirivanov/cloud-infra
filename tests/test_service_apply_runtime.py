@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ import test_oci_dependency
 import test_preview_runtime as fixtures
 from infra_program import operation_runtime as operation
 from infra_program import preview_runtime as preview
+from infra_program.governance import policy_configuration
 
 ROOT = Path(__file__).resolve().parents[1]
 config = test_oci.config
@@ -119,6 +121,15 @@ def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
             )
         )
     (work / "stack.yaml").write_text('{"config":{}}')
+    policy_config = {}
+    if unit == "oci-network":
+        profile = tomllib.loads((ROOT / "config/quotas/profiles.toml").read_text())["profiles"][
+            "oci-free"
+        ]
+        policy_config = policy_configuration(
+            {"profile": profile["id"], "profile_revision": profile["revision"]}, profile
+        )
+    (work / "policy.json").write_text(json.dumps(policy_config))
     for args in (
         ["stack", "init", unit, "--secrets-provider", "passphrase"],
         [
@@ -131,6 +142,8 @@ def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
             str(work / "stack.yaml"),
             "--policy-pack",
             str(ROOT / "policies"),
+            "--policy-pack-config",
+            str(work / "policy.json"),
         ],
     ):
         subprocess.run(
@@ -175,6 +188,8 @@ def test_real_cli_policy_plan_and_update_events(tmp_path, config, unit):
                 str(work / "reference-plan.json"),
                 "--policy-pack",
                 str(ROOT / "policies"),
+                "--policy-pack-config",
+                str(work / "policy.json"),
             ],
         ):
             completed = subprocess.run(

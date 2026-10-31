@@ -139,6 +139,7 @@ def prepare_lifecycle(tmp_path, monkeypatch, unit, fault, importing=False):
     expected = {"checkpoint_sha256": "fixture-checkpoint", "journal_head": head}
     monkeypatch.setattr(apply.preview, "_checkout", lambda root: None)
     monkeypatch.setattr(apply, "_admit", lambda *a: (context, expected))
+    monkeypatch.setattr(apply.preview, "_policy_configuration", lambda context: b"{}")
     monkeypatch.setattr(apply, "_current_environment", lambda *a: None)
     monkeypatch.setattr(
         apply, "cli_runtime", lambda root, archive, target: SimpleNamespace(verify=lambda: None)
@@ -262,6 +263,7 @@ def test_owned_bootstrap_checks_identity_and_mode_before_factory(
     raw = {n: b"fixture" for n in apply.NAMES}
     (tmp_path / "plan.json").write_bytes(raw["plan"])
     (tmp_path / "stack.yaml").write_bytes(raw["encrypted_configuration"])
+    (tmp_path / "policy.json").write_bytes(apply.preview._policy_configuration(context))
     data = dict(
         root=str(tmp_path),
         unit=context.contract.unit,
