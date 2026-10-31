@@ -1,11 +1,13 @@
 """Synthetic wire receipts: fail closed, bind exact inputs and retain no raw diagnostics."""
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import test_oci
+import test_oci_dependency
 from infra_core.foundation import load_foundation
 from infra_core.preview_contracts import describe_preview
 from infra_core.preview_results import (
@@ -16,7 +18,7 @@ from infra_core.preview_results import (
     create_preview_result,
     validate_preview_result,
 )
-from preview_graph_helpers import service_events
+from preview_graph_helpers import oci_events, service_events
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 10, 28, 12, tzinfo=UTC)
@@ -58,6 +60,21 @@ def inputs(request):
         ).encode()
         artifacts["provider_toolchain"] = (ROOT / "config/provider-toolchain.json").read_bytes()
         graph_events = service_events(configuration)
+    else:
+        cfg = test_oci.config.__wrapped__()
+        account, profile, _ = test_oci.evidence()
+        dependency = test_oci_dependency.committed(cfg) if request.param == "oci-oke" else None
+        artifacts["proposal"] = json.dumps(
+            {"configuration": asdict(cfg), "stack_configuration": {}}
+        ).encode()
+        artifacts["account"], artifacts["profile"] = (
+            json.dumps(account).encode(),
+            json.dumps(profile).encode(),
+        )
+        artifacts["provider_toolchain"] = (ROOT / "config/provider-toolchain.json").read_bytes()
+        if dependency is not None:
+            artifacts["dependency_outputs"] = json.dumps(dependency).encode()
+        graph_events = oci_events(request.param, cfg, account, dependency)
     summary = {
         "maybeCorrupt": False,
         "isPreview": True,
@@ -264,14 +281,14 @@ def test_clocks_disabled_contract_and_missing_bindings_fail(inputs):
 def test_aggregate_stream_budget_stops_consumption(inputs, monkeypatch):
     import infra_core.preview_results as results
 
-    monkeypatch.setattr(results, "MAX_TOTAL_BYTES", 4096)
+    monkeypatch.setattr(results, "MAX_TOTAL_BYTES", 16384)
     contract, artifacts, _ = inputs
     consumed = []
 
     def events():
         for n in range(100):
             consumed.append(n)
-            yield wire("stdoutEvent", {"message": "x" * 1000}, n)
+            yield wire("stdoutEvent", {"message": "x" * 4000}, n)
 
     with pytest.raises(ValueError, match="PREVIEW004"):
         create((contract, artifacts, events()))
@@ -401,7 +418,7 @@ def test_two_child_graph_stamp_and_legacy_receipt_rejection(inputs):
     receipt = json.loads(
         create((contract, artifacts, [wire(k, v, n) for n, (k, v) in enumerate(bodies)]))
     )
-    assert receipt["schema_version"] == 2
+    assert receipt["schema_version"] == 3
     assert receipt["service_graph"]["resource_count"] == 5
     assert len(receipt["service_graph"]["sha256"]) == 64
     for fault in ("schema", "digest", "count"):
@@ -414,3 +431,166 @@ def test_two_child_graph_stamp_and_legacy_receipt_rejection(inputs):
             changed["service_graph"]["resource_count"] = 4
         with pytest.raises(ValueError, match="PREVIEW003"):
             validate_preview_result(json.dumps(changed).encode(), contract, artifacts, now=NOW)
+
+
+@pytest.mark.parametrize("inputs", ["oci-network", "oci-oke"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing",
+        "extra",
+        "parent",
+        "provider",
+        "region",
+        "reference",
+        "unknown-reference",
+        "changed-id",
+        "substitution",
+    ],
+)
+def test_oci_graph_rejects_unproven_references(inputs, fault):
+    contract, artifacts, raw = inputs
+    events = [json.loads(record) for record in raw]
+    pre = [event["resourcePreEvent"]["metadata"] for event in events if "resourcePreEvent" in event]
+    child = next(item for item in pre if "vcnId" in item["new"]["inputs"])
+    provider = next(item for item in pre if item["type"] == "pulumi:providers:oci")
+    if fault == "missing":
+        events = [
+            event
+            for event in events
+            if not any(
+                body.get("metadata", {}).get("urn") == child["urn"]
+                for body in event.values()
+                if isinstance(body, dict)
+            )
+        ]
+    elif fault == "extra":
+        child["urn"] += "-extra"
+    elif fault == "parent":
+        child["new"]["parent"] = "private-substitution"
+    elif fault == "provider":
+        child["new"]["provider"] = child["provider"] = (
+            child["provider"].rsplit("::", 1)[0] + "::wrong-id"
+        )
+    elif fault == "region":
+        provider["new"]["inputs"]["region"] = "private-substitution"
+    elif fault in {"reference", "unknown-reference"}:
+        child["new"]["inputs"]["vcnId"] = (
+            "04da6b54-80e4-46f7-96ec-b56ff0331ba9"
+            if fault == "unknown-reference"
+            else "private-substitution"
+        )
+    elif fault == "changed-id":
+        child["new"]["id"] = "different-pre-event-id"
+    else:
+        child["new"]["inputs"]["paidAddon"] = "private-substitution"
+    for sequence, event in enumerate(events):
+        event["sequence"] = sequence
+    with pytest.raises(
+        ValueError, match="^PREVIEW010: OCI preview graph does not match reviewed proposal$"
+    ):
+        create((contract, artifacts, [json.dumps(event).encode() for event in events]))
+
+
+@pytest.mark.parametrize("inputs", ["oci-oke"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "shape",
+        "boot",
+        "memory",
+        "count",
+        "capacity",
+        "profile",
+        "home-region",
+        "dependency",
+        "read-outputs",
+        "cluster-reference",
+        "read-id",
+    ],
+)
+def test_oke_graph_binds_capacity_and_committed_dependency(inputs, fault):
+    contract, artifacts, raw = inputs
+    artifacts = dict(artifacts)
+    events = [json.loads(record) for record in raw]
+    states = [
+        event["resourcePreEvent"]["metadata"]["new"]
+        for event in events
+        if "resourcePreEvent" in event
+    ]
+    props = next(state["inputs"] for state in states if state["type"].endswith("nodePool:NodePool"))
+    if fault == "shape":
+        props["nodeShape"] = "VM.Standard.E4.Flex"
+    elif fault == "boot":
+        props["nodeSourceDetails"]["bootVolumeSizeInGbs"] = "51"
+    elif fault == "memory":
+        props["nodeShapeConfig"]["memoryInGbs"] += 1
+    elif fault == "count":
+        props["nodeConfigDetails"]["size"] += 1
+    elif fault == "cluster-reference":
+        props["clusterId"] = "other-cluster-id"
+    elif fault == "read-id":
+        next(state for state in states if state["type"] == "pulumi:pulumi:StackReference")["id"] = (
+            "other-stack"
+        )
+    elif fault == "read-outputs":
+        reference = next(
+            event["resOutputsEvent"]["metadata"]["new"]
+            for event in events
+            if "resOutputsEvent" in event
+            and event["resOutputsEvent"]["metadata"]["type"] == "pulumi:pulumi:StackReference"
+        )
+        reference["outputs"]["outputs"]["network"]["region"] = "private-substitution"
+    else:
+        name = (
+            "profile"
+            if fault == "capacity"
+            else "dependency_outputs"
+            if fault == "dependency"
+            else "account"
+        )
+        value = json.loads(artifacts[name])
+        if fault == "capacity":
+            value["capacity"]["memory_gb"] = 1
+        elif fault == "profile":
+            value["profile"] = "other-profile"
+        elif fault == "home-region":
+            value["home_region"] = "other-region"
+        else:
+            value["network"]["region"] = "other-region"
+        artifacts[name] = json.dumps(value).encode()
+    with pytest.raises(ValueError, match="PREVIEW010"):
+        create((contract, artifacts, [json.dumps(event).encode() for event in events]))
+
+
+@pytest.mark.parametrize("inputs", ["oci-network", "oci-oke"], indirect=True)
+def test_oci_receipt_stamp_and_schema_migration(inputs):
+    contract, artifacts, _ = inputs
+    result = json.loads(create(inputs))
+    assert result["schema_version"] == 3 and result["service_graph"] is None
+    stamp = result["oci_graph"]
+    assert stamp["resource_count"] > 5 and len(stamp["sha256"]) == 64
+    assert len(stamp["profile_sha256"]) == 64
+    assert (stamp["dependency_sha256"] is not None) == (contract.unit == "oci-oke")
+    for field in ("sha256", "profile_sha256", "resource_count", "dependency_sha256"):
+        changed = json.loads(json.dumps(result))
+        changed["oci_graph"][field] = "substitution"
+        with pytest.raises(ValueError, match="PREVIEW003"):
+            validate_preview_result(json.dumps(changed).encode(), contract, artifacts, now=NOW)
+    for schema in (1, 2):
+        result["schema_version"] = schema
+        with pytest.raises(ValueError, match="PREVIEW003"):
+            validate_preview_result(json.dumps(result).encode(), contract, artifacts, now=NOW)
+
+
+@pytest.mark.parametrize("inputs", ["oci-network", "oci-oke"], indirect=True)
+def test_oci_explicit_paid_profile_is_bound_without_changing_graph(inputs):
+    contract, artifacts, events = inputs
+    artifacts = dict(artifacts)
+    account = json.loads(artifacts["account"])
+    profile = json.loads(artifacts["profile"])
+    account["profile"] = profile["id"] = "oci-paid-a1"
+    profile["capacity"].update(ocpus=4, memory_gb=24)
+    artifacts.update(account=json.dumps(account).encode(), profile=json.dumps(profile).encode())
+    result = create((contract, artifacts, events))
+    assert validate_preview_result(result, contract, artifacts, now=NOW)["oci_graph"]
