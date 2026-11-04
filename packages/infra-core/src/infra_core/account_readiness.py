@@ -9,6 +9,7 @@ from typing import Any
 from infra_core import inventory_evidence, service_evidence
 from infra_core.cutover import repository_state
 from infra_core.governance.audit import audit
+from infra_core.provider_capabilities import cost_coverage
 from infra_core.readiness import digest, parsed, private, read
 
 PROVIDERS = {
@@ -136,6 +137,7 @@ def _check(
         "commit": commit,
         "profiles_sha256": digest(profiles_raw),
         "account_evidence": status,
+        "cost_coverage": cost_coverage(provider),
         "remaining_reviews": [
             "independent live free-tier entitlement and other-service/billing review",
             "effective read-only credentials and complete account/organization coverage",

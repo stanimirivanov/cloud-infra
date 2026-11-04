@@ -142,3 +142,17 @@ sys.addaudithook(audit)
 assert len(inspect(Path(sys.argv[1]))["providers"]) == 10
 """
     subprocess.run([sys.executable, "-B", "-c", script, str(ROOT)], check=True, timeout=30)
+
+
+def test_capability_report_distinguishes_collected_attested_and_unavailable_dimensions():
+    entries = {row["provider"]: row["cost_coverage"] for row in inspect(ROOT)["providers"]}
+    assert "zone_dns_inventory" in entries["cloudflare"]["automatic"]
+    assert "free_plan_entitlement" in entries["cloudflare"]["operator_attested"]
+    assert {"workers", "pages", "r2", "tunnel"} <= set(entries["cloudflare"]["unavailable"])
+    assert "management_project_inventory" in entries["supabase"]["automatic"]
+    assert {"database_sizes", "billing_metrics"} <= set(entries["supabase"]["operator_attested"])
+    assert entries["aws"] == {
+        "automatic": [],
+        "operator_attested": [],
+        "unavailable": ["all_cost_dimensions"],
+    }

@@ -16,6 +16,7 @@ from infra_core.administration import private_path
 from infra_core.governance.contracts import fields, mapping, number, records, timestamp
 from infra_core.governance.coverage import validate_coverage
 from infra_core.governance.resources import CAPACITY, INVENTORY_TYPES, MONTHLY, footprint
+from infra_core.provider_capabilities import cost_coverage
 from infra_core.services.billing import billing_period
 from infra_core.services.coverage import usage_coverage
 from infra_core.services.governance import MAXIMUM, METRICS, _dns_name
@@ -28,6 +29,7 @@ PROVIDERS = dict(
         strict=True,
     )
 )
+INCOMPLETE = "missing_invalid_or_incomplete"
 AGES = dict(observation=900, billing_lag=900, profile=90 * 86400, entitlement=30 * 86400)
 
 
@@ -110,15 +112,15 @@ def evaluate(
             )
         )
 
-    def attempt(metric: str, read: Callable[[], Any]) -> Any:
+    def attempt(metric: str, read: Callable[[], Any], *, reason: str = INCOMPLETE) -> Any:
         try:
             return read()
         except (ValueError, KeyError, TypeError, ArithmeticError):
-            add(metric, "unknown", "missing_invalid_or_incomplete")
+            add(metric, "unknown", reason)
             return None
 
-    def gate(metric: str, read: Callable[[], Any]) -> Any:
-        value = attempt(metric, read)
+    def gate(metric: str, read: Callable[[], Any], *, reason: str = INCOMPLETE) -> Any:
+        value = attempt(metric, read, reason=reason)
         if value is not None:
             add(metric, "normal", "coverage_consistent")
         return value
@@ -128,6 +130,13 @@ def evaluate(
         return value.get(metric) if type(value) is dict else None
 
     def age(metric: str, value: object, category: str) -> bool:
+        if category == "billing_lag" and value is None:
+            reason = (
+                "missing_completeness_watermark" if provider == "oci" else "missing_usage_coverage"
+            )
+            add(metric, "unknown", reason)
+            return False
+
         def read() -> bool:
             instant = timestamp(value, "measurement clock")
             seconds = Decimal(str((now - instant).total_seconds()))
@@ -144,7 +153,9 @@ def evaluate(
             add(
                 metric,
                 status,
-                "age_threshold",
+                "stale_usage_coverage"
+                if category == "billing_lag" and seconds > maximum
+                else "age_threshold",
                 observed_at=value,
                 age_seconds=str(seconds),
                 max_age_seconds=maximum,
@@ -291,6 +302,9 @@ def evaluate(
         billing_fresh = age("billing_observation_age", usage.get("observed_at"), "observation")
         coverage_fresh = age("billing_coverage_age", usage.get("covered_through"), "billing_lag")
 
+        meters = usage.get("values")
+        unknown_meters = type(meters) is dict and bool(set(meters) - set(MONTHLY))
+
         def window() -> bool:
             require(
                 valid
@@ -300,7 +314,7 @@ def evaluate(
                 and type(usage["source"]) is str
                 and bool(usage["source"].strip())
                 and type(usage["values"]) is dict
-                and set(usage["values"]) <= set(MONTHLY)
+                and not unknown_meters
             )
             cutoff = timestamp(usage["covered_through"], "billing coverage")
             observed = timestamp(usage["observed_at"], "billing observation")
@@ -313,7 +327,14 @@ def evaluate(
             fields(profile["monthly"], set(MONTHLY), "monthly limits")
             return True
 
-        covered = gate("billing_window", window) is True
+        covered = (
+            gate(
+                "billing_window",
+                window,
+                reason="unrecognized_usage_metrics" if unknown_meters else INCOMPLETE,
+            )
+            is True
+        )
         for metric in sorted(MONTHLY):
             measurement(
                 "usage/" + metric,
@@ -376,12 +397,12 @@ def evaluate(
         if provider == "supabase":
             measurement("capacity/max_database_mb", lambda: sizes[1], 500, sizes is not None)
 
+        meters = evidence.get("usage")
+        supported_meters = METRICS if provider == "supabase" else set()
+        unknown_meters = type(meters) is dict and bool(set(meters) - supported_meters)
+
         def period_read() -> dict[str, str] | None:
-            require(
-                valid
-                and type(evidence["usage"]) is dict
-                and set(evidence["usage"]) <= (METRICS if provider == "supabase" else set())
-            )
+            require(valid and type(evidence["usage"]) is dict and not unknown_meters)
             return billing_period(
                 evidence["billing_period"], metered=provider == "supabase", now=now
             )
@@ -395,7 +416,11 @@ def evaluate(
             period_ok = True
             return period
 
-        period = attempt("billing_window", period_check)
+        period = attempt(
+            "billing_window",
+            period_check,
+            reason="unrecognized_usage_metrics" if unknown_meters else INCOMPLETE,
+        )
         if period_ok:
             add("billing_window", "normal", "coverage_consistent")
         windows = {}
@@ -436,6 +461,11 @@ def evaluate(
         (s for s in ("unknown", "critical", "warning") if any(f["status"] == s for f in findings)),
         "normal",
     )
+    usage_windows = safe_clocks(windows)
+    if provider == "oci":
+        # Report unknown clocks explicitly rather than implying the observation is a cutoff.
+        usage_windows.setdefault("observed_at", None)
+        usage_windows.setdefault("covered_through", None)
     return dict(
         schema_version=1,
         kind="operational-findings",
@@ -452,7 +482,8 @@ def evaluate(
                 for k in ("observed_at", "collection_started_at", "collection_completed_at")
             }
         ),
-        usage_windows=safe_clocks(windows),
+        usage_windows=usage_windows,
+        cost_coverage=cost_coverage(provider),
         deployment_authorized=False,
         remediation_authorized=False,
     )

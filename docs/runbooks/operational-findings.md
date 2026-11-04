@@ -82,6 +82,28 @@ Each finding has a stable identity comprising unit, scope digest and metric, plu
 status, a fixed reason code and applicable aggregate value/limit/headroom or age.
 The report records `evaluated_at`, the original collection clocks and billing
 watermarks/windows. Re-evaluation never refreshes a capture or advances its coverage.
+
+The findings report, account readiness report, and each provider capability entry
+include a `cost_coverage` object. Its three lists describe repository support:
+
+- `automatic` names dimensions supported by existing collectors.
+- `operator_attested` names dimensions that rely on independent review or
+  supplemental readings.
+- `unavailable` names products or cost dimensions outside automatic coverage.
+
+This catalog describes collection capabilities even when the report has no account
+evidence. The findings report's `complete` field applies to evaluated findings.
+Costs listed as unavailable require separate review.
+
+For OCI, `usage_windows.observed_at` records the observation time and
+`usage_windows.covered_through` records the completeness cutoff. An absent or
+unparseable clock appears as null. A missing cutoff yields
+`missing_completeness_watermark`, while coverage beyond the existing lag limit
+yields `stale_usage_coverage`. Supabase keeps the original gauge and cumulative
+windows, with `missing_usage_coverage` for an absent clock. Unexpected meter keys
+yield `unrecognized_usage_metrics` on the billing window finding and remain
+private. These diagnostics use the existing findings IDs and status rules.
+
 The CLI also binds exact index, policy, evidence, account (when present) and tracked
 profile bytes by SHA-256. It returns both authorization fields as false.
 
