@@ -244,7 +244,14 @@ class Command(auto.PulumiCommand):
             "--stack",
             self.stack,
         ]
-        require(args == select or (bool(self.uri) and args == preview))
+        split = preview.index("--exec-kind")
+        with_plan = (
+            preview[:split] + ["--save-plan", str(self.work / "plan.json")] + preview[split:]
+        )
+        if args == with_plan:
+            plan = self.work / "plan.json"
+            require(not plan.exists() and not plan.is_symlink())
+        require(args == select or (bool(self.uri) and args in (preview, with_plan)))
         require(
             Path(cwd).resolve() == self.work.resolve() and on_output is None and on_error is None
         )
@@ -317,7 +324,7 @@ class Stack(auto.Stack):
     def preview(self, *args: Any, **kwargs: Any) -> auto.PreviewResult:
         require(
             not args
-            and set(kwargs)
+            and set(kwargs) - {"plan"}
             == {
                 "policy_packs",
                 "policy_pack_configs",

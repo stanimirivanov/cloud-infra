@@ -26,6 +26,8 @@ def case(request, config, tmp_path, monkeypatch):
     other = tmp_path / "runtime-fixture"
     other.mkdir()
     _, context, raw = test_oci_apply.case.__wrapped__(request, config, other)
+    # The shared fixture models apply. Import has its own ownership evidence contract.
+    del raw["preview_result"]
     for directory in ("config", "packages", "policies"):
         shutil.copytree(other / directory, tmp_path / directory, dirs_exist_ok=True)
     for filename in ("uv.lock", ".python-version"):

@@ -161,3 +161,47 @@ def oci_events(unit, cfg, account, dependency=None):
         for kind in ("resourcePreEvent", "resOutputsEvent"):
             records.append((kind, dict(planning=True, metadata=deepcopy(metadata))))
     return records
+
+
+def apply_receipt(context, artifacts, raw):
+    """Create a fresh graph receipt using the existing synthetic event builders."""
+    import json
+    from datetime import UTC, datetime
+
+    from infra_core.preview_results import PACK, RULE, create_preview_result
+
+    unit = context.contract.unit
+    if unit.startswith("oci-"):
+        dependency = json.loads(raw["dependency_outputs"]) if unit == "oci-oke" else None
+        events = oci_events(unit, context.configuration, context.account, dependency)
+    else:
+        events = service_events(context.proposal)
+    events += [
+        ("policyAnalyzeSummaryEvent", {"policyPackName": PACK, "passed": [RULE]}),
+        (
+            "summaryEvent",
+            {
+                "isPreview": True,
+                "result": "succeeded",
+                "maybeCorrupt": False,
+                "resourceChanges": {"same": 1},
+                "PolicyPacks": {PACK: "local"},
+            },
+        ),
+        ("cancelEvent", {}),
+    ]
+    now = datetime.now(UTC)
+    return create_preview_result(
+        context.contract,
+        artifacts,
+        [
+            json.dumps({"sequence": n, "timestamp": int(now.timestamp()), kind: value}).encode()
+            for n, (kind, value) in enumerate(events)
+        ],
+        exit_code=0,
+        started_at=now.isoformat(),
+        completed_at=now.isoformat(),
+        now=now,
+        plan=raw["plan"],
+        encrypted_configuration=raw["encrypted_configuration"],
+    )

@@ -24,6 +24,7 @@ from infra_program import oci_apply as apply
 from infra_program import service_apply as driver
 from infra_program.oci.dependencies import network_digest
 from infra_program.preview_program import NetworkPreviewContext, OkePreviewContext
+from preview_graph_helpers import apply_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
@@ -144,6 +145,10 @@ def case(request, config, tmp_path):
                 )
             ).encode(),
         )
+    _, artifacts, _ = apply.preview._prepare(
+        tmp_path, context, raw["encrypted_configuration"], raw.get("dependency_outputs")
+    )
+    raw["preview_result"] = apply_receipt(context, artifacts, raw)
     return tmp_path, context, raw
 
 
@@ -152,6 +157,9 @@ def test_existing_oci_preflight_and_execution_binding(case):
     result, binding = apply.prepare(root, context.contract.unit, COMMIT, raw)
     assert result.configuration == context.configuration
     assert json.loads(binding)["adapter"] == "oci-apply-v1"
+    assert json.loads(binding)["inputs"]["preview_result"] == driver._hash(raw["preview_result"])
+    with pytest.raises(ValueError, match="APPLY001"):
+        apply.prepare(root, context.contract.unit, COMMIT, raw | {"plan": raw["plan"] + b" "})
     raw["evidence"] += b" "
     with pytest.raises((ValueError, RuntimeError)):
         apply.prepare(root, context.contract.unit, COMMIT, raw)
@@ -385,3 +393,10 @@ def test_builtin_reference_provider_has_no_cloud_configuration(name, properties,
         lambda message, urn: violations.append(message),
     )
     assert (violations == []) is allowed
+
+
+def test_oci_apply_rejects_missing_preview_receipt(case):
+    root, context, raw = case
+    raw.pop("preview_result", None)
+    with pytest.raises(ValueError, match="APPLY001"):
+        apply.prepare(root, context.contract.unit, COMMIT, raw)

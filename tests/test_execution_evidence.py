@@ -3,11 +3,13 @@
 import json
 from copy import deepcopy
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 import test_administration as administrative
 import test_cutover as cutover_fixtures
-from infra_core import administration, cli, cutover
+import test_preview_results as preview_fixtures
+from infra_core import administration, cli, cutover, execution_evidence
 
 observation = administrative.observation
 review = cutover_fixtures.review
@@ -178,3 +180,39 @@ def test_legacy_environment_only_policy_requires_migration(observation):
     path.write_text(json.dumps(policy), encoding="utf-8")
     with pytest.raises(ValueError, match="ADMIN001|GOV003"):
         administration.check(root, json.dumps(document).encode())
+
+
+preview_inputs = preview_fixtures.inputs
+
+
+@pytest.mark.parametrize(
+    "fault", ["plan", "encrypted_configuration", "proposal", "stale", "unit", "unbound"]
+)
+def test_apply_preview_binds_reviewed_execution_files(preview_inputs, fault):
+    contract, artifacts, _ = preview_inputs
+    inputs = {"plan": b"private-plan", "encrypted_configuration": b"private-configuration"}
+    now = preview_fixtures.NOW
+    inputs["preview_result"] = preview_fixtures.create(preview_inputs, **inputs)
+    execution_evidence.validate_apply_preview(contract, artifacts, inputs, now=now)
+    if fault in {"plan", "encrypted_configuration"}:
+        inputs[fault] += b" "
+    elif fault == "proposal":
+        proposal = json.loads(artifacts["proposal"])
+        if contract.unit.startswith("oci-"):
+            proposal["configuration"]["name"] = "different"
+        else:
+            proposal["configuration"]["resources"][0]["key"] = "different"
+        artifacts["proposal"] = json.dumps(proposal).encode()
+    elif fault == "stale":
+        now += timedelta(minutes=16)
+    elif fault == "unit":
+        foreign_unit = "oci-oke" if contract.unit != "oci-oke" else "oci-network"
+        foreign = preview_fixtures.inputs.__wrapped__(SimpleNamespace(param=foreign_unit))
+        inputs["preview_result"] = preview_fixtures.create(
+            foreign, plan=inputs["plan"], encrypted_configuration=inputs["encrypted_configuration"]
+        )
+    else:
+        inputs["preview_result"] = preview_fixtures.create(preview_inputs)
+    with pytest.raises(ValueError, match="APPLY001") as error:
+        execution_evidence.validate_apply_preview(contract, artifacts, inputs, now=now)
+    assert "private-" not in str(error.value)

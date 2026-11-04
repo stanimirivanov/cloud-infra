@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import tomllib
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import asdict, fields, replace
 from datetime import UTC, datetime
@@ -283,6 +284,7 @@ def run_preview(
     encrypted_configuration: bytes,
     credentials: dict[str, str],
     dependency_outputs: bytes | None = None,
+    plan_sink: Callable[[bytes], None] | None = None,
 ) -> bytes:
     """Library only: callers must separately establish protected operational admission."""
     started, deadline = datetime.now(UTC).isoformat(), time.monotonic() + 300
@@ -297,6 +299,7 @@ def run_preview(
             dependency_outputs,
             started,
             deadline,
+            plan_sink,
         )
     except Exception:
         raise RuntimeError(MESSAGE) from None
@@ -312,6 +315,7 @@ def _run(
     dependency: bytes | None,
     started: str,
     deadline: float,
+    plan_sink: Callable[[bytes], None] | None,
 ) -> bytes:
     _checkout(root)
     _contract(root, context)
@@ -384,6 +388,7 @@ def _run(
             work_dir=str(work), pulumi_home=environment["PULUMI_HOME"], pulumi_command=adapter
         )
         stack = Stack.select(context.contract.stack_identity, workspace)
+        plan_path = work / "plan.json"
         stack.preview(
             policy_packs=[str(root / "policies")],
             policy_pack_configs=[str(work / "policy.json")],
@@ -393,6 +398,7 @@ def _run(
             suppress_progress=True,
             refresh=False,
             config_file=str(work / "stack.yaml"),
+            **({"plan": str(plan_path)} if plan_sink is not None else {}),
         )
         runtime.verify()
         (verified_supabase_environment if supabase else verified_environment)(root, work / "home")
@@ -404,7 +410,8 @@ def _run(
             preview_input_digests(context.contract, artifacts)
             == preview_input_digests(context.contract, after)
         )
-        return create_preview_result(
+        plan = _read(plan_path, 1024 * 1024) if plan_sink is not None else None
+        receipt = create_preview_result(
             context.contract,
             artifacts,
             stack.wire.records,
@@ -412,4 +419,10 @@ def _run(
             started_at=started,
             completed_at=datetime.now(UTC).isoformat(),
             now=datetime.now(UTC),
+            plan=plan,
+            encrypted_configuration=ciphertext if plan is not None else None,
         )
+        if plan_sink is not None:
+            assert plan is not None
+            plan_sink(plan)
+        return receipt

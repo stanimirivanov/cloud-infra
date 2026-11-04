@@ -169,6 +169,16 @@ def _time(value: Any) -> datetime:
         raise ValueError("PREVIEW003: invalid or incomplete preview evidence") from None
 
 
+def execution_binding(plan: bytes, encrypted_configuration: bytes) -> dict[str, str]:
+    """Bind the private files by exact bytes without embedding them in a receipt."""
+    for value in (plan, encrypted_configuration):
+        _require(type(value) is bytes and 0 < len(value) <= MAX_ARTIFACT_BYTES)
+    return {
+        "plan_sha256": hashlib.sha256(plan).hexdigest(),
+        "configuration_sha256": hashlib.sha256(encrypted_configuration).hexdigest(),
+    }
+
+
 def validate_preview_result(
     encoded: bytes,
     contract: PreviewContract,
@@ -180,6 +190,14 @@ def validate_preview_result(
     data, expected = _parse(encoded, MAX_RESULT_BYTES), _scope(contract, artifacts)
     graph = _graph(contract, artifacts)
     expected.update(_graph_stamps(graph))
+    if "execution" in data:
+        binding = data["execution"]
+        _require(
+            type(binding) is dict
+            and set(binding) == {"plan_sha256", "configuration_sha256"}
+            and all(_digest(value) for value in binding.values())
+        )
+        expected["execution"] = binding
     _require(
         set(data)
         == set(expected)
@@ -229,6 +247,8 @@ def create_preview_result(
     started_at: str,
     completed_at: str,
     now: datetime,
+    plan: bytes | None = None,
+    encrypted_configuration: bytes | None = None,
 ) -> bytes:
     """Consume bounded CLI wire records, discard private content, emit canonical success bytes.
 
@@ -236,6 +256,9 @@ def create_preview_result(
     callers must preserve the CLI 3.272.0 wire observations instead of synthesizing them.
     """
     data = _scope(contract, artifacts)
+    _require((plan is None) == (encrypted_configuration is None))
+    if plan is not None and encrypted_configuration is not None:
+        data["execution"] = execution_binding(plan, encrypted_configuration)
     graph = _graph(contract, artifacts)
     _require(type(exit_code) is int and exit_code == 0, "PREVIEW004")
     start_second = int(_time(started_at).timestamp())
