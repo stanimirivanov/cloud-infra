@@ -158,6 +158,10 @@ def execution(case, monkeypatch):
             return cls()
 
         def preview(self, **options):
+            plan = options.pop("plan", None)
+            if plan is not None:
+                assert Path(plan) == state.work / "plan.json"
+                Path(plan).write_bytes(b'{"synthetic":true}')
             assert options == dict(
                 policy_packs=[str(ROOT / "policies")],
                 policy_pack_configs=[str(state.work / "policy.json")],
@@ -255,7 +259,7 @@ def execution(case, monkeypatch):
     return state
 
 
-def execute(case):
+def execute(case, **options):
     context, ciphertext, credentials, dependency = case
     return driver.run_preview(
         ROOT,
@@ -265,6 +269,7 @@ def execute(case):
         encrypted_configuration=ciphertext,
         credentials=credentials,
         dependency_outputs=dependency,
+        **options,
     )
 
 
@@ -385,3 +390,21 @@ def test_graph_substitution_blocks_receipt(case, execution):
     with pytest.raises(RuntimeError, match="PREVIEW005"):
         execute(case)
     assert not execution.work.exists()
+
+
+def test_owned_preview_exports_only_plan_bound_to_successful_graph(case, execution):
+    captured = []
+    result = json.loads(execute(case, plan_sink=captured.append))
+    assert captured == [b'{"synthetic":true}']
+    assert result["execution"] == {
+        "plan_sha256": hashlib.sha256(captured[0]).hexdigest(),
+        "configuration_sha256": hashlib.sha256(case[1]).hexdigest(),
+    }
+
+
+def test_owned_preview_withholds_saved_plan_after_graph_failure(case, execution):
+    captured = []
+    execution.fault = "graph"
+    with pytest.raises(RuntimeError, match="PREVIEW005"):
+        execute(case, plan_sink=captured.append)
+    assert not captured

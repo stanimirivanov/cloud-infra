@@ -308,8 +308,9 @@ the outer service/backend_account_id encoding used by the shared driver. Its inn
 OCI profile is canonical JSON containing adapter=oci-apply-v1, hashes of all frozen
 non-approval inputs (including dependency files), profile hash and foundation
 configuration digest. Review the actual bytes; never derive expectations from an
-unverified approval. A saved plan from the same factories and pinned runtime remains
-an operator-supplied artifact. Plan authoring is not automated here. Plans must
+unverified approval. OCI apply requires the same plan-bound `preview_result` and
+protected Python preview capture as service apply. OKE also binds the committed
+network dependency in its graph receipt. Plans must
 contain the exact existing graph, protected resources and explicit native provider
 bindings. Pinned Pulumi omits read-only StackReferences from saved plans and records
 their built-in pulumi provider instead; only that exact default provider is allowed

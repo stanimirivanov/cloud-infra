@@ -22,7 +22,7 @@ from infra_program.preview_runtime import CliRuntime
 
 
 def names(unit: str) -> set[str]:
-    return oci_apply.names(unit) | {"ownership", "target_checkpoint"}
+    return oci_apply.names(unit, importing=True) | {"ownership", "target_checkpoint"}
 
 
 def _document(raw: dict[str, bytes]) -> dict[str, Any]:
@@ -100,7 +100,7 @@ def prepare(
     ):
         require(ownership._read(root, doc["artifacts"][reference])[1] == raw[name])
     context, _ = oci_apply.prepare(
-        root, unit, commit, {n: raw[n] for n in oci_apply.names(unit)}, True
+        root, unit, commit, {n: raw[n] for n in oci_apply.names(unit, importing=True)}, True
     )
     before = _target_metadata(root, raw)
     parent, provider = _identities(raw)

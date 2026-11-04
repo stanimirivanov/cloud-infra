@@ -15,6 +15,7 @@ from infra_core import operations
 from infra_core.foundation import load_foundation
 from infra_program import import_driver, oci_apply
 from infra_program import service_apply as apply
+from preview_graph_helpers import apply_receipt
 from test_operation_runtime import plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +60,16 @@ def test_service_preflight_audits_existing_inputs_before_secret_lookup(
     )
     raw.update(posture=b"fixture", posture_envelope=b"fixture")
     monkeypatch.setattr(pulumi, "Config", lambda *a, **kw: pytest.fail("early secret lookup"))
-    result, _ = apply._service(tmp_path, context.contract.unit, COMMIT, raw)
+    with pytest.raises(ValueError, match="APPLY001"):
+        apply._service(tmp_path, context.contract.unit, COMMIT, raw)
+    _, artifacts, _ = apply.preview._prepare(
+        tmp_path, context, raw["encrypted_configuration"], None
+    )
+    raw["preview_result"] = apply_receipt(context, artifacts, raw)
+    result, binding = apply._service(tmp_path, context.contract.unit, COMMIT, raw)
+    assert json.loads(binding)["inputs"]["preview_result"] == apply._hash(raw["preview_result"])
+    with pytest.raises(ValueError, match="APPLY001"):
+        apply._service(tmp_path, context.contract.unit, COMMIT, raw | {"plan": raw["plan"] + b" "})
     assert result.proposal == proposal
     raw["evidence"] += b" "
     with pytest.raises(ValueError):
@@ -260,7 +270,7 @@ def test_owned_bootstrap_checks_identity_and_mode_before_factory(
         head = operations.journal(tmp_path, journal, value, "running", predecessor=head)
     elif dry_run and fault == "journal-mode":
         head = operations.journal(tmp_path, journal, value, "running", predecessor=head)
-    raw = {n: b"fixture" for n in apply.NAMES}
+    raw = {n: b"fixture" for n in apply.APPLY_NAMES}
     (tmp_path / "plan.json").write_bytes(raw["plan"])
     (tmp_path / "stack.yaml").write_bytes(raw["encrypted_configuration"])
     (tmp_path / "policy.json").write_bytes(apply.preview._policy_configuration(context))

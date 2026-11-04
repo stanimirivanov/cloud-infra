@@ -5,12 +5,14 @@ import fcntl
 import os
 import tomllib
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pulumi
 from infra_core import administration, operations
 from infra_core.backend import validate_receipt
+from infra_core.execution_evidence import validate_apply_preview
 from infra_core.foundation import load_foundation
 from infra_core.oci.config import parse_config
 from infra_core.oci.graph import network_graph, oke_graph
@@ -27,9 +29,9 @@ from infra_program.preview_program import NetworkPreviewContext, OkePreviewConte
 UNITS = {"oci-network", "oci-oke"}
 
 
-def names(unit: str) -> set[str]:
+def names(unit: str, *, importing: bool = False) -> set[str]:
     require(unit in UNITS)
-    base = driver.NAMES | {"account"}
+    base = (driver.NAMES if importing else driver.APPLY_NAMES) | {"account"}
     return base | (
         {"dependency_outputs", "network_receipt", "network_journal"} if unit == "oci-oke" else set()
     )
@@ -119,7 +121,7 @@ def prepare(
     root: Path, unit: str, commit: str, raw: dict[str, bytes], importing: bool = False
 ) -> tuple[NetworkPreviewContext, bytes]:
     driver._enabled(root, True, importing, unit=unit)
-    require(set(raw) == names(unit))
+    require(set(raw) == names(unit, importing=importing))
     foundation = load_foundation(root)
     configuration = parse_config(preview._json(raw["proposal"], operations.MAX_BYTES))
     account = preview._json(raw["account"], operations.MAX_BYTES)
@@ -144,6 +146,8 @@ def prepare(
     assert isinstance(prepared, NetworkPreviewContext)
     context = prepared
     preview._versions(root, context, artifacts)
+    if not importing:
+        validate_apply_preview(context.contract, artifacts, raw, now=datetime.now(UTC))
     validate_plan(raw["plan"], context)
     validate_receipt(foundation, preview._json(raw["qualification"], operations.MAX_BYTES))
     if unit == "oci-oke":
@@ -153,7 +157,10 @@ def prepare(
     return context, preview._encoded(
         {
             "adapter": "oci-apply-v1",
-            "inputs": {n: driver._hash(raw[n]) for n in sorted(names(unit) - driver.APPROVAL)},
+            "inputs": {
+                n: driver._hash(raw[n])
+                for n in sorted(names(unit, importing=importing) - driver.APPROVAL)
+            },
             "profile": driver._hash(preview._encoded(context.profile)),
             "foundation": foundation.digest,
         }

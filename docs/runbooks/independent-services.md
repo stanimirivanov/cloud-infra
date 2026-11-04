@@ -567,7 +567,8 @@ operations-policy.json. No flag, key or GitHub setting is enabled by this PR.
 The private schema-1 bundle has paths, backend_account_id, cli_archive,
 provider_home and output fields. paths must contain operation, approval, operator,
 approver, backup_receipt, backup_manifest, environment, plan, encrypted_configuration,
-proposal, evidence, envelope, qualification, posture and posture_envelope. Each is
+proposal, evidence, envelope, qualification, posture, posture_envelope and
+preview_result. Each is
 an existing bounded .infra file. The CLI archive and provider_home are explicitly
 prepared, checksum-pinned inputs; the output must be new in an existing private
 directory. Supply the original encrypted stack configuration bytes and the exact
@@ -575,13 +576,26 @@ unchanged CLI checkpoint export used by capture; reformatting changes their hash
 
 Execution uses schema-2 operation approvals: the schema-1 fields plus
 execution_inputs_sha256. This binds the frozen proposal, service evidence, profile,
-qualification, backend posture, encrypted configuration, plan and backend account
-scope. Signature roles/type and exact-byte bindings remain unchanged. Schema-1
+qualification, backend posture, encrypted configuration, plan, graph receipt and
+backend account scope. Signature roles/type and exact-byte bindings remain unchanged. Schema-1
 preflight is still supported by the core API but cannot admit this executor. Callers
-must supply a saved plan produced from the same reviewed factories, pinned toolchain
-and inputs. No plan-authoring CLI is added; the existing preview command does not
-save this artifact. Saved plans constrain known values/operations, not every unknown
-provider value. Reapprove any changed plan or input; do not edit signed artifacts.
+must retain the saved plan and graph receipt from the same owned preview. The
+protected Python caller uses `infra_program.preview_driver.run_preview` with a
+`plan_sink` callback. The driver asks the pinned CLI to save the plan inside its
+private work directory and delivers those bytes to the callback after graph and
+policy validation. Store the plan and returned receipt in fresh owner-private
+files and retain the original preview inputs. The existing preview CLI returns
+diagnostic receipts without an execution binding.
+
+Use the receipt bytes as `paths.preview_result` and the captured plan bytes as
+`paths.plan`. The receipt binds the unit, reviewed proposal and evidence, selected
+profile, toolchain and policy. Its execution section binds exact plan and
+encrypted configuration bytes. Apply revalidates the graph receipt and its
+15-minute freshness window before loading credentials and again in the owned
+resource program. Both files are covered by the signed execution-input binding.
+Recollect a fresh preview and obtain new approvals when any bound input changes.
+The graph receipt is unsigned and independent approval remains required.
+Saved plans constrain known values and operations.
 
 The durable journal path is fixed to .infra/operations/UNIT.json. Protect and retain
 it across runner jobs; never restore an old prepared journal to retry an operation.
@@ -597,7 +611,7 @@ then records running and performs the exact saved-plan update. It accepts only
 same/create/update/read operations; deletes/replacements, unknown types, unprotected
 children and missing explicit provider/parent bindings are rejected. The owned child
 checks runtime identity, signatures, frozen files and admitted/running dry-run mode
-before using the existing secret-backed factory. Preview APIs are not widened.
+before using the existing secret-backed factory.
 
 A failure before update launch records failed; a launched update with incomplete,
 failed or inconsistent evidence records indeterminate. Never retry or automatically
@@ -674,11 +688,9 @@ keys, DNS records, account data, live flag values or workflow dispatch.
    action-specific signatures. Flag/configuration/commit changes invalidate old
    approvals and evidence bindings: recollect and reapprove rather than patching
    signatures or restamping observations. Use existing admission freshness limits.
-5. Produce and independently review the exact saved plan with the existing pinned
-   factories/toolchain and mandatory policies. **Harness gap:** the existing
-   preview CLI does not save the executor's required plan, and this PR adds no
-   plan-authoring CLI. A separately reviewed plan-production procedure/artifact is
-   required before proceeding; do not substitute preview JSON or fabricate a plan.
+5. Capture the exact saved plan and matching graph receipt through the protected
+   Python preview driver described above. Independently review the graph and plan
+   before signing the execution inputs.
 6. Under the protected main workflow context, run the existing admission check:
 
    ```sh
@@ -857,8 +869,8 @@ must agree with observed provider state. IDs may be unknown during preview. Unkn
 The receipt contains only the matched graph's digest/count, preserving the existing
 input/event hashes and false authorization fields. It is unsigned consistency
 evidence, not proof of source authenticity, account entitlement or live readiness.
-Aggregate service preflight and mandatory policy checks remain required. This
-slice does not strengthen saved-plan apply admission.
+Aggregate service preflight and mandatory policy checks remain required.
+M07-PR9 uses the graph receipt in saved-plan apply admission.
 
 Compatibility: schema-1 and schema-2 receipts are rejected for all units. Regenerate receipts
 and downstream approvals with fresh evidence and the reviewed code; never restamp

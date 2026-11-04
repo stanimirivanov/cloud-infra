@@ -20,6 +20,10 @@ def main():
     if case["hang"]:
         time.sleep(30)
         return
+    if "--save-plan" in args:
+        plan = Path(args[args.index("--save-plan") + 1])
+        assert plan == Path.cwd() / "plan.json"
+        plan.write_bytes(b'{"synthetic":true}')
     target = args[args.index("--event-log") + 1]
     assert target.startswith("tcp://127.0.0.1:")
     proto = sdk.events_pb2_grpc.pulumi_dot_events__pb2

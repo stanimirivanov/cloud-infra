@@ -9,6 +9,7 @@ import sys
 import tempfile
 import tomllib
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ import pulumi
 from infra_core import administration, operation_admission, operations
 from infra_core.backend import validate_receipt
 from infra_core.backend_posture import validate_posture_evidence
+from infra_core.execution_evidence import PREVIEW_RESULT, validate_apply_preview
 from infra_core.foundation import load_foundation
 from infra_core.preview_contracts import describe_preview
 from infra_core.provider_tools import (
@@ -48,6 +50,7 @@ NAMES = {
     "posture",
     "posture_envelope",
 }
+APPLY_NAMES = NAMES | {PREVIEW_RESULT}
 APPROVAL = {
     "operation",
     "approval",
@@ -111,6 +114,7 @@ def _service(
     preview._contract(root, context)
     _, artifacts, _ = preview._prepare(root, context, raw["encrypted_configuration"], None)
     preview._versions(root, context, artifacts)
+    validate_apply_preview(context.contract, artifacts, raw, now=datetime.now(UTC))
     validate_plan(raw["plan"], context.contract.stack_identity, foundation.pulumi_version)
     plans = preview._json(raw["plan"], operations.MAX_BYTES)["resourcePlans"]
     expected_graph = {
@@ -126,7 +130,7 @@ def _service(
     validate_receipt(foundation, preview._json(raw["qualification"], operations.MAX_BYTES))
     return context, preview._encoded(
         {
-            "inputs": {n: _hash(raw[n]) for n in sorted(NAMES - APPROVAL)},
+            "inputs": {n: _hash(raw[n]) for n in sorted(APPLY_NAMES - APPROVAL)},
             "profile": _hash(preview._encoded(context.profile)),
             "foundation": foundation.digest,
         }
@@ -205,7 +209,7 @@ def _names(oci: bool, unit: str, importing: bool = False) -> set[str]:
 
         return names(unit)
     require(unit in {"cloudflare-edge", "supabase-database"})
-    return NAMES
+    return APPLY_NAMES
 
 
 def _load(

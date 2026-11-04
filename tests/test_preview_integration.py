@@ -119,6 +119,7 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
             suppress_progress=True,
             refresh=False,
             config_file=str(work / "stack.yaml"),
+            **({"plan": str(work / "plan.json")} if fault is None else {}),
         )
         assert result.change_summary == {"same": 1, "create": 2}
         end = datetime.now(UTC)
@@ -139,6 +140,7 @@ def test_sdk_process_rpc_and_receipt_boundary(tmp_path, monkeypatch, capsys, uni
             assert "SYNTHETIC_PRIVATE" not in str(error.value) and receipt is None
         else:
             preview()
+            assert (work / "plan.json").read_bytes() == b'{"synthetic":true}'
             assert stack.wire.records == [r.encode() for r in raw]
             result = validate_preview_result(receipt, contract, artifacts, now=datetime.now(UTC))
             digest = hashlib.sha256()
