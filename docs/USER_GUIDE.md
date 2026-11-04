@@ -1,7 +1,8 @@
 # User and Operator Guide
 
 Reviewed 30 October 2026. Applies to the `cloud-infra` uv workspace and its
-currently disabled deployment configuration. All relative paths and commands
+currently disabled deployment configuration. The M07 workflow was reconciled
+on 4 November 2026. All relative paths and commands
 below start at the repository root, the directory containing `HARNESS.md`.
 
 ## 1. What you can operate today
@@ -15,7 +16,7 @@ steps. GCP, AWS, Neon, Fly.io, Render, Vercel and Netlify have no deployable mod
 
 Read the [coverage and current limits](MULTI_PROVIDER_AUDIT.md),
 [proposed improvements](ARCHITECTURE_IMPROVEMENT_PLAN.md) and
-[M06 acceptance boundary](m06-closeout.md) before planning deployment.
+[M07 closeout and pending live prerequisites](m07-closeout.md) before planning deployment.
 
 **There is no zero-billing guarantee.** The checks reject known unsafe proposals
 within their modeled scope. They cannot prevent external writers, application
@@ -42,6 +43,11 @@ collection and component lists describe only the implemented subsets, with
 limitations alongside them. Current OCI, Cloudflare and Supabase support is partial.
 AWS, GCP, Neon, Fly.io (`flyio`), Render, Vercel and Netlify are reported unsupported.
 Unknown provider names fail with `CAP002`; inconsistent metadata fails with `CAP001`.
+
+The `cost_coverage` field groups dimensions into `automatic`, `operator_attested`,
+and `unavailable`. Use it to identify which readings to collect and what the
+account owner must verify independently. Account readiness and operational
+findings reports use the same coverage vocabulary.
 
 Each unit exposes its configured preview flag, stack and dependencies.
 `foundation_enabled` is false because the foundation loader rejects any other value.
@@ -227,6 +233,9 @@ timestamp simply to make a validation pass.
 | `.infra/supabase.json` | User/org IDs, project region/name/key and per-meter remaining-cycle growth budgets; no password/token fields |
 | `.infra/usage.json` | Authoritative OCI current-month totals, original observation and completeness watermark; see the governance runbook for schema |
 | `.infra/inventory.json` and `.envelope.json` suffix | Collected OCI inventory and adjacent exact-byte binding sidecar |
+| `.infra/cloudflare-review.json`, `.infra/cloudflare-read.token` | Independent zone review and owner-private Zone Read / DNS Read credential |
+| `.infra/supabase-supplement.json`, `.infra/supabase-read.token` | Original database and usage readings and owner-private Management API credential |
+| Apply bundle `paths.plan` and `paths.preview_result` | Exact private saved plan and matching schema-3 receipt with execution binding from the same owned preview |
 | `.infra/cloudflare-evidence.json`, `.infra/supabase-evidence.json` and sidecars | Complete provider-specific evidence; preserve bytes and collection clocks |
 | `packages/infra-program/Pulumi.<stack>.yaml` | Conventional encrypted stack config location beside `Pulumi.yaml`, only once an approved stack exists; ignored by Git |
 | Outside checkout: OCI INI and signing key | Explicit credential file/profile; key mode 0600, containing directories 0700 |
@@ -363,26 +372,33 @@ fresh posture evidence and explicit authorization described in the backend runbo
 
 ### Eventual approved production workflow
 
-The intended engine sequence is initialize/select the explicit stack with
-`--secrets-provider passphrase`, generate a policy-checked saved plan using
-`pulumi preview`, then apply exactly that approved plan using `pulumi up`.
-Here those engine actions must be supplied by the protected orchestration with
-bound evidence, not a standalone copy-paste shell recipe. Production stack
-initialization itself remains an activation prerequisite.
+Qualify the exact existing stack and resolve the ten readiness gates with the
+responsible operator and reviewer. The gates cover trust and runner enrollment,
+backend posture, independent recovery, entitlement, writer exclusion, controlled
+apply, ownership, health, monitoring, and state recovery. Stack initialization
+requires separate authorization. Use the [live prerequisite record](m07-closeout.md#live-acceptance-evidence-still-required)
+and the [operational readiness procedure](runbooks/operational-readiness.md).
 
-Before any execution, an operator and reviewer must resolve the ten readiness
-gates: trust/runner enrollment, backend posture, independent backup/recovery,
-account entitlement, writer exclusion, unit-specific readiness, ownership,
-monitoring and the remaining acceptance items in
-[operational readiness](runbooks/operational-readiness.md). Use the exact staged
-procedure for the selected unit; a successful preview never grants apply authority.
+For OCI, use the reviewed account-selected `oci-free` or `oci-paid-a1` profile and
+revision. The mandatory policy uses that selection and its limits. Paid A1 requires
+its own account and cost approval. See [selected-profile policy](runbooks/free-tier-governance.md#selected-profile-mandatory-policy-m07-pr3).
 
-The saved operation must bind commit, config, checkpoint and plan digests to the
-unit/account, approvals and journal predecessor. Inspect creates, updates,
-replacements and deletes; forecast replacement overlap and retained storage.
-Recollect stale evidence. Execute through the protected unit apply workflow only
-after separately authorized activation; stop on unknown outcome and reconcile
-journal/state before retrying. Do not run auto-approve or a second writer.
+Capture the plan and graph receipt together through the protected Python preview
+driver's `plan_sink` interface. Keep the original proposal, evidence and sidecar,
+encrypted configuration, saved plan, and receipt in private custody. The regular
+preview CLI produces diagnostic receipts. Apply uses schema 3 with an execution
+binding and checks the receipt's 15-minute freshness window. Regenerate old or
+stale receipts and obtain fresh approvals against the exact input bytes. A
+schema-1/2 receipt or a schema-3 diagnostic receipt cannot admit apply. See the
+[protected apply input contract](runbooks/independent-services.md#controlled-single-service-apply-m05-pr6).
+
+The signed operation binds the reviewed commit, unit, encrypted configuration,
+checkpoint, plan and receipt, and journal predecessor. Apply admits
+`same`, `create`, `update`, and `read` only. For OKE, verify the committed network
+dependency digest. An unresolved OCI resource reference blocks graph receipt
+generation, including during first creation. After separately approved activation,
+use the protected workflow and reconcile the journal and checkpoint after execution.
+An indeterminate outcome requires operator reconciliation before any further action.
 
 ### Stack execution order
 
@@ -432,6 +448,23 @@ cannot be obtained. Never manufacture zero totals, restamp or reduce scope.
 
 ### Cloudflare and Supabase
 
+Run collection only for the reviewed scope with its private read credential.
+Create the independent review and supplement first. Replace the account ID and
+organization slug below, repeating `--organization` for every visible organization.
+Choose fresh output paths for each collection.
+
+```sh
+uv run --locked infra services collect-cloudflare \
+  --config .infra/cloudflare.json --review .infra/cloudflare-review.json \
+  --token-file .infra/cloudflare-read.token --output .infra/cloudflare-evidence.json
+uv run --locked infra services collect-supabase \
+  --config .infra/supabase.json --supplement .infra/supabase-supplement.json \
+  --token-file .infra/supabase-read.token --account-id ACCOUNT_ID \
+  --organization REVIEWED_ORG --output .infra/supabase-evidence.json
+```
+
+Then audit the published pairs offline.
+
 ```sh
 uv run --locked infra services audit \
   --config .infra/cloudflare.json --evidence .infra/cloudflare-evidence.json
@@ -452,6 +485,22 @@ database sizes, original organization billing anniversary, per-metric coverage
 and reviewed growth through cycle end. Current storage capacity cannot substitute
 for cumulative GB-hours; daily MAU sums cannot substitute for distinct cycle MAU.
 Read the dashboard's organization usage and project database metrics independently.
+
+### Review coverage and readiness
+
+```sh
+uv run --locked infra monitoring findings --evidence .infra/monitoring/index.json
+uv run --locked infra governance check-readiness --unit oci-network \
+  --account-id ACCOUNT_ID --evidence .infra/account-readiness.json
+```
+
+Use a prepared private index for each command. In findings, inspect the original
+observation time and the completeness cutoff separately. A fresh OCI API reading
+can still have an unknown cutoff. Missing coverage, stale windows, and unrecognized
+meters require follow-up with the evidence owner. An evidence-consistent readiness
+result still exits 1 with live acceptance pending. See the
+[cost findings input contract](runbooks/operational-findings.md) and
+[account readiness input contract](runbooks/free-tier-governance.md#m06-account-readiness).
 
 ### Optional Python validation driver via uv
 

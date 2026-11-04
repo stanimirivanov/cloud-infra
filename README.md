@@ -20,6 +20,9 @@ The [M06 closeout](docs/m06-closeout.md) maps the delivered readiness checks and
 procedures to those ten acceptance gates. Operational acceptance and activation
 remain pending; M06-PR13 engineering closeout requires its own CI and merge.
 
+The [M07 closeout](docs/m07-closeout.md) records the delivered coverage, collection,
+graph admission checks, and remaining live prerequisites.
+
 ## Development
 
 Use Git and Python 3.11+ from the repository root in a POSIX shell on Linux x64:

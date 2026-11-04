@@ -180,6 +180,9 @@ nor proves administrator bypass, reviewer independence/custody or protected-comm
 - [M06](docs/m06-closeout.md): readiness checks and staged activation procedures;
   PR1–12 merged, PR13 closeout conditional on CI/merge, operational acceptance pending.
 
+- [M07](docs/m07-closeout.md): provider coverage, service collection, and preview
+  graph binding for apply. PR1–PR9 merged, with live acceptance pending.
+
 Retirement removes repository execution paths, not cloud resources, local private
 artifacts or external state ownership. The configured backend identity/prefix stays
 unchanged. Never reuse or delete externally owned state during verification.
