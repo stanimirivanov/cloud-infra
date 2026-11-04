@@ -84,6 +84,50 @@ CATALOG = (
 )
 
 
+# Source support only. Automatic collection still requires evidence validation.
+_COST_COVERAGE = {
+    "oci": (
+        ("compute_and_volume_inventory", "backend_bucket_posture", "usage_observation"),
+        ("free_tier_entitlement", "monthly_usage_completeness", "other_service_review"),
+        (
+            "authoritative_usage_watermark",
+            "object_storage",
+            "backups",
+            "network_egress",
+            "other_ancillary_costs",
+        ),
+    ),
+    "cloudflare": (
+        ("zone_dns_inventory",),
+        ("free_plan_entitlement", "other_service_review"),
+        ("workers", "pages", "r2", "tunnel", "other_non_dns_costs"),
+    ),
+    "supabase": (
+        ("management_project_inventory",),
+        (
+            "free_plan_entitlement",
+            "database_sizes",
+            "billing_metrics",
+            "billing_cycle_anchor",
+            "other_service_review",
+        ),
+        ("branches", "other_out_of_scope_product_costs"),
+    ),
+}
+
+
+def cost_coverage(provider: str) -> dict[str, list[str]]:
+    """Classify repository coverage without making claims about a specific account."""
+    automatic, attested, unavailable = _COST_COVERAGE.get(
+        provider, ((), (), ("all_cost_dimensions",))
+    )
+    return {
+        "automatic": list(automatic),
+        "operator_attested": list(attested),
+        "unavailable": list(unavailable),
+    }
+
+
 def validate_catalog(catalog: tuple[Capability, ...]) -> None:
     """Reject inconsistent source metadata before producing any partial report."""
     if (
@@ -138,6 +182,7 @@ def inspect(root: Path, provider: str | None = None) -> dict[str, Any]:
         if provider is not None and item.provider != provider:
             continue
         entry = asdict(item)
+        entry["cost_coverage"] = cost_coverage(item.provider)
         entry["support"] = "partial" if item.components else "unsupported"
         entry["units"] = [
             {

@@ -297,3 +297,12 @@ def test_supabase_usage_is_not_zero_filled_or_restamped(service_bundle, mutation
     change_observation(service_bundle, mutate)
     with pytest.raises(ValueError, match="AREADY001"):
         check(service_bundle)
+
+
+def test_oci_readiness_reports_separate_inventory_and_billing_coverage(oci_bundle):
+    report = check(oci_bundle)
+    assert report["account_evidence"] == "account-evidence-consistent"
+    assert "compute_and_volume_inventory" in report["cost_coverage"]["automatic"]
+    assert "monthly_usage_completeness" in report["cost_coverage"]["operator_attested"]
+    assert "authoritative_usage_watermark" in report["cost_coverage"]["unavailable"]
+    assert report["account_ready"] is False

@@ -454,3 +454,36 @@ def test_threshold_cross_product_preserves_small_positive_difference():
         case["config"]["warning_utilization_percent"] = str(80 + 80 * epsilon)
     # The threshold cross product exceeds value*100 by 80*epsilon**2.
     assert indexed(f.evaluate(**case))["usage/a1_ocpu_hours"]["status"] == "normal"
+
+
+@pytest.mark.parametrize("fault", ["absent", "null", "stale"])
+def test_oci_report_distinguishes_observation_from_usage_completeness(fault):
+    case = globals()["case"].__wrapped__(SimpleNamespace(param="oci-network"))
+    usage = case["evidence"]["usage"]
+    if fault == "absent":
+        usage.pop("covered_through")
+    elif fault == "null":
+        usage["covered_through"] = None
+    else:
+        usage["covered_through"] = (case["now"] - timedelta(minutes=16)).isoformat()
+
+    report = f.evaluate(**case)
+
+    assert report["usage_windows"]["observed_at"] == usage["observed_at"]
+    assert report["usage_windows"]["covered_through"] == usage.get("covered_through")
+    findings = indexed(report)
+    assert findings["usage/a1_ocpu_hours"]["status"] == "unknown"
+    assert findings["billing_coverage_age"]["reason"] == (
+        "stale_usage_coverage" if fault == "stale" else "missing_completeness_watermark"
+    )
+    assert "object_storage" in report["cost_coverage"]["unavailable"]
+
+
+def test_unknown_meter_is_diagnosed_without_exposing_its_name(case):
+    usage = case["evidence"]["usage"]
+    (usage["values"] if case["account"] else usage)["private-unreviewed-meter"] = 0
+    report = f.evaluate(**case)
+
+    assert report["status"] == "unknown"
+    assert indexed(report)["billing_window"]["reason"] == "unrecognized_usage_metrics"
+    assert "private-unreviewed-meter" not in json.dumps(report)
