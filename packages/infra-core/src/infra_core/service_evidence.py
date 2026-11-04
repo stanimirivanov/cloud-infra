@@ -230,18 +230,14 @@ def capture_cloudflare_evidence(
     return payload, capture_service_evidence(config, profile, payload, commit=commit, now=now)
 
 
-def capture_supabase_evidence(
+def validate_supabase_supplement(
     config: dict[str, Any],
     profile: dict[str, Any],
-    collection: SupabaseCollection,
     supplement: bytes,
     *,
-    commit: str,
     now: datetime | None = None,
-) -> tuple[bytes, bytes]:
-    """Reconcile explicit operator readings with management identities, never fill gaps."""
-    config, profile = deepcopy((config, profile))
-    now = now or datetime.now(UTC)
+) -> dict[str, Any]:
+    """Parse the operator supplement and audit its original evidence before collection."""
     wrapper = fields(
         _payload(supplement),
         {"schema_version", "classification", "evidence", "database_observations"},
@@ -257,6 +253,23 @@ def capture_supabase_evidence(
     data = wrapper["evidence"]
     # Validate original clocks, all five metrics, billing cycle, DB sizes and review flags.
     audit(config, data, profile, now=now)
+    return wrapper
+
+
+def capture_supabase_evidence(
+    config: dict[str, Any],
+    profile: dict[str, Any],
+    collection: SupabaseCollection,
+    supplement: bytes,
+    *,
+    commit: str,
+    now: datetime | None = None,
+) -> tuple[bytes, bytes]:
+    """Reconcile explicit operator readings with management identities, never fill gaps."""
+    config, profile = deepcopy((config, profile))
+    now = now or datetime.now(UTC)
+    wrapper = validate_supabase_supplement(config, profile, supplement, now=now)
+    data = wrapper["evidence"]
     require(
         config.get("provider") == "supabase"
         and collection.account_id == config["account_id"]
