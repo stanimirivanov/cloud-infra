@@ -229,6 +229,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for name in ("config", "review", "token-file", "output"):
         collection.add_argument("--" + name, type=Path, required=True)
+    supabase_collection = services_commands.add_parser(
+        "collect-supabase", help="collect read-only management evidence with an operator supplement"
+    )
+    for name in ("config", "supplement", "token-file", "output"):
+        supabase_collection.add_argument("--" + name, type=Path, required=True)
+    supabase_collection.add_argument("--account-id", required=True)
+    supabase_collection.add_argument(
+        "--organization",
+        action="append",
+        required=True,
+        help="reviewed visible organization slug, repeat for every organization",
+    )
     staging = services_commands.add_parser(
         "check-staging", help="offline Supabase inputs; activation pending"
     )
@@ -379,6 +391,19 @@ def main(
                 "PASS: Cloudflare evidence collected; entitlement remains independently reviewed; "
                 "deployment disabled"
             )
+        elif args.command == "services" and args.services_command == "collect-supabase":
+            from infra_core.service_collection import collect_supabase
+
+            collect_supabase(
+                root,
+                args.config,
+                args.supplement,
+                args.token_file,
+                args.output,
+                account_id=args.account_id,
+                organizations=tuple(args.organization),
+            )
+            print("PASS: Supabase management evidence joined with the operator supplement")
         elif args.command == "services" and args.services_command == "check-staging":
             from infra_core.supabase_staging import check as check_supabase_staging
 

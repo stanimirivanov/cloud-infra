@@ -4,9 +4,8 @@ This library adds offline service preflight and protected Pulumi components. It
 does not activate deployments. `config/pulumi.toml` identities remain disabled;
 the normal program, `infra preview --unit NAME` and `infra deploy --unit NAME` still reject provisioning.
 There is no Terraform adoption, OCI output dependency, Kubernetes integration,
-DNS zone creation or SQL migration here. Read-only management collection is a library
-API; there is no collection CLI/workflow activation yet. Configuration lookup
-is explicit through the library factory described below.
+DNS zone creation or SQL migration here. The collection commands below produce private evidence for offline audit.
+Configuration lookup for Pulumi is explicit through the library factory described below.
 
 ## Ownership and map
 
@@ -41,6 +40,48 @@ full membership visibility, role/entitlement review, source authenticity and fre
 authoritative usage remain administrator-owned live prerequisites. Pagination is
 not a transactional snapshot; whole-process deadlines remain orchestration work.
 No dependency, existing evidence schema, quota, freshness or activation change.
+
+### Supabase collection command (M07-PR7)
+
+From a clean reviewed checkout, prepare the Supabase proposal and the schema-1
+supplement described above. Supply the independently reviewed Management API user
+ID and repeat `--organization` for every visible organization, including paid
+organizations. The proposal selects the target Free organization. The command
+matches the user and membership against the Management API and reconciles all
+visible Free projects with the supplement.
+
+Store the inputs in ignored `.infra`. Supply a private, owner-readable Management
+API bearer token file with mode 0600 or 0400 and use the least privileges available
+for the reviewed read access. The collector uses the existing bounded GET transport.
+Choose a fresh output name in an existing directory.
+
+```shell
+umask 077
+mkdir -p .infra/supabase-evidence
+uv run --locked infra services collect-supabase \
+  --config .infra/supabase.json \
+  --supplement .infra/supabase-supplement.json \
+  --token-file .infra/supabase-read.token \
+  --account-id REVIEWED_USER_ID \
+  --organization reviewed-free-org --organization reviewed-paid-org \
+  --output .infra/supabase-evidence/run-001.json
+uv run --locked infra services audit \
+  --config .infra/supabase.json \
+  --evidence .infra/supabase-evidence/run-001.json
+```
+
+The supplement supplies database sizes, metric windows, verification time, and the
+billing anchor. The joined evidence spans the earliest observation start through
+the latest completion and binds the original supplement bytes by digest. Missing
+metrics, stale readings, conflicting identities, and incomplete project or
+membership observations fail collection.
+
+Both files use mode 0600. The command rechecks the input bytes and checkout before
+publication, preserves existing files, and publishes the sidecar before the payload.
+A process termination between those writes can leave an orphan sidecar. Choose a
+fresh destination and inspect the orphan privately. Exit 1 reports `COLLECT001`
+with private details withheld. Run live collection under an independently bounded
+runner and audit the pair within the existing evidence freshness window.
 
 ### Cloudflare observation collection (M04-PR5)
 

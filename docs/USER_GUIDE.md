@@ -439,15 +439,12 @@ uv run --locked infra services audit \
   --config .infra/supabase.json --evidence .infra/supabase-evidence.json
 ```
 
-These read local files; they do not query provider APIs. Each evidence file needs
-its adjacent `.envelope.json` sidecar. Existing read-only collection library APIs
-are `infra_core.inventory.cloudflare.collect_zone` and
-`infra_core.inventory.supabase.collect_management`; capture/join helpers live in
-`infra_core.service_evidence`. Their exact inputs and required operator supplements
-are in [independent services](runbooks/independent-services.md). Cloudflare has an
-explicit [collection command](runbooks/independent-services.md#cloudflare-collection-command-m07-pr6)
-using an independent review and private token file; Supabase collection remains a
-library API. Do not write a fake supplement from example values.
+The offline audit reads each evidence file and its adjacent `.envelope.json`
+sidecar. Cloudflare collection uses an independent review and private token file.
+Supabase collection also requires an independently reviewed user, complete visible
+organization list, and a supplement with original database and billing readings.
+See the [Cloudflare collection command](runbooks/independent-services.md#cloudflare-collection-command-m07-pr6)
+and [Supabase collection command](runbooks/independent-services.md#supabase-collection-command-m07-pr7).
 
 Cloudflare checks every existing DNS record, including unmanaged records outside
 the supported creation types. Supabase requires all relevant Free projects,

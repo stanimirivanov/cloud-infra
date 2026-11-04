@@ -8,12 +8,18 @@ import tempfile
 import tomllib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from infra_core.evidence import MAX_ARTIFACT_BYTES
 from infra_core.governance.contracts import fields, timestamp
 from infra_core.inventory.cloudflare import collect_zone
-from infra_core.service_evidence import capture_cloudflare_evidence, reviewed_commit
+from infra_core.inventory.supabase import collect_management
+from infra_core.service_evidence import (
+    capture_cloudflare_evidence,
+    capture_supabase_evidence,
+    reviewed_commit,
+    validate_supabase_supplement,
+)
 from infra_core.services.governance import DNS, validate_resource
 
 MESSAGE = "COLLECT001: collection failed; inspect private inputs, scope and destination"
@@ -167,6 +173,43 @@ def collect_cloudflare(
     root: Path, config_path: Path, review_path: Path, token_file: Path, output: Path
 ) -> None:
     """Collect one explicitly authorized zone; preserve original clocks and closed schemas."""
+    _collect(root, config_path, review_path, token_file, output, provider="cloudflare")
+
+
+def collect_supabase(
+    root: Path,
+    config_path: Path,
+    supplement: Path,
+    token_file: Path,
+    output: Path,
+    *,
+    account_id: str,
+    organizations: tuple[str, ...],
+) -> None:
+    """Collect the reviewed membership and join independent usage and database readings."""
+    _collect(
+        root,
+        config_path,
+        supplement,
+        token_file,
+        output,
+        provider="supabase",
+        account_id=account_id,
+        organizations=organizations,
+    )
+
+
+def _collect(
+    root: Path,
+    config_path: Path,
+    review_path: Path,
+    token_file: Path,
+    output: Path,
+    *,
+    provider: Literal["cloudflare", "supabase"],
+    account_id: str = "",
+    organizations: tuple[str, ...] = (),
+) -> None:
     try:
         root = root.resolve()
         commit = reviewed_commit(root)
@@ -179,18 +222,32 @@ def collect_cloudflare(
         profile_path = root / "config/quotas/profiles.toml"
         proposal_raw, review_raw = (_read(path) for path in inputs[:2])
         profiles_raw = _read(profile_path)
-        config, review = _json(proposal_raw), _json(review_raw)
-        profile = tomllib.loads(profiles_raw.decode())["profiles"]["cloudflare-free"]
-        _review(config, review, profile)
+        config = _json(proposal_raw)
+        profile = tomllib.loads(profiles_raw.decode())["profiles"][f"{provider}-free"]
+        if provider == "cloudflare":
+            review = _json(review_raw)
+            _review(config, review, profile)
+        else:
+            _require(
+                config.get("provider") == "supabase" and config.get("account_id") == account_id
+            )
+            _require(config.get("scope_id") in organizations)
+            validate_supabase_supplement(config, profile, review_raw)
         token_raw = _read(inputs[2], credential=True)
         token = token_raw.decode("ascii").removesuffix("\n").removesuffix("\r")
         _require(re.fullmatch(r"[!-~]{1,4096}", token) is not None)
-        collection = collect_zone(
-            config["account_id"], config["scope_id"], review["scope_name"], token=token
-        )
-        payload, envelope = capture_cloudflare_evidence(
-            config, profile, collection, review, commit=commit
-        )
+        if provider == "cloudflare":
+            zone = collect_zone(
+                config["account_id"], config["scope_id"], review["scope_name"], token=token
+            )
+            payload, envelope = capture_cloudflare_evidence(
+                config, profile, zone, review, commit=commit
+            )
+        else:
+            management = collect_management(account_id, organizations, token=token)
+            payload, envelope = capture_supabase_evidence(
+                config, profile, management, review_raw, commit=commit
+            )
         _require(reviewed_commit(root) == commit)
         _require(tuple(_read(path) for path in inputs[:2]) == (proposal_raw, review_raw))
         _require(

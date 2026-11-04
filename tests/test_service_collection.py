@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 import test_cloudflare_collection as fixtures
+import test_supabase_collection as supabase_fixtures
 from infra_core import cli
 from infra_core import service_collection as collection
 from infra_core.service_evidence import read_service_pair, validate_service_evidence
@@ -270,3 +271,89 @@ def test_dirty_checkout_blocks_collection_before_credentials(case, monkeypatch):
     assert run(case) == 1
     assert not case.network.calls
     absent(case)
+
+
+supabase_network = supabase_fixtures.network
+supabase_supplement = supabase_fixtures.supplement
+
+
+@pytest.fixture
+def supabase_case(case, supabase_network, supabase_supplement):
+    config, profile, supplement = supabase_supplement
+    case.proposal.write_text(json.dumps(config))
+    case.review.write_text(json.dumps(supplement))
+    case.config, case.profile, case.supplement = config, profile, supplement
+    case.network = supabase_network
+    return case
+
+
+def run_supabase(case, *, account_id=supabase_fixtures.ACCOUNT):
+    return cli.main(
+        [
+            "--root",
+            str(case.root),
+            "services",
+            "collect-supabase",
+            "--config",
+            str(case.proposal),
+            "--supplement",
+            str(case.review),
+            "--token-file",
+            str(case.token),
+            "--output",
+            str(case.output),
+            "--account-id",
+            account_id,
+            "--organization",
+            supabase_fixtures.ORG,
+            "--organization",
+            "paid-org",
+        ]
+    )
+
+
+def test_supabase_cli_preserves_supplement_readings(supabase_case, capsys):
+    case = supabase_case
+    assert run_supabase(case) == 0
+    payload, envelope = read_service_pair(case.output)
+    result = validate_service_evidence(case.config, case.profile, payload, envelope, commit=COMMIT)
+    assert result["deployment_authorized"] is False
+    evidence = json.loads(payload)
+    original = case.supplement["evidence"]
+    for field in ("usage", "billing_period", "verified_at", "resources"):
+        assert evidence[field] == original[field]
+    assert evidence["collection_started_at"] == original["collection_started_at"]
+    assert "supplemental-operator-observations sha256=" in evidence["source"]
+    assert all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in (case.output, case.sidecar))
+    assert b"private@example.com" not in payload + envelope
+    assert "synthetic-token" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "fault", ["organization", "project", "api-user", "input-user", "stale", "usage"]
+)
+def test_supabase_cli_rejects_incomplete_or_conflicting_evidence(supabase_case, fault, capsys):
+    case = supabase_case
+    account_id = supabase_fixtures.ACCOUNT
+    evidence = case.supplement["evidence"]
+    if fault == "organization":
+        case.network.replies["/v1/organizations"].pop()
+    elif fault == "project":
+        case.network.replies[supabase_fixtures.PATH] = supabase_fixtures.projects([])
+    elif fault == "api-user":
+        case.network.replies["/v1/profile"]["gotrue_id"] = "other"
+    elif fault == "input-user":
+        account_id = "other"
+    elif fault == "stale":
+        evidence["observed_at"] = evidence["collection_started_at"] = (
+            datetime.now(UTC) - timedelta(minutes=16)
+        ).isoformat()
+    else:
+        del evidence["usage"]["storage_mb"]
+    case.review.write_text(json.dumps(case.supplement))
+
+    assert run_supabase(case, account_id=account_id) == 1
+    absent(case)
+    if fault in {"input-user", "stale", "usage"}:
+        assert not case.network.calls
+    assert capsys.readouterr().err.strip() == f"FAIL: {collection.MESSAGE}"
